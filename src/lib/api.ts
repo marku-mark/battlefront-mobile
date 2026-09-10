@@ -52,3 +52,22 @@ export function getFlashDealEndTime(): Date {
   end.setHours(end.getHours() + 6);
   return end;
 }
+
+export async function getChatbotReply(message: string): Promise<string> {
+  const normalizedMessage = message.toLowerCase();
+
+  if (normalizedMessage.includes("order")) {
+    return "Order tracking will be available once you sign in. I can still help you find a product in the meantime.";
+  }
+  if (normalizedMessage.includes("gpu") || normalizedMessage.includes("graphics")) {
+    return "For graphics cards, check Flash Deals for current GPU offers. Tell me your budget and target games for a more specific recommendation.";
+  }
+  if (normalizedMessage.includes("laptop")) {
+    return "We have laptops for work, school, and gaming. Open Categories and choose Laptops to browse the current selection.";
+  }
+  if (normalizedMessage.includes("shipping") || normalizedMessage.includes("delivery")) {
+    return "Delivery options depend on your location. Shipping details will be shown during checkout once the cart flow is connected.";
+  }
+
+  return "I can help with products, orders, GPUs, laptops, and delivery. What would you like to know?";
+}

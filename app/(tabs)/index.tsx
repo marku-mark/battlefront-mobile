@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { ScrollView, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { Pressable, ScrollView, View } from "react-native";
 import {
   getBanners,
   getBrands,
@@ -18,8 +19,10 @@ import { TrustBar } from "@/components/sections/TrustBar";
 import { SulitPicks } from "@/components/sections/SulitPicks";
 import { NewArrivals } from "@/components/sections/NewArrivals";
 import { Brands } from "@/components/sections/Brands";
+import { Chatbot } from "@/components/support/Chatbot";
 
 export default function HomeScreen() {
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const [banners, setBanners] = useState<Banner[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [flashDeals, setFlashDeals] = useState<Product[]>([]);
@@ -51,6 +54,15 @@ export default function HomeScreen() {
         <Brands brands={brands} />
         <View className="h-6" />
       </ScrollView>
+      <Pressable
+        accessibilityLabel="Open Battlefront Support chat"
+        onPress={() => setIsChatOpen(true)}
+        className="absolute right-4 bottom-5 w-14 h-14 rounded-full bg-primary items-center justify-center"
+        style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+      >
+        <Ionicons name="chatbubble-ellipses" size={24} color="#f8fafc" />
+      </Pressable>
+      <Chatbot visible={isChatOpen} onClose={() => setIsChatOpen(false)} />
     </View>
   );
 }
