@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useTheme } from "@/theme/ThemeProvider";
 
 const accountLinks = [
   { icon: "receipt-outline", label: "My orders", detail: "Track purchases and deliveries" },
@@ -14,6 +15,8 @@ function showUnavailableMessage() {
 }
 
 export default function AccountScreen() {
+  const { isDark, toggleMode } = useTheme();
+
   return (
     <SafeAreaView className="flex-1 bg-background">
       <ScrollView
@@ -89,6 +92,24 @@ export default function AccountScreen() {
               <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
             </Pressable>
           ))}
+          <Pressable
+            onPress={toggleMode}
+            className="flex-row items-center p-4 border-t border-border"
+            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+          >
+            <View className="w-9 h-9 rounded-md bg-secondary items-center justify-center">
+              <Ionicons name={isDark ? "sunny-outline" : "moon-outline"} size={19} color="#f8fafc" />
+            </View>
+            <View className="flex-1 ml-3">
+              <Text className="text-foreground text-sm font-medium">
+                {isDark ? "Light mode" : "Dark mode"}
+              </Text>
+              <Text className="text-muted-foreground text-xs mt-0.5">
+                Change the app appearance
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
+          </Pressable>
         </View>
 
         <View className="flex-row items-center justify-center gap-1.5 mt-7">

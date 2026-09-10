@@ -1,7 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
+import { useCart } from "@/hooks/useCart";
 
 export default function TabsLayout() {
+  const { itemCount } = useCart();
+
   return (
     <Tabs
       screenOptions={{
@@ -38,6 +41,8 @@ export default function TabsLayout() {
         name="cart"
         options={{
           title: "Cart",
+          tabBarBadge: itemCount > 0 ? (itemCount > 99 ? "99+" : itemCount) : undefined,
+          tabBarBadgeStyle: { backgroundColor: "#ef1b1b", color: "#f8fafc" },
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="cart-outline" size={size} color={String(color)} />
           ),

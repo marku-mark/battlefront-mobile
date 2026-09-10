@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { Pressable, ScrollView, View } from "react-native";
+import { Alert, Modal, Pressable, ScrollView, View } from "react-native";
 import {
   getBanners,
   getBrands,
@@ -20,17 +20,47 @@ import { SulitPicks } from "@/components/sections/SulitPicks";
 import { NewArrivals } from "@/components/sections/NewArrivals";
 import { Brands } from "@/components/sections/Brands";
 import { Chatbot } from "@/components/support/Chatbot";
+import { ProductDetails } from "@/components/products/ProductDetails";
+import { ProductSearch } from "@/components/search/ProductSearch";
+import { useCart } from "@/hooks/useCart";
 
 export default function HomeScreen() {
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [banners, setBanners] = useState<Banner[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [flashDeals, setFlashDeals] = useState<Product[]>([]);
   const [sulitPicks, setSulitPicks] = useState<Product[]>([]);
   const [newArrivals, setNewArrivals] = useState<Product[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [quantity, setQuantity] = useState(1);
+  const { addItem, itemCount } = useCart();
 
   const flashDealEndTime = useMemo(() => getFlashDealEndTime(), []);
+  const searchableProducts = useMemo(
+    () => [...flashDeals, ...sulitPicks, ...newArrivals],
+    [flashDeals, newArrivals, sulitPicks]
+  );
+
+  function handleProductSelect(product: Product) {
+    setIsSearchOpen(false);
+    setSelectedProduct(product);
+    setQuantity(1);
+  }
+
+  function handleProductClose() {
+    setSelectedProduct(null);
+  }
+
+  function handleAddToCart(product: Product, itemQuantity: number) {
+    addItem(product, itemQuantity);
+    Alert.alert(
+      "Added to cart",
+      `${itemQuantity} x ${product.name} added to your cart.`,
+      [{ text: "Continue shopping", onPress: handleProductClose }]
+    );
+  }
 
   useEffect(() => {
     getBanners().then(setBanners);
@@ -43,14 +73,18 @@ export default function HomeScreen() {
 
   return (
     <View className="flex-1 bg-background">
-      <Header cartCount={0} />
+      <Header cartCount={itemCount} onSearchPress={() => setIsSearchOpen(true)} />
       <ScrollView showsVerticalScrollIndicator={false}>
         <PromoBanners banners={banners} />
         <Categories categories={categories} />
-        <FlashDeals products={flashDeals} endTime={flashDealEndTime} />
+        <FlashDeals
+          products={flashDeals}
+          endTime={flashDealEndTime}
+          onSelectProduct={handleProductSelect}
+        />
         <TrustBar />
-        <SulitPicks products={sulitPicks} />
-        <NewArrivals products={newArrivals} />
+        <SulitPicks products={sulitPicks} onSelectProduct={handleProductSelect} />
+        <NewArrivals products={newArrivals} onSelectProduct={handleProductSelect} />
         <Brands brands={brands} />
         <View className="h-6" />
       </ScrollView>
@@ -63,6 +97,27 @@ export default function HomeScreen() {
         <Ionicons name="chatbubble-ellipses" size={24} color="#f8fafc" />
       </Pressable>
       <Chatbot visible={isChatOpen} onClose={() => setIsChatOpen(false)} />
+      <ProductSearch
+        visible={isSearchOpen}
+        products={searchableProducts}
+        onClose={() => setIsSearchOpen(false)}
+        onSelectProduct={handleProductSelect}
+      />
+      <Modal
+        visible={selectedProduct !== null}
+        animationType="slide"
+        onRequestClose={handleProductClose}
+      >
+        {selectedProduct && (
+          <ProductDetails
+            product={selectedProduct}
+            quantity={quantity}
+            onQuantityChange={setQuantity}
+            onAddToCart={handleAddToCart}
+            onClose={handleProductClose}
+          />
+        )}
+      </Modal>
     </View>
   );
 }
