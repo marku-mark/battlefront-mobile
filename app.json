@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "Battlefront",
+    "slug": "battlefront-mobile",
+    "scheme": "battlefront",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#090b10",
+    "plugins": ["expo-router"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.battlefront.mobile"
+    },
+    "android": {
+      "package": "com.battlefront.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#090b10"
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
