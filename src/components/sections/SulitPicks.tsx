@@ -13,9 +13,14 @@ export function SulitPicks({ products, onSelectProduct }: SulitPicksProps) {
   return (
     <View className="mt-6">
       <View className="flex-row items-center justify-between px-4 mb-3">
-        <Text className="text-foreground font-bold text-base">Sulit Picks</Text>
+        <View>
+          <Text className="text-foreground font-bold text-base">Sulit Picks</Text>
+          <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.14em]">
+            best value everyday
+          </Text>
+        </View>
         <Text className="text-muted-foreground text-[11px] uppercase tracking-[0.16em]">
-          Best value
+          Smart buys
         </Text>
       </View>
       <FlatList

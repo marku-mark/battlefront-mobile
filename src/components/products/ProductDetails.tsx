@@ -30,6 +30,7 @@ export function ProductDetails({
         ((product.originalPrice! - product.price) / product.originalPrice!) * 100
       )
     : 0;
+  const subtotal = product.price * quantity;
 
   return (
     <View className="flex-1 bg-background">
@@ -48,7 +49,7 @@ export function ProductDetails({
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 24 }}
+        contentContainerStyle={{ paddingBottom: 28 }}
       >
         <Image
           source={{ uri: product.image }}
@@ -63,7 +64,7 @@ export function ProductDetails({
               {product.name}
             </Text>
             {hasDiscount && (
-                <View className="bg-ring rounded-full px-2 py-1">
+              <View className="bg-ring rounded-full px-2 py-1">
                 <Text className="text-primary-foreground text-xs font-bold">-{discountPct}%</Text>
               </View>
             )}
@@ -88,12 +89,24 @@ export function ProductDetails({
             )}
           </View>
 
+          <View className="mt-5 rounded-2xl bg-secondary border border-border p-3">
+            <View className="flex-row items-center justify-between">
+              <Text className="text-foreground text-sm font-semibold">Delivery</Text>
+              <Text className="text-primary text-xs font-bold uppercase tracking-[0.12em]">Free over ₱5,000</Text>
+            </View>
+            <Text className="text-muted-foreground text-xs mt-1.5">Ships in 24 hours • Cash on delivery supported</Text>
+          </View>
+
           <View className="mt-6 pt-5 border-t border-border">
             <Text className="text-foreground text-base font-semibold">About this product</Text>
             <Text className="text-muted-foreground text-sm leading-5 mt-2">
-              Built for reliable performance in your next setup. Product specifications,
-              availability, and delivery options will be confirmed during checkout.
+              Built for reliable performance in your next setup. This product is selected for high-performance use and backed by Battlefront support for a smoother shopping experience.
             </Text>
+            <View className="mt-3 gap-2">
+              <BulletPoint text="Reliable daily performance for demanding setups" />
+              <BulletPoint text="Built for compatibility and easy upgrades" />
+              <BulletPoint text="Backing support from Battlefront and warranty coverage" />
+            </View>
           </View>
 
           <View className="flex-row items-center justify-between mt-6">
@@ -121,6 +134,10 @@ export function ProductDetails({
       </ScrollView>
 
       <View className="px-4 py-3 border-t border-border bg-background">
+        <View className="flex-row items-center justify-between mb-3">
+          <Text className="text-muted-foreground text-xs uppercase tracking-[0.12em]">Total</Text>
+          <Text className="text-foreground text-lg font-bold">{formatPrice(subtotal)}</Text>
+        </View>
         <Pressable
           accessibilityLabel={`Add ${product.name} to cart`}
           onPress={() => onAddToCart(product, quantity)}
@@ -145,6 +162,19 @@ function InfoChip({ icon, label, isDark }: InfoChipProps) {
     <View className="flex-row items-center gap-1.5 bg-secondary border border-border rounded-xl px-2.5 py-2">
       <Ionicons name={icon} size={14} color={isDark ? "#cbd5e1" : "#68717e"} />
       <Text className="text-muted-foreground text-xs">{label}</Text>
+    </View>
+  );
+}
+
+type BulletPointProps = {
+  text: string;
+};
+
+function BulletPoint({ text }: BulletPointProps) {
+  return (
+    <View className="flex-row items-start gap-2">
+      <View className="mt-1.5 h-1.5 w-1.5 rounded-full bg-primary" />
+      <Text className="flex-1 text-muted-foreground text-sm leading-5">{text}</Text>
     </View>
   );
 }

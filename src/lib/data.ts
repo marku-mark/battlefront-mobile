@@ -33,11 +33,14 @@ export type Brand = {
 export type Store = {
   id: string;
   name: string;
+  branch: string;
   address: string;
   landmark?: string;
   hours: string;
   phone: string;
   city: string;
+  latitude?: number;
+  longitude?: number;
 };
 
 export const categories: Category[] = [
@@ -158,28 +161,57 @@ export const brands: Brand[] = [
 export const stores: Store[] = [
   {
     id: "store-sagay",
-    name: "Sagay Branch",
+    name: "Battlefront Computer & Piso-Wifi Store",
+    branch: "Sagay Branch",
     city: "Sagay City",
     address: "Infront of Western Union, Maria Lopez Elementary School, AE Marañon St, Unhan, Sagay City, 6122 Negros Occidental",
     landmark: "Beside LBC Express",
-    hours: "Monday-Saturday, 8:00 AM-6:00 PM; Sunday, 10:00 AM-5:00 PM",
+    hours: "Mon-Sat 8AM-6PM, Sun 10AM-5PM",
     phone: "(034) 400-0001",
+    latitude: 10.893563,
+    longitude: 123.413813,
   },
   {
     id: "store-escalante",
-    name: "Escalante Branch",
+    name: "Battlefront Computer Parts & Accessories",
+    branch: "Escalante Branch",
     city: "Escalante City",
     address: "Escalante City, Negros Occidental",
-    hours: "Monday-Saturday, 8:00 AM-6:00 PM",
+    hours: "Mon-Sat 8AM-6PM",
     phone: "(034) 400-0002",
+    latitude: 10.842687,
+    longitude: 123.498562,
   },
   {
     id: "store-san-carlos",
-    name: "San Carlos Branch",
+    name: "Battlefront Computer & Piso-Wifi Store",
+    branch: "San Carlos Branch",
     city: "San Carlos City",
     address: "Infront of Metro Bank, Siroy Building, Carmona Street, Barangay 5, San Carlos City, 6127 Negros Occidental",
     landmark: "Beside Pure Gold",
-    hours: "Monday-Saturday, 8:00 AM-6:00 PM",
+    hours: "Mon-Sat 8AM-6PM",
     phone: "(034) 400-0003",
+    latitude: 10.482812,
+    longitude: 123.421187,
+  },
+  {
+    id: "store-bacolod",
+    name: "Battlefront Computer Trading",
+    branch: "Bacolod Branch",
+    city: "Bacolod City",
+    address: "Downtown, Along SKG Shopping Center, Beside Ukay-Ukayan 58 Lizares St. Brgy. 13, Bacolod City, Philippines, 6100",
+    hours: "Hours not provided",
+    phone: "0961 176 4608",
+  },
+  {
+    id: "store-guihulngan",
+    name: "Battlefront Computer Trading",
+    branch: "Guihulngan Branch",
+    city: "Guihulngan City",
+    address: "L&E Arcade, Larena St. Brgy. Poblacion, Guihulngan City (above Watsons), Guihulngan, Philippines, 6214",
+    hours: "Hours not provided",
+    phone: "0947 946 5723",
+    latitude: 10.1206,
+    longitude: 123.2717,
   },
 ];

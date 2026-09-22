@@ -16,7 +16,7 @@ export default function StoreLocatorScreen() {
     if (!normalizedQuery) return stores;
 
     return stores.filter((store) =>
-      [store.name, store.city, store.address].some((value) =>
+      [store.name, store.branch, store.city, store.address].some((value) =>
         value.toLowerCase().includes(normalizedQuery)
       )
     );
@@ -91,7 +91,10 @@ function StoreCard({ store, isDark }: { store: Store; isDark: boolean }) {
   }
 
   function openDirections() {
-    const query = encodeURIComponent(`${store.name}, ${store.address}`);
+    const query = store.latitude !== undefined && store.longitude !== undefined
+      ? `${store.latitude},${store.longitude}`
+      : encodeURIComponent(`${store.name}, ${store.branch}, ${store.address}`);
+
     Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`).catch(() => {
       Alert.alert("Unable to open maps", "Directions are not available on this device.");
     });
@@ -105,6 +108,7 @@ function StoreCard({ store, isDark }: { store: Store; isDark: boolean }) {
         </View>
         <View className="flex-1">
           <Text className="text-foreground text-base font-bold">{store.name}</Text>
+          <Text className="text-primary text-xs font-bold mt-1">{store.branch}</Text>
           <Text className="text-muted-foreground text-xs mt-1 leading-4">{store.address}</Text>
           {store.landmark && (
             <View className="flex-row items-center gap-1.5 mt-2">

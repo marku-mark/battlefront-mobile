@@ -22,18 +22,28 @@ export function FlashDeals({ products, endTime, onSelectProduct }: FlashDealsPro
           <View className="w-7 h-7 rounded-full bg-ring/15 items-center justify-center">
             <Ionicons name="flash" size={16} color="#ef4444" />
           </View>
-          <Text className="text-foreground font-bold text-base">
-            Flash Deals
-          </Text>
+          <View>
+            <Text className="text-foreground font-bold text-base">
+              Flash Deals
+            </Text>
+            <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.14em]">
+              limited time offers
+            </Text>
+          </View>
         </View>
 
         {!isDone ? (
-          <View className="flex-row items-center gap-1.5">
-            <TimeBlock value={hours} />
-            <Text className="text-muted-foreground text-[10px] font-bold">:</Text>
-            <TimeBlock value={minutes} />
-            <Text className="text-muted-foreground text-[10px] font-bold">:</Text>
-            <TimeBlock value={seconds} />
+          <View className="items-end">
+            <Text className="text-muted-foreground text-[9px] uppercase tracking-[0.14em] mb-1.5">
+              Ends in
+            </Text>
+            <View className="flex-row items-center gap-1.5">
+              <TimeBlock value={hours} />
+              <Text className="text-muted-foreground text-[10px] font-bold">:</Text>
+              <TimeBlock value={minutes} />
+              <Text className="text-muted-foreground text-[10px] font-bold">:</Text>
+              <TimeBlock value={seconds} />
+            </View>
           </View>
         ) : (
           <Text className="text-muted-foreground text-xs">Deal ended</Text>
