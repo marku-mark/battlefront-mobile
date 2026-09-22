@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
@@ -15,6 +16,7 @@ function showUnavailableMessage() {
 }
 
 export default function AccountScreen() {
+  const router = useRouter();
   const { isDark, toggleMode } = useTheme();
 
   return (
@@ -76,6 +78,21 @@ export default function AccountScreen() {
           </Text>
         </View>
         <View className="mx-4 rounded-2xl bg-card border border-border overflow-hidden">
+          <Pressable
+            onPress={() => router.push("/store-locator")}
+            accessibilityLabel="Find a Battlefront store"
+            className="flex-row items-center p-4 border-b border-border"
+            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+          >
+            <View className="w-9 h-9 rounded-xl bg-secondary items-center justify-center">
+              <Ionicons name="storefront-outline" size={19} color={isDark ? "#f8fafc" : "#30343b"} />
+            </View>
+            <View className="flex-1 ml-3">
+              <Text className="text-foreground text-sm font-medium">Store locator</Text>
+              <Text className="text-muted-foreground text-xs mt-0.5">Find a Battlefront branch near you</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={isDark ? "#9ca3af" : "#68717e"} />
+          </Pressable>
           {accountLinks.map((link, index) => (
             <Pressable
               key={link.label}

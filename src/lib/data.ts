@@ -30,6 +30,16 @@ export type Brand = {
   logo: string;
 };
 
+export type Store = {
+  id: string;
+  name: string;
+  address: string;
+  landmark?: string;
+  hours: string;
+  phone: string;
+  city: string;
+};
+
 export const categories: Category[] = [
   { id: "cat-1", name: "Laptops", icon: "laptop-outline" },
   { id: "cat-2", name: "Desktops", icon: "desktop-outline" },
@@ -143,4 +153,33 @@ export const brands: Brand[] = [
   { id: "brand-3", name: "Corsair", logo: "" },
   { id: "brand-4", name: "Logitech", logo: "" },
   { id: "brand-5", name: "Gigabyte", logo: "" },
+];
+
+export const stores: Store[] = [
+  {
+    id: "store-sagay",
+    name: "Sagay Branch",
+    city: "Sagay City",
+    address: "Infront of Western Union, Maria Lopez Elementary School, AE Marañon St, Unhan, Sagay City, 6122 Negros Occidental",
+    landmark: "Beside LBC Express",
+    hours: "Monday-Saturday, 8:00 AM-6:00 PM; Sunday, 10:00 AM-5:00 PM",
+    phone: "(034) 400-0001",
+  },
+  {
+    id: "store-escalante",
+    name: "Escalante Branch",
+    city: "Escalante City",
+    address: "Escalante City, Negros Occidental",
+    hours: "Monday-Saturday, 8:00 AM-6:00 PM",
+    phone: "(034) 400-0002",
+  },
+  {
+    id: "store-san-carlos",
+    name: "San Carlos Branch",
+    city: "San Carlos City",
+    address: "Infront of Metro Bank, Siroy Building, Carmona Street, Barangay 5, San Carlos City, 6127 Negros Occidental",
+    landmark: "Beside Pure Gold",
+    hours: "Monday-Saturday, 8:00 AM-6:00 PM",
+    phone: "(034) 400-0003",
+  },
 ];
