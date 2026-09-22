@@ -12,9 +12,12 @@ export function NewArrivals({ products, onSelectProduct }: NewArrivalsProps) {
 
   return (
     <View className="mt-6">
-      <Text className="text-foreground font-semibold text-base px-4 mb-3">
-        New Arrivals
-      </Text>
+      <View className="flex-row items-center justify-between px-4 mb-3">
+        <Text className="text-foreground font-bold text-base">New Arrivals</Text>
+        <Text className="text-muted-foreground text-[11px] uppercase tracking-[0.16em]">
+          Fresh picks
+        </Text>
+      </View>
       <ProductGrid products={products} onSelectProduct={onSelectProduct} />
     </View>
   );

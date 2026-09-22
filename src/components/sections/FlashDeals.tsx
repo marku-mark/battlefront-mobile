@@ -19,18 +19,20 @@ export function FlashDeals({ products, endTime, onSelectProduct }: FlashDealsPro
     <View className="mt-6">
       <View className="flex-row items-center justify-between px-4 mb-3">
         <View className="flex-row items-center gap-2">
-          <Ionicons name="flash" size={18} color="#ef1b1b" />
-          <Text className="text-foreground font-semibold text-base">
+          <View className="w-7 h-7 rounded-full bg-ring/15 items-center justify-center">
+            <Ionicons name="flash" size={16} color="#ef4444" />
+          </View>
+          <Text className="text-foreground font-bold text-base">
             Flash Deals
           </Text>
         </View>
 
         {!isDone ? (
-          <View className="flex-row items-center gap-1">
+          <View className="flex-row items-center gap-1.5">
             <TimeBlock value={hours} />
-            <Text className="text-muted-foreground text-xs">:</Text>
+            <Text className="text-muted-foreground text-[10px] font-bold">:</Text>
             <TimeBlock value={minutes} />
-            <Text className="text-muted-foreground text-xs">:</Text>
+            <Text className="text-muted-foreground text-[10px] font-bold">:</Text>
             <TimeBlock value={seconds} />
           </View>
         ) : (
@@ -43,7 +45,7 @@ export function FlashDeals({ products, endTime, onSelectProduct }: FlashDealsPro
         horizontal
         showsHorizontalScrollIndicator={false}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingRight: 20, gap: 12 }}
         renderItem={({ item }) => (
           <ProductCard product={item} width={140} onPress={onSelectProduct} />
         )}
@@ -54,8 +56,8 @@ export function FlashDeals({ products, endTime, onSelectProduct }: FlashDealsPro
 
 function TimeBlock({ value }: { value: string }) {
   return (
-    <View className="bg-secondary rounded-sm px-1.5 py-0.5 min-w-[22px] items-center">
-      <Text className="text-foreground text-xs font-semibold">{value}</Text>
+    <View className="bg-card border border-border rounded-md px-1.5 py-1 min-w-[25px] items-center">
+      <Text className="text-foreground text-[10px] font-bold">{value}</Text>
     </View>
   );
 }

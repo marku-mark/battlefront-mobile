@@ -23,43 +23,46 @@ export function ProductCard({ product, width = 150, onPress }: ProductCardProps)
   return (
     <Pressable
       onPress={() => onPress?.(product)}
-      style={({ pressed }) => ({ width, opacity: pressed ? 0.85 : 1 })}
+      style={({ pressed }) => ({ width, opacity: pressed ? 0.9 : 1 })}
+      className="self-start"
     >
-      <View className="rounded-lg overflow-hidden bg-card border border-border">
+      <View className="rounded-xl overflow-hidden bg-card border border-border shadow-sm">
         <Image
           source={{ uri: product.image }}
-          style={{ width: "100%", height: width }}
+          style={{ width: "100%", height: width * 0.96 }}
           resizeMode="cover"
         />
         {hasDiscount && (
-          <View className="absolute top-1.5 left-1.5 bg-ring rounded-sm px-1.5 py-0.5">
-            <Text className="text-foreground text-[10px] font-semibold">
+          <View className="absolute top-2 left-2 bg-ring rounded-full px-1.5 py-0.5">
+            <Text className="text-primary-foreground text-[10px] font-bold uppercase">
               -{discountPct}%
             </Text>
           </View>
         )}
       </View>
 
-      <Text numberOfLines={2} className="text-foreground text-xs mt-1.5 leading-4">
-        {product.name}
-      </Text>
-
-      <View className="flex-row items-center gap-1.5 mt-1">
-        <Text className="text-primary font-semibold text-sm">
-          {formatPrice(product.price)}
+      <View className="mt-2.5">
+        <Text numberOfLines={2} className="text-foreground text-[13px] font-medium leading-4">
+          {product.name}
         </Text>
-        {hasDiscount && (
-          <Text className="text-muted-foreground text-[11px] line-through">
-            {formatPrice(product.originalPrice!)}
+
+        <View className="flex-row items-end gap-1.5 mt-1.5">
+          <Text className="text-primary font-bold text-sm">
+            {formatPrice(product.price)}
+          </Text>
+          {hasDiscount && (
+            <Text className="text-muted-foreground text-[11px] line-through mb-[1px]">
+              {formatPrice(product.originalPrice!)}
+            </Text>
+          )}
+        </View>
+
+        {product.sold !== undefined && (
+          <Text className="text-muted-foreground text-[10px] mt-1 uppercase tracking-[0.12em]">
+            {product.sold} sold
           </Text>
         )}
       </View>
-
-      {product.sold !== undefined && (
-        <Text className="text-muted-foreground text-[10px] mt-0.5">
-          {product.sold} sold
-        </Text>
-      )}
     </Pressable>
   );
 }

@@ -9,9 +9,11 @@ import {
 } from "react-native";
 import { categories } from "@/lib/data";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useTheme } from "@/theme/ThemeProvider";
 
 export default function CategoriesScreen() {
   const [query, setQuery] = useState("");
+  const { isDark } = useTheme();
 
   const filteredCategories = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -30,13 +32,13 @@ export default function CategoriesScreen() {
           Find the right parts for your next build.
         </Text>
 
-        <View className="flex-row items-center gap-2 bg-secondary rounded-md px-3 mt-4 h-11">
-          <Ionicons name="search-outline" size={18} color="#9ca3af" />
+        <View className="flex-row items-center gap-2 bg-secondary border border-border rounded-xl px-3 mt-4 h-11">
+          <Ionicons name="search-outline" size={18} color={isDark ? "#cbd5e1" : "#68717e"} />
           <TextInput
             value={query}
             onChangeText={setQuery}
             placeholder="Search categories"
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor="#94a3b8"
             autoCapitalize="none"
             returnKeyType="search"
             className="flex-1 text-foreground text-sm"
@@ -47,7 +49,7 @@ export default function CategoriesScreen() {
               onPress={() => setQuery("")}
               hitSlop={8}
             >
-              <Ionicons name="close-circle" size={18} color="#9ca3af" />
+              <Ionicons name="close-circle" size={18} color={isDark ? "#9ca3af" : "#68717e"} />
             </Pressable>
           )}
         </View>
@@ -62,7 +64,7 @@ export default function CategoriesScreen() {
         keyboardShouldPersistTaps="handled"
         ListEmptyComponent={
           <View className="items-center py-12">
-            <Ionicons name="search-outline" size={28} color="#9ca3af" />
+            <Ionicons name="search-outline" size={28} color={isDark ? "#9ca3af" : "#68717e"} />
             <Text className="text-foreground text-sm font-semibold mt-3">
               No categories found
             </Text>
@@ -73,11 +75,12 @@ export default function CategoriesScreen() {
         }
         renderItem={({ item }) => (
           <Pressable
-            className="flex-1 min-h-[128px] rounded-lg bg-card border border-border p-4 justify-between"
+            accessibilityLabel={`Browse ${item.name}`}
+            className="flex-1 min-h-[128px] rounded-2xl bg-card border border-border p-4 justify-between"
             style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1 })}
           >
-            <View className="w-11 h-11 rounded-md bg-secondary items-center justify-center">
-              <Ionicons name={item.icon as any} size={24} color="#f8fafc" />
+            <View className="w-11 h-11 rounded-xl bg-secondary items-center justify-center">
+              <Ionicons name={item.icon as any} size={24} color={isDark ? "#f8fafc" : "#30343b"} />
             </View>
             <View className="flex-row items-center justify-between mt-4">
               <Text className="text-foreground text-sm font-semibold">

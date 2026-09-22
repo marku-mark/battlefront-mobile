@@ -30,10 +30,10 @@ export default function AccountScreen() {
           </Text>
         </View>
 
-        <View className="mx-4 mt-5 rounded-lg bg-card border border-border p-4">
+        <View className="mx-4 mt-5 rounded-2xl bg-card border border-border p-4">
           <View className="flex-row items-center">
-            <View className="w-14 h-14 rounded-full bg-secondary items-center justify-center">
-              <Ionicons name="person-outline" size={26} color="#9ca3af" />
+            <View className="w-14 h-14 rounded-full bg-secondary border border-border items-center justify-center">
+              <Ionicons name="person-outline" size={26} color={isDark ? "#cbd5e1" : "#68717e"} />
             </View>
             <View className="flex-1 ml-3">
               <Text className="text-foreground text-base font-semibold">
@@ -48,7 +48,8 @@ export default function AccountScreen() {
           <View className="flex-row gap-3 mt-5">
             <Pressable
               onPress={showUnavailableMessage}
-              className="flex-1 bg-primary rounded-md items-center py-3"
+              accessibilityLabel="Sign in"
+              className="flex-1 bg-primary rounded-xl items-center py-3"
               style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
             >
               <Text className="text-primary-foreground text-sm font-semibold">
@@ -57,7 +58,8 @@ export default function AccountScreen() {
             </Pressable>
             <Pressable
               onPress={showUnavailableMessage}
-              className="flex-1 border border-border rounded-md items-center py-3"
+              accessibilityLabel="Create account"
+              className="flex-1 border border-border rounded-xl items-center py-3"
               style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
             >
               <Text className="text-foreground text-sm font-semibold">
@@ -67,10 +69,13 @@ export default function AccountScreen() {
           </View>
         </View>
 
-        <Text className="text-foreground text-base font-semibold px-4 mt-7 mb-3">
-          Account shortcuts
-        </Text>
-        <View className="mx-4 rounded-lg bg-card border border-border overflow-hidden">
+        <View className="flex-row items-center justify-between px-4 mt-7 mb-3">
+          <Text className="text-foreground text-base font-bold">Account shortcuts</Text>
+          <Text className="text-muted-foreground text-[11px] uppercase tracking-[0.14em]">
+            Guest mode
+          </Text>
+        </View>
+        <View className="mx-4 rounded-2xl bg-card border border-border overflow-hidden">
           {accountLinks.map((link, index) => (
             <Pressable
               key={link.label}
@@ -78,8 +83,8 @@ export default function AccountScreen() {
               className={`flex-row items-center p-4 ${index < accountLinks.length - 1 ? "border-b border-border" : ""}`}
               style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
             >
-              <View className="w-9 h-9 rounded-md bg-secondary items-center justify-center">
-                <Ionicons name={link.icon} size={19} color="#f8fafc" />
+              <View className="w-9 h-9 rounded-xl bg-secondary items-center justify-center">
+                <Ionicons name={link.icon} size={19} color={isDark ? "#f8fafc" : "#30343b"} />
               </View>
               <View className="flex-1 ml-3">
                 <Text className="text-foreground text-sm font-medium">
@@ -89,7 +94,7 @@ export default function AccountScreen() {
                   {link.detail}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
+              <Ionicons name="chevron-forward" size={18} color={isDark ? "#9ca3af" : "#68717e"} />
             </Pressable>
           ))}
           <Pressable
@@ -97,8 +102,8 @@ export default function AccountScreen() {
             className="flex-row items-center p-4 border-t border-border"
             style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
           >
-            <View className="w-9 h-9 rounded-md bg-secondary items-center justify-center">
-              <Ionicons name={isDark ? "sunny-outline" : "moon-outline"} size={19} color="#f8fafc" />
+            <View className="w-9 h-9 rounded-xl bg-secondary items-center justify-center">
+              <Ionicons name={isDark ? "sunny-outline" : "moon-outline"} size={19} color={isDark ? "#f8fafc" : "#30343b"} />
             </View>
             <View className="flex-1 ml-3">
               <Text className="text-foreground text-sm font-medium">
@@ -108,7 +113,7 @@ export default function AccountScreen() {
                 Change the app appearance
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
+            <Ionicons name="chevron-forward" size={18} color={isDark ? "#9ca3af" : "#68717e"} />
           </Pressable>
         </View>
 

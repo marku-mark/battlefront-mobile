@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Text, View } from "react-native";
+import { useTheme } from "@/theme/ThemeProvider";
 
 const items = [
   { icon: "shield-checkmark-outline", label: "Warranty" },
@@ -8,12 +9,19 @@ const items = [
 ] as const;
 
 export function TrustBar() {
+  const { isDark } = useTheme();
+
   return (
-    <View className="flex-row justify-between px-4 mt-6 py-3 border-t border-b border-border">
-      {items.map((item) => (
-        <View key={item.label} className="flex-row items-center gap-1.5">
-          <Ionicons name={item.icon} size={14} color="#9ca3af" />
-          <Text className="text-muted-foreground text-xs">{item.label}</Text>
+    <View className="flex-row px-4 mt-6 py-3.5 border-t border-b border-border">
+      {items.map((item, index) => (
+        <View
+          key={item.label}
+          className={`flex-1 flex-row items-center justify-center gap-1.5 ${index > 0 ? "border-l border-border" : ""}`}
+        >
+          <Ionicons name={item.icon} size={15} color={isDark ? "#cbd5e1" : "#68717e"} />
+          <Text className="text-muted-foreground text-[10px] font-medium uppercase tracking-[0.08em]">
+            {item.label}
+          </Text>
         </View>
       ))}
     </View>

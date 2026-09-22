@@ -10,18 +10,23 @@ export function Brands({ brands }: BrandsProps) {
 
   return (
     <View className="mt-6 mb-4">
-      <Text className="text-foreground font-semibold text-base px-4 mb-3">
-        Brands
-      </Text>
+      <View className="flex-row items-center justify-between px-4 mb-3">
+        <Text className="text-foreground font-bold text-base">Brands</Text>
+        <Text className="text-muted-foreground text-[11px] uppercase tracking-[0.16em]">
+          Shop trusted
+        </Text>
+      </View>
       <FlatList
         data={brands}
         horizontal
         showsHorizontalScrollIndicator={false}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingRight: 20, gap: 10 }}
         renderItem={({ item }) => (
-          <View className="border border-border rounded-md px-4 py-3 items-center justify-center">
-            <Text className="text-foreground text-sm font-medium">{item.name}</Text>
+          <View className="border border-border rounded-xl bg-card min-w-[96px] px-4 py-3.5 items-center justify-center">
+            <Text className="text-foreground text-xs font-bold uppercase tracking-[0.08em]">
+              {item.name}
+            </Text>
           </View>
         )}
       />

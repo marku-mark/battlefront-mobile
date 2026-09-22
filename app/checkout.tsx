@@ -45,13 +45,13 @@ export default function CheckoutScreen() {
       <SafeAreaView className="flex-1 bg-background">
         <View className="flex-row items-center px-4 py-3 border-b border-border">
           <Pressable onPress={() => router.back()} hitSlop={10} className="w-9 h-9 items-center justify-center">
-            <Ionicons name="arrow-back" size={22} color="#f8fafc" />
+            <Ionicons name="arrow-back" size={22} color="#0f172a" />
           </Pressable>
           <Text className="text-foreground text-lg font-semibold ml-2">Checkout</Text>
         </View>
         <View className="flex-1 items-center justify-center px-6">
           <Text className="text-foreground text-base font-semibold">Your cart is empty</Text>
-          <Pressable onPress={() => router.replace("/")} className="bg-primary rounded-md px-5 py-3 mt-5">
+          <Pressable onPress={() => router.replace("/")} className="bg-primary rounded-xl px-5 py-3 mt-5">
             <Text className="text-primary-foreground text-sm font-semibold">Browse products</Text>
           </Pressable>
         </View>
@@ -64,19 +64,19 @@ export default function CheckoutScreen() {
       <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View className="flex-row items-center px-4 py-3 border-b border-border">
           <Pressable onPress={() => router.back()} hitSlop={10} className="w-9 h-9 items-center justify-center">
-            <Ionicons name="arrow-back" size={22} color="#f8fafc" />
+            <Ionicons name="arrow-back" size={22} color="#0f172a" />
           </Pressable>
           <Text className="text-foreground text-lg font-semibold ml-2">Checkout</Text>
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
-          <Text className="text-foreground text-base font-semibold">Delivery details</Text>
+          <Text className="text-foreground text-base font-bold">Delivery details</Text>
           <Field label="Full name" value={fullName} onChangeText={setFullName} placeholder="Juan Dela Cruz" />
           <Field label="Phone number" value={phone} onChangeText={setPhone} placeholder="09XX XXX XXXX" keyboardType="phone-pad" />
           <Field label="Delivery address" value={address} onChangeText={setAddress} placeholder="House number, street, city" multiline />
 
-          <Text className="text-foreground text-base font-semibold mt-7 mb-3">Order summary</Text>
-          <View className="bg-card border border-border rounded-lg p-4">
+          <Text className="text-foreground text-base font-bold mt-7 mb-3">Order summary</Text>
+          <View className="bg-card border border-border rounded-2xl p-4">
             {items.map(({ product, quantity }) => (
               <View key={product.id} className="flex-row justify-between mb-3">
                 <Text className="flex-1 text-muted-foreground text-sm" numberOfLines={1}>
@@ -98,12 +98,12 @@ export default function CheckoutScreen() {
           </View>
 
           <View className="flex-row items-center gap-2 mt-5">
-            <Ionicons name="lock-closed-outline" size={15} color="#9ca3af" />
+            <Ionicons name="lock-closed-outline" size={15} color="#94a3b8" />
             <Text className="text-muted-foreground text-xs">Secure checkout. Payment integration coming later.</Text>
           </View>
           <Pressable
             onPress={handlePlaceOrder}
-            className="bg-primary rounded-md items-center py-3 mt-5"
+            className="bg-primary rounded-xl items-center py-3.5 mt-5"
             style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
           >
             <Text className="text-primary-foreground text-sm font-bold">Place order</Text>
@@ -131,10 +131,10 @@ function Field({ label, value, onChangeText, placeholder, multiline, keyboardTyp
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor="#9ca3af"
+        placeholderTextColor="#94a3b8"
         keyboardType={keyboardType}
         multiline={multiline}
-        className={`bg-secondary rounded-md px-3 py-3 text-foreground text-sm ${multiline ? "min-h-20" : "h-11"}`}
+        className={`bg-secondary border border-border rounded-xl px-3 py-3 text-foreground text-sm ${multiline ? "min-h-20" : "h-11"}`}
       />
     </View>
   );

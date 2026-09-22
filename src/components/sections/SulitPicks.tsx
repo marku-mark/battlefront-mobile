@@ -12,15 +12,18 @@ export function SulitPicks({ products, onSelectProduct }: SulitPicksProps) {
 
   return (
     <View className="mt-6">
-      <Text className="text-foreground font-semibold text-base px-4 mb-3">
-        Sulit Picks
-      </Text>
+      <View className="flex-row items-center justify-between px-4 mb-3">
+        <Text className="text-foreground font-bold text-base">Sulit Picks</Text>
+        <Text className="text-muted-foreground text-[11px] uppercase tracking-[0.16em]">
+          Best value
+        </Text>
+      </View>
       <FlatList
         data={products}
         horizontal
         showsHorizontalScrollIndicator={false}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingRight: 20, gap: 12 }}
         renderItem={({ item }) => (
           <ProductCard product={item} width={140} onPress={onSelectProduct} />
         )}

@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getChatbotReply } from "@/lib/api";
+import { useTheme } from "@/theme/ThemeProvider";
 
 type ChatMessage = {
   id: string;
@@ -38,6 +39,7 @@ const quickQuestions = [
 ];
 
 export function Chatbot({ visible, onClose }: ChatbotProps) {
+  const { isDark } = useTheme();
   const [messages, setMessages] = useState<ChatMessage[]>([welcomeMessage]);
   const [draft, setDraft] = useState("");
   const [isReplying, setIsReplying] = useState(false);
@@ -107,10 +109,10 @@ export function Chatbot({ visible, onClose }: ChatbotProps) {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <Pressable className="absolute inset-0" onPress={onClose} />
-        <SafeAreaView className="w-[94%] max-w-[420px] mr-3 mb-3 bg-background rounded-lg border border-border overflow-hidden">
+        <SafeAreaView className="w-[94%] max-w-[420px] mr-3 mb-3 bg-background rounded-2xl border border-border overflow-hidden">
           <View className="flex-row items-center justify-between px-4 py-3 border-b border-border">
             <View className="flex-row items-center gap-2">
-              <View className="w-8 h-8 rounded-md bg-primary items-center justify-center">
+              <View className="w-8 h-8 rounded-xl bg-primary items-center justify-center">
                 <Ionicons name="chatbubble-ellipses" size={17} color="#f8fafc" />
               </View>
               <View>
@@ -124,7 +126,7 @@ export function Chatbot({ visible, onClose }: ChatbotProps) {
               hitSlop={10}
               className="w-9 h-9 items-center justify-center"
             >
-              <Ionicons name="close" size={23} color="#f8fafc" />
+              <Ionicons name="close" size={23} color={isDark ? "#f8fafc" : "#30343b"} />
             </Pressable>
           </View>
 
@@ -137,7 +139,7 @@ export function Chatbot({ visible, onClose }: ChatbotProps) {
             keyboardShouldPersistTaps="handled"
             renderItem={({ item }) => (
               <View
-                className={`max-w-[82%] rounded-lg px-3 py-2.5 ${
+                className={`max-w-[82%] rounded-2xl px-3 py-2.5 ${
                   item.role === "user"
                     ? "self-end bg-primary"
                     : "self-start bg-card border border-border"
@@ -167,7 +169,7 @@ export function Chatbot({ visible, onClose }: ChatbotProps) {
                   key={question}
                   disabled={isReplying}
                   onPress={() => handleQuickQuestion(question)}
-                  className="border border-border bg-secondary rounded-md px-2.5 py-2"
+                  className="border border-border bg-secondary rounded-xl px-2.5 py-2"
                   style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
                 >
                   <Text className="text-foreground text-[11px]">{question}</Text>
@@ -181,10 +183,10 @@ export function Chatbot({ visible, onClose }: ChatbotProps) {
               value={draft}
               onChangeText={setDraft}
               placeholder="Ask about a product or order"
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor="#94a3b8"
               multiline
               maxLength={500}
-              className="flex-1 max-h-24 min-h-11 bg-secondary rounded-md px-3 py-2.5 text-foreground text-sm"
+              className="flex-1 max-h-24 min-h-11 bg-secondary border border-border rounded-xl px-3 py-2.5 text-foreground text-sm"
               onSubmitEditing={handleSend}
             />
             <Pressable
@@ -192,7 +194,7 @@ export function Chatbot({ visible, onClose }: ChatbotProps) {
               accessibilityState={{ disabled: !draft.trim() || isReplying }}
               disabled={!draft.trim() || isReplying}
               onPress={handleSend}
-              className="w-11 h-11 rounded-md bg-primary items-center justify-center"
+              className="w-11 h-11 rounded-xl bg-primary items-center justify-center"
               style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
             >
               <Ionicons name="send" size={17} color="#f8fafc" />

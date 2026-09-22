@@ -37,7 +37,7 @@ export function PromoBanners({ banners }: PromoBannersProps) {
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingHorizontal: 16 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingRight: 20 }}
         snapToInterval={BANNER_WIDTH}
         decelerationRate="fast"
         onScroll={handleScroll}
@@ -45,18 +45,18 @@ export function PromoBanners({ banners }: PromoBannersProps) {
         renderItem={({ item }) => (
           <View
             style={{ width: BANNER_WIDTH }}
-            className="rounded-lg overflow-hidden bg-card"
+            className="rounded-xl overflow-hidden bg-card border border-border"
           >
             <Image
               source={{ uri: item.image }}
-              style={{ width: BANNER_WIDTH, height: 160 }}
+              style={{ width: BANNER_WIDTH, height: 172 }}
               resizeMode="cover"
             />
-            <View className="absolute bottom-0 left-0 right-0 p-3 bg-background/60">
-              <Text className="text-foreground font-semibold text-base">
+            <View className="absolute bottom-0 left-0 right-0 px-4 py-3.5 bg-background/75">
+              <Text className="text-foreground font-bold text-base">
                 {item.title}
               </Text>
-              <Text className="text-muted-foreground text-xs mt-0.5">
+              <Text className="text-foreground/75 text-xs mt-1">
                 {item.subtitle}
               </Text>
             </View>
@@ -65,7 +65,7 @@ export function PromoBanners({ banners }: PromoBannersProps) {
       />
 
       {banners.length > 1 && (
-        <View className="flex-row justify-center gap-1.5 mt-2">
+        <View className="flex-row justify-center gap-2 mt-2.5">
           {banners.map((banner, i) => (
             <View
               key={banner.id}
