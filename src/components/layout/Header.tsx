@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Pressable, Text, View } from "react-native";
+import { Image, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
 
@@ -20,12 +20,12 @@ export function Header({ cartCount = 0, onCartPress, onSearchPress }: HeaderProp
     >
       <View className="flex-row items-center gap-3 px-4 py-3.5">
         <View className="flex-1">
-          <Text className="text-foreground text-[17px] font-bold tracking-tight">
-            BATTLEFRONT
-          </Text>
-          <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.14em]">
-            PC parts • gaming gear
-          </Text>
+          <Image
+            source={require("../../../assets/logo-mark.png")}
+            accessibilityLabel="Battlefront logo"
+            resizeMode="contain"
+            className="h-12 w-16"
+          />
         </View>
 
         <Pressable
