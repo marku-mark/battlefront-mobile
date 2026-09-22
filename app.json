@@ -6,6 +6,12 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#090b10"
+    },
     "backgroundColor": "#090b10",
     "plugins": [
       "expo-router",
@@ -18,6 +24,7 @@
     "android": {
       "package": "com.battlefront.mobile",
       "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#090b10"
       }
     },
