@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { Alert, Modal, Pressable, ScrollView, View } from "react-native";
 import {
   getBanners,
@@ -25,6 +26,7 @@ import { ProductSearch } from "@/components/search/ProductSearch";
 import { useCart } from "@/hooks/useCart";
 
 export default function HomeScreen() {
+  const router = useRouter();
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [banners, setBanners] = useState<Banner[]>([]);
@@ -73,10 +75,10 @@ export default function HomeScreen() {
 
   return (
     <View className="flex-1 bg-background">
-      <Header cartCount={itemCount} onSearchPress={() => setIsSearchOpen(true)} />
+      <Header cartCount={itemCount} onCartPress={() => router.push("/cart")} onSearchPress={() => setIsSearchOpen(true)} />
       <ScrollView showsVerticalScrollIndicator={false}>
         <PromoBanners banners={banners} />
-        <Categories categories={categories} />
+        <Categories categories={categories} onSelect={() => router.push("/categories")} />
         <FlashDeals
           products={flashDeals}
           endTime={flashDealEndTime}
