@@ -27,7 +27,7 @@ export function ProductCard({ product, width = 150, onPress }: ProductCardProps)
       style={({ pressed }) => ({ width, opacity: pressed ? 0.94 : 1 })}
       className="self-start"
     >
-      <View className="rounded-2xl overflow-hidden bg-card border border-border shadow-sm">
+      <View className="rounded-2xl overflow-hidden bg-card border border-border shadow-soft">
         <View className="relative">
           <Image
             source={{ uri: product.image }}

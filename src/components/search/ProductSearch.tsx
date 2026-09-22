@@ -19,6 +19,14 @@ export function ProductSearch({
 }: ProductSearchProps) {
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim().toLowerCase();
+
+  const popularSuggestions = useMemo(() => {
+    const suggestions = ["monitor", "keyboard", "ssd", "gpu", "laptop", "mouse"];
+    return suggestions.filter((term) =>
+      products.some((product) => product.name.toLowerCase().includes(term))
+    );
+  }, [products]);
+
   const filteredProducts = useMemo(
     () =>
       products.filter((product) =>
@@ -49,7 +57,7 @@ export function ProductSearch({
           >
             <Ionicons name="arrow-back" size={22} color="#f8fafc" />
           </Pressable>
-          <View className="flex-1 flex-row items-center gap-2 bg-secondary rounded-md px-3 h-11">
+          <View className="flex-1 flex-row items-center gap-2 bg-secondary rounded-xl px-3 h-11 border border-border">
             <Ionicons name="search-outline" size={18} color="#9ca3af" />
             <TextInput
               autoFocus
@@ -76,9 +84,33 @@ export function ProductSearch({
           contentContainerStyle={{ padding: 16, gap: 18 }}
           keyboardShouldPersistTaps="handled"
           ListHeaderComponent={
-            <Text className="text-muted-foreground text-xs mb-1">
-              {normalizedQuery ? `${filteredProducts.length} results` : "Browse all products"}
-            </Text>
+            <View className="mb-3">
+              {normalizedQuery ? (
+                <Text className="text-muted-foreground text-xs mb-2">
+                  {filteredProducts.length} results for “{query.trim()}”
+                </Text>
+              ) : (
+                <>
+                  <Text className="text-muted-foreground text-xs uppercase tracking-[0.14em] mb-2">
+                    Popular searches
+                  </Text>
+                  <View className="flex-row flex-wrap gap-2">
+                    {popularSuggestions.map((term) => (
+                      <Pressable
+                        key={term}
+                        onPress={() => setQuery(term)}
+                        className="rounded-full border border-border bg-card px-3 py-1.5"
+                        style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
+                      >
+                        <Text className="text-foreground text-xs font-medium capitalize">
+                          {term}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </>
+              )}
+            </View>
           }
           ListEmptyComponent={
             <View className="items-center py-16">

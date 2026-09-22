@@ -11,6 +11,8 @@ function formatPrice(value: number): string {
 export default function CartScreen() {
   const router = useRouter();
   const { items, subtotal, updateQuantity, removeItem } = useCart();
+  const shippingFee = subtotal > 5000 ? 0 : 150;
+  const total = subtotal + shippingFee;
 
   if (items.length === 0) {
     return (
@@ -57,9 +59,24 @@ export default function CartScreen() {
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 28 }}>
+        <View className="mb-4 rounded-2xl border border-border bg-card p-3 shadow-soft">
+          <View className="flex-row items-center justify-between">
+            <Text className="text-foreground text-sm font-semibold">Order summary</Text>
+            <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.12em]">
+              {items.length} items
+            </Text>
+          </View>
+          <View className="mt-2 flex-row items-center gap-2">
+            <Ionicons name="checkmark-circle-outline" size={15} color="#ef4444" />
+            <Text className="text-muted-foreground text-xs">
+              {subtotal >= 5000 ? "Free shipping unlocked" : `Add ${formatPrice(5000 - subtotal)} more for free shipping`}
+            </Text>
+          </View>
+        </View>
+
         {items.map(({ product, quantity }) => (
-          <View key={product.id} className="flex-row bg-card border border-border rounded-2xl p-3 mb-3">
+          <View key={product.id} className="flex-row bg-card border border-border rounded-2xl p-3 mb-3 shadow-soft">
             <Image source={{ uri: product.image }} className="w-20 h-20 rounded-xl bg-secondary" />
             <View className="flex-1 ml-3">
               <View className="flex-row items-start gap-2">
@@ -99,10 +116,18 @@ export default function CartScreen() {
           </View>
         ))}
 
-        <View className="bg-card border border-border rounded-2xl p-4 mt-2">
-          <View className="flex-row justify-between">
+        <View className="bg-card border border-border rounded-2xl p-4 mt-2 shadow-soft">
+          <View className="flex-row justify-between mb-2">
             <Text className="text-muted-foreground text-sm">Subtotal</Text>
             <Text className="text-foreground text-base font-bold">{formatPrice(subtotal)}</Text>
+          </View>
+          <View className="flex-row justify-between mb-2">
+            <Text className="text-muted-foreground text-sm">Shipping</Text>
+            <Text className="text-foreground text-sm">{shippingFee === 0 ? "FREE" : formatPrice(shippingFee)}</Text>
+          </View>
+          <View className="border-t border-border pt-3 mt-1 flex-row justify-between">
+            <Text className="text-foreground text-base font-bold">Total</Text>
+            <Text className="text-primary text-base font-bold">{formatPrice(total)}</Text>
           </View>
           <Text className="text-muted-foreground text-xs mt-3">Shipping and taxes are calculated at checkout.</Text>
           <Pressable

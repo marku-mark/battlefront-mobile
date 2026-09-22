@@ -70,15 +70,23 @@ export default function CheckoutScreen() {
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
+          <View className="rounded-2xl border border-border bg-card p-3 mb-5 shadow-soft">
+            <View className="flex-row items-center gap-2">
+              <Ionicons name="lock-closed-outline" size={15} color="#ef4444" />
+              <Text className="text-foreground text-sm font-semibold">Secure checkout</Text>
+            </View>
+            <Text className="text-muted-foreground text-xs mt-1">Protected payment flow • Verified local delivery • Warranty support</Text>
+          </View>
+
           <Text className="text-foreground text-base font-bold">Delivery details</Text>
           <Field label="Full name" value={fullName} onChangeText={setFullName} placeholder="Juan Dela Cruz" />
           <Field label="Phone number" value={phone} onChangeText={setPhone} placeholder="09XX XXX XXXX" keyboardType="phone-pad" />
           <Field label="Delivery address" value={address} onChangeText={setAddress} placeholder="House number, street, city" multiline />
 
           <Text className="text-foreground text-base font-bold mt-7 mb-3">Order summary</Text>
-          <View className="bg-card border border-border rounded-2xl p-4">
+          <View className="bg-card border border-border rounded-2xl p-4 shadow-soft">
             {items.map(({ product, quantity }) => (
-              <View key={product.id} className="flex-row justify-between mb-3">
+              <View key={product.id} className="flex-row justify-between mb-3 gap-3">
                 <Text className="flex-1 text-muted-foreground text-sm" numberOfLines={1}>
                   {quantity} x {product.name}
                 </Text>
@@ -97,10 +105,6 @@ export default function CheckoutScreen() {
             </View>
           </View>
 
-          <View className="flex-row items-center gap-2 mt-5">
-            <Ionicons name="lock-closed-outline" size={15} color="#94a3b8" />
-            <Text className="text-muted-foreground text-xs">Secure checkout. Payment integration coming later.</Text>
-          </View>
           <Pressable
             onPress={handlePlaceOrder}
             className="bg-primary rounded-xl items-center py-3.5 mt-5"

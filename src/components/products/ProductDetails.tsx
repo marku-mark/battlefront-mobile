@@ -89,7 +89,7 @@ export function ProductDetails({
             )}
           </View>
 
-          <View className="mt-5 rounded-2xl bg-secondary border border-border p-3">
+          <View className="mt-5 rounded-2xl bg-secondary border border-border p-3 shadow-soft">
             <View className="flex-row items-center justify-between">
               <Text className="text-foreground text-sm font-semibold">Delivery</Text>
               <Text className="text-primary text-xs font-bold uppercase tracking-[0.12em]">Free over ₱5,000</Text>

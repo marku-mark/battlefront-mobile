@@ -5,10 +5,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
 
 const accountLinks = [
-  { icon: "receipt-outline", label: "My orders", detail: "Track purchases and deliveries" },
-  { icon: "heart-outline", label: "Wishlist", detail: "Save products for later" },
-  { icon: "location-outline", label: "Delivery addresses", detail: "Manage your saved locations" },
-  { icon: "help-circle-outline", label: "Help center", detail: "Get support from Battlefront" },
+  { icon: "receipt-outline", label: "My orders", detail: "Track purchases and deliveries", badge: "Soon" },
+  { icon: "heart-outline", label: "Wishlist", detail: "Save products for later", badge: "Soon" },
+  { icon: "location-outline", label: "Delivery addresses", detail: "Manage your saved locations", badge: "Soon" },
+  { icon: "help-circle-outline", label: "Help center", detail: "Get support from Battlefront", badge: "Live" },
 ] as const;
 
 function showUnavailableMessage() {
@@ -104,9 +104,16 @@ export default function AccountScreen() {
                 <Ionicons name={link.icon} size={19} color={isDark ? "#f8fafc" : "#30343b"} />
               </View>
               <View className="flex-1 ml-3">
-                <Text className="text-foreground text-sm font-medium">
-                  {link.label}
-                </Text>
+                <View className="flex-row items-center gap-2">
+                  <Text className="text-foreground text-sm font-medium">
+                    {link.label}
+                  </Text>
+                  <View className={`rounded-full px-1.5 py-0.5 ${link.badge === "Live" ? "bg-primary/15" : "bg-secondary"}`}>
+                    <Text className={`text-[9px] font-bold uppercase tracking-[0.08em] ${link.badge === "Live" ? "text-primary" : "text-muted-foreground"}`}>
+                      {link.badge}
+                    </Text>
+                  </View>
+                </View>
                 <Text className="text-muted-foreground text-xs mt-0.5">
                   {link.detail}
                 </Text>

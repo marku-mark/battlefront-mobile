@@ -14,7 +14,12 @@ export function Categories({ categories, onSelect }: CategoriesProps) {
   return (
     <View className="mt-6">
       <View className="flex-row items-center justify-between px-4 mb-3">
-        <Text className="text-foreground font-bold text-base">Categories</Text>
+        <View>
+          <Text className="text-foreground font-bold text-base">Shop by category</Text>
+          <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.14em]">
+            find your fit
+          </Text>
+        </View>
         <Text className="text-muted-foreground text-[11px] uppercase tracking-[0.16em]">
           Browse all
         </Text>
@@ -28,10 +33,10 @@ export function Categories({ categories, onSelect }: CategoriesProps) {
         renderItem={({ item }) => (
           <Pressable
             onPress={() => onSelect?.(item)}
-            className="items-center w-16"
+            className="items-center w-[74px]"
             style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1, transform: [{ scale: pressed ? 0.96 : 1 }] })}
           >
-            <View className="w-14 h-14 rounded-xl bg-secondary items-center justify-center border border-border">
+            <View className="w-14 h-14 rounded-2xl bg-secondary items-center justify-center border border-border">
               <Ionicons
                 name={item.icon as any}
                 size={22}
@@ -39,8 +44,8 @@ export function Categories({ categories, onSelect }: CategoriesProps) {
               />
             </View>
             <Text
-              numberOfLines={1}
-              className="text-muted-foreground text-xs mt-1.5 text-center"
+              numberOfLines={2}
+              className="text-muted-foreground text-[11px] mt-1.5 text-center leading-3"
             >
               {item.name}
             </Text>

@@ -31,6 +31,12 @@ module.exports = {
         sm: "4px",
         md: "6px",
         lg: "8px",
+        xl: "12px",
+        "2xl": "16px",
+      },
+      boxShadow: {
+        soft: "0 8px 24px rgba(15, 23, 42, 0.12)",
+        elevated: "0 14px 36px rgba(15, 23, 42, 0.18)",
       },
     },
   },

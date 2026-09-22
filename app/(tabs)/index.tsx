@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Alert, Modal, Pressable, ScrollView, View } from "react-native";
+import { Alert, Modal, Pressable, ScrollView, Text, View } from "react-native";
 import {
   getBanners,
   getBrands,
@@ -37,6 +37,7 @@ export default function HomeScreen() {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [quantity, setQuantity] = useState(1);
+  const [isLoading, setIsLoading] = useState(true);
   const { addItem, itemCount } = useCart();
 
   const flashDealEndTime = useMemo(() => getFlashDealEndTime(), []);
@@ -65,18 +66,60 @@ export default function HomeScreen() {
   }
 
   useEffect(() => {
-    getBanners().then(setBanners);
-    getCategories().then(setCategories);
-    getFlashDeals().then(setFlashDeals);
-    getSulitPicks().then(setSulitPicks);
-    getNewArrivals().then(setNewArrivals);
-    getBrands().then(setBrands);
+    Promise.all([
+      getBanners().then(setBanners),
+      getCategories().then(setCategories),
+      getFlashDeals().then(setFlashDeals),
+      getSulitPicks().then(setSulitPicks),
+      getNewArrivals().then(setNewArrivals),
+      getBrands().then(setBrands),
+    ])
+      .catch(() => {
+        setBanners([]);
+        setCategories([]);
+        setFlashDeals([]);
+        setSulitPicks([]);
+        setNewArrivals([]);
+        setBrands([]);
+      })
+      .finally(() => setIsLoading(false));
   }, []);
+
+  if (isLoading) {
+    return (
+      <View className="flex-1 bg-background">
+        <Header cartCount={itemCount} onCartPress={() => router.push("/cart")} onSearchPress={() => setIsSearchOpen(true)} />
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 28 }}>
+          <LoadingHero />
+          <LoadingRow title="Trending" />
+          <LoadingCards />
+          <LoadingCards />
+        </ScrollView>
+      </View>
+    );
+  }
 
   return (
     <View className="flex-1 bg-background">
       <Header cartCount={itemCount} onCartPress={() => router.push("/cart")} onSearchPress={() => setIsSearchOpen(true)} />
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 28 }}
+      >
+        <View className="px-4 pt-4">
+          <View className="rounded-2xl bg-card border border-border p-4">
+            <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.14em]">
+              Battlefront essentials
+            </Text>
+            <Text className="text-foreground text-xl font-bold mt-2 leading-7">
+              Built for power, speed, and uptime.
+            </Text>
+            <Text className="text-muted-foreground text-sm mt-1.5 leading-5">
+              Upgrade your gaming, work, and everyday setup with trusted parts and dependable service.
+            </Text>
+          </View>
+        </View>
+
         <PromoBanners banners={banners} />
         <Categories categories={categories} onSelect={() => router.push("/categories")} />
         <FlashDeals
@@ -88,7 +131,6 @@ export default function HomeScreen() {
         <SulitPicks products={sulitPicks} onSelectProduct={handleProductSelect} />
         <NewArrivals products={newArrivals} onSelectProduct={handleProductSelect} />
         <Brands brands={brands} />
-        <View className="h-6" />
       </ScrollView>
       <Pressable
         accessibilityLabel="Open Battlefront Support chat"
@@ -120,6 +162,44 @@ export default function HomeScreen() {
           />
         )}
       </Modal>
+    </View>
+  );
+}
+
+function LoadingHero() {
+  return (
+    <View className="px-4 pt-4">
+      <View className="rounded-2xl bg-card border border-border p-4">
+        <View className="h-2.5 w-20 rounded-full bg-secondary" />
+        <View className="mt-3 h-6 w-4/5 rounded-full bg-secondary" />
+        <View className="mt-2 h-4 w-full rounded-full bg-secondary" />
+        <View className="mt-2 h-4 w-3/4 rounded-full bg-secondary" />
+      </View>
+    </View>
+  );
+}
+
+function LoadingRow({ title }: { title: string }) {
+  return (
+    <View className="mt-6 px-4 mb-3">
+      <View className="flex-row items-center justify-between">
+        <View className="h-4 w-28 rounded-full bg-secondary" />
+        <View className="h-3 w-16 rounded-full bg-secondary" />
+      </View>
+    </View>
+  );
+}
+
+function LoadingCards() {
+  return (
+    <View className="px-4 flex-row gap-3">
+      {Array.from({ length: 3 }).map((_, index) => (
+        <View key={index} className="w-[140px]">
+          <View className="h-[134px] rounded-2xl bg-secondary border border-border" />
+          <View className="mt-2 h-3.5 w-20 rounded-full bg-secondary" />
+          <View className="mt-2 h-3 w-16 rounded-full bg-secondary" />
+        </View>
+      ))}
     </View>
   );
 }

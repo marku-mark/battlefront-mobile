@@ -62,6 +62,11 @@ export default function CategoriesScreen() {
         contentContainerStyle={{ padding: 16, gap: 12 }}
         columnWrapperStyle={{ gap: 12 }}
         keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={
+          <Text className="text-muted-foreground text-xs uppercase tracking-[0.14em] mb-1">
+            {query.trim() ? `${filteredCategories.length} results` : "Shop by needs"}
+          </Text>
+        }
         ListEmptyComponent={
           <View className="items-center py-12">
             <Ionicons name="search-outline" size={28} color={isDark ? "#9ca3af" : "#68717e"} />
