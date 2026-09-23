@@ -6,9 +6,10 @@ import { useTheme } from "@/theme/ThemeProvider";
 type CategoriesProps = {
   categories: Category[];
   onSelect?: (category: Category) => void;
+  onBrowseAll?: () => void;
 };
 
-export function Categories({ categories, onSelect }: CategoriesProps) {
+export function Categories({ categories, onSelect, onBrowseAll }: CategoriesProps) {
   const { isDark } = useTheme();
 
   return (
@@ -20,9 +21,16 @@ export function Categories({ categories, onSelect }: CategoriesProps) {
             find your fit
           </Text>
         </View>
-        <Text className="text-muted-foreground text-[11px] uppercase tracking-[0.16em]">
-          Browse all
-        </Text>
+        <Pressable
+          accessibilityLabel="Browse all categories"
+          onPress={onBrowseAll}
+          hitSlop={8}
+          style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
+        >
+          <Text className="text-primary text-[11px] font-semibold uppercase tracking-[0.12em]">
+            Browse all
+          </Text>
+        </Pressable>
       </View>
       <FlatList
         data={categories}
@@ -32,6 +40,7 @@ export function Categories({ categories, onSelect }: CategoriesProps) {
         contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}
         renderItem={({ item }) => (
           <Pressable
+            accessibilityLabel={`Browse ${item.name} category`}
             onPress={() => onSelect?.(item)}
             className="items-center w-[74px]"
             style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1, transform: [{ scale: pressed ? 0.96 : 1 }] })}

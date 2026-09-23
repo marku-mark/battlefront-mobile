@@ -4,6 +4,7 @@ import { Stack } from "expo-router";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { CartProvider } from "@/hooks/useCart";
+import { WishlistProvider } from "@/hooks/useWishlist";
 import { ThemeProvider } from "@/theme/ThemeProvider";
 import { useTheme } from "@/theme/ThemeProvider";
 
@@ -26,7 +27,9 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <ThemeProvider>
           <CartProvider>
-            <AppStack />
+            <WishlistProvider>
+              <AppStack />
+            </WishlistProvider>
           </CartProvider>
         </ThemeProvider>
       </SafeAreaProvider>

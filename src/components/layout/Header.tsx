@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Image, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
+import { LogoMark } from "@/components/layout/LogoMark";
 
 type HeaderProps = {
   cartCount?: number;
@@ -20,12 +21,7 @@ export function Header({ cartCount = 0, onCartPress, onSearchPress }: HeaderProp
     >
       <View className="flex-row items-center gap-3 px-4 py-3.5">
         <View className="flex-1">
-          <Image
-            source={require("../../../assets/logo-mark.png")}
-            accessibilityLabel="Battlefront logo"
-            resizeMode="contain"
-            className="h-12 w-16"
-          />
+          <LogoMark isDark={isDark} size={48} />
         </View>
 
         <Pressable

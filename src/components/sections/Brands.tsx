@@ -12,9 +12,6 @@ export function Brands({ brands }: BrandsProps) {
     <View className="mt-6 mb-4">
       <View className="flex-row items-center justify-between px-4 mb-3">
         <Text className="text-foreground font-bold text-base">Brands</Text>
-        <Text className="text-muted-foreground text-[11px] uppercase tracking-[0.16em]">
-          Shop trusted
-        </Text>
       </View>
       <FlatList
         data={brands}

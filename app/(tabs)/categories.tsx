@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useMemo, useState } from "react";
+import { useLocalSearchParams } from "expo-router";
+import { useEffect, useMemo, useState } from "react";
 import {
   FlatList,
   Pressable,
@@ -12,8 +13,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
 
 export default function CategoriesScreen() {
+  const { categoryId } = useLocalSearchParams<{ categoryId?: string }>();
   const [query, setQuery] = useState("");
+  const [selectedCategoryId, setSelectedCategoryId] = useState(categoryId ?? null);
   const { isDark } = useTheme();
+
+  useEffect(() => {
+    setSelectedCategoryId(categoryId ?? null);
+  }, [categoryId]);
 
   const filteredCategories = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -31,6 +38,11 @@ export default function CategoriesScreen() {
         <Text className="text-muted-foreground text-sm mt-1">
           Find the right parts for your next build.
         </Text>
+        {selectedCategoryId && (
+          <Text className="text-primary text-xs font-semibold mt-2">
+            Category selected
+          </Text>
+        )}
 
         <View className="flex-row items-center gap-2 bg-secondary border border-border rounded-xl px-3 mt-4 h-11">
           <Ionicons name="search-outline" size={18} color={isDark ? "#cbd5e1" : "#68717e"} />
@@ -81,17 +93,27 @@ export default function CategoriesScreen() {
         renderItem={({ item }) => (
           <Pressable
             accessibilityLabel={`Browse ${item.name}`}
-            className="flex-1 min-h-[128px] rounded-2xl bg-card border border-border p-4 justify-between"
+            accessibilityState={{ selected: selectedCategoryId === item.id }}
+            onPress={() => setSelectedCategoryId(item.id)}
+            className={`flex-1 min-h-[128px] rounded-2xl border p-4 justify-between ${
+              selectedCategoryId === item.id
+                ? "bg-primary/10 border-primary"
+                : "bg-card border-border"
+            }`}
             style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1 })}
           >
             <View className="w-11 h-11 rounded-xl bg-secondary items-center justify-center">
               <Ionicons name={item.icon as any} size={24} color={isDark ? "#f8fafc" : "#30343b"} />
             </View>
             <View className="flex-row items-center justify-between mt-4">
-              <Text className="text-foreground text-sm font-semibold">
+              <Text className="text-foreground text-sm font-semibold flex-1">
                 {item.name}
               </Text>
-              <Ionicons name="arrow-forward" size={16} color="#ef1b1b" />
+              <Ionicons
+                name={selectedCategoryId === item.id ? "checkmark-circle" : "arrow-forward"}
+                size={16}
+                color="#ef1b1b"
+              />
             </View>
           </Pressable>
         )}

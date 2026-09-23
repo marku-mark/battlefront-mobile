@@ -18,7 +18,6 @@ import { Categories } from "@/components/sections/Categories";
 import { FlashDeals } from "@/components/sections/FlashDeals";
 import { TrustBar } from "@/components/sections/TrustBar";
 import { SulitPicks } from "@/components/sections/SulitPicks";
-import { NewArrivals } from "@/components/sections/NewArrivals";
 import { Brands } from "@/components/sections/Brands";
 import { Chatbot } from "@/components/support/Chatbot";
 import { ProductDetails } from "@/components/products/ProductDetails";
@@ -106,22 +105,17 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 28 }}
       >
-        <View className="px-4 pt-4">
-          <View className="rounded-2xl bg-card border border-border p-4">
-            <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.14em]">
-              Battlefront essentials
-            </Text>
-            <Text className="text-foreground text-xl font-bold mt-2 leading-7">
-              Built for power, speed, and uptime.
-            </Text>
-            <Text className="text-muted-foreground text-sm mt-1.5 leading-5">
-              Upgrade your gaming, work, and everyday setup with trusted parts and dependable service.
-            </Text>
-          </View>
-        </View>
-
         <PromoBanners banners={banners} />
-        <Categories categories={categories} onSelect={() => router.push("/categories")} />
+        <Categories
+          categories={categories}
+          onBrowseAll={() => router.push("/categories")}
+          onSelect={(category) =>
+            router.push({
+              pathname: "/categories",
+              params: { categoryId: category.id },
+            })
+          }
+        />
         <FlashDeals
           products={flashDeals}
           endTime={flashDealEndTime}
@@ -129,7 +123,6 @@ export default function HomeScreen() {
         />
         <TrustBar />
         <SulitPicks products={sulitPicks} onSelectProduct={handleProductSelect} />
-        <NewArrivals products={newArrivals} onSelectProduct={handleProductSelect} />
         <Brands brands={brands} />
       </ScrollView>
       <Pressable

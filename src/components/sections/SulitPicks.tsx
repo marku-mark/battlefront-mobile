@@ -19,9 +19,6 @@ export function SulitPicks({ products, onSelectProduct }: SulitPicksProps) {
             best value everyday
           </Text>
         </View>
-        <Text className="text-muted-foreground text-[11px] uppercase tracking-[0.16em]">
-          Smart buys
-        </Text>
       </View>
       <FlatList
         data={products}

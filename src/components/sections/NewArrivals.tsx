@@ -19,9 +19,6 @@ export function NewArrivals({ products, onSelectProduct }: NewArrivalsProps) {
             fresh drops
           </Text>
         </View>
-        <Text className="text-muted-foreground text-[11px] uppercase tracking-[0.16em]">
-          Trending now
-        </Text>
       </View>
       <ProductGrid products={products} onSelectProduct={onSelectProduct} />
     </View>
