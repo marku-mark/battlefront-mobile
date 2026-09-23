@@ -1,22 +1,29 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { useCart } from "@/hooks/useCart";
+import { useTheme } from "@/theme/ThemeProvider";
 
 export default function TabsLayout() {
   const { itemCount } = useCart();
+  const { isDark } = useTheme();
+  const activeColor = isDark ? "#ef1b1b" : "#ab2923";
+  const inactiveColor = isDark ? "#9ca3af" : "#59616d";
+  const backgroundColor = isDark ? "#090b10" : "#fffaf6";
+  const borderColor = isDark ? "#2a2e36" : "#d5cec5";
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: "#ef1b1b",
-        tabBarInactiveTintColor: "#9ca3af",
+        tabBarActiveTintColor: activeColor,
+        tabBarInactiveTintColor: inactiveColor,
         tabBarStyle: {
-          backgroundColor: "#090b10",
-          borderTopColor: "#2a2e36",
+          backgroundColor,
+          borderTopColor: borderColor,
           borderTopWidth: 1,
+          height: 64,
         },
-        tabBarLabelStyle: { fontSize: 11 },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
       }}
     >
       <Tabs.Screen
@@ -42,7 +49,11 @@ export default function TabsLayout() {
         options={{
           title: "Cart",
           tabBarBadge: itemCount > 0 ? (itemCount > 99 ? "99+" : itemCount) : undefined,
-          tabBarBadgeStyle: { backgroundColor: "#ef1b1b", color: "#f8fafc" },
+          tabBarBadgeStyle: {
+            backgroundColor: activeColor,
+            color: "#f8fafc",
+            minWidth: 18,
+          },
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="cart-outline" size={size} color={String(color)} />
           ),

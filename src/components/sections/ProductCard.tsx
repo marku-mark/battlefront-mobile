@@ -83,22 +83,21 @@ export function ProductCard({ product, width = 150, onPress }: ProductCardProps)
               )}
             </View>
 
-            <View className="flex-row items-center justify-between mt-1.5">
+            <View className="flex-row items-center justify-between mt-1.5 gap-2">
               {product.sold !== undefined ? (
                 <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.12em]">
                   {product.sold} sold
                 </Text>
               ) : (
-                <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.12em]">
-                  Ready to ship
-                </Text>
+                <View />
               )}
 
-              {hasDiscount && (
-                <Text className="text-ring text-[10px] font-bold uppercase tracking-[0.12em]">
-                  Save more
+              <View className="flex-row items-center gap-1">
+                <View className="h-1.5 w-1.5 rounded-full bg-primary" />
+                <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.08em]">
+                  Ready to ship
                 </Text>
-              )}
+              </View>
             </View>
           </View>
         </Pressable>

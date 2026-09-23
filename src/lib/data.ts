@@ -11,6 +11,8 @@ export type Category = {
 export type Product = {
   id: string;
   name: string;
+  categoryId: string;
+  brandId: string;
   price: number;
   originalPrice?: number;
   image: string;
@@ -79,6 +81,8 @@ export const flashDeals: Product[] = [
   {
     id: "flash-1",
     name: "RTX 4070 Super 12GB",
+    categoryId: "cat-3",
+    brandId: "brand-5",
     price: 32999,
     originalPrice: 38999,
     image: "https://images.unsplash.com/photo-1591488320449-011701bb6704?w=400&q=80",
@@ -87,6 +91,8 @@ export const flashDeals: Product[] = [
   {
     id: "flash-2",
     name: "Mechanical Keyboard 87-key",
+    categoryId: "cat-4",
+    brandId: "brand-3",
     price: 2499,
     originalPrice: 3299,
     image: "https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=400&q=80",
@@ -95,6 +101,8 @@ export const flashDeals: Product[] = [
   {
     id: "flash-3",
     name: "27\" 165Hz Gaming Monitor",
+    categoryId: "cat-5",
+    brandId: "brand-1",
     price: 10999,
     originalPrice: 13999,
     image: "https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?w=400&q=80",
@@ -106,18 +114,24 @@ export const sulitPicks: Product[] = [
   {
     id: "sulit-1",
     name: "1TB NVMe SSD Gen4",
+    categoryId: "cat-7",
+    brandId: "brand-5",
     price: 3999,
     image: "https://images.unsplash.com/photo-1597852074816-d933c7d2b988?w=400&q=80",
   },
   {
     id: "sulit-2",
     name: "Wireless Gaming Mouse",
+    categoryId: "cat-4",
+    brandId: "brand-4",
     price: 1899,
     image: "https://images.unsplash.com/photo-1527814050087-3793815479db?w=400&q=80",
   },
   {
     id: "sulit-3",
     name: "750W 80+ Gold PSU",
+    categoryId: "cat-3",
+    brandId: "brand-3",
     price: 4599,
     image: "https://images.unsplash.com/photo-1591405351990-4726e331f141?w=400&q=80",
   },
@@ -127,27 +141,41 @@ export const newArrivals: Product[] = [
   {
     id: "new-1",
     name: "Ryzen 7 8700G Processor",
+    categoryId: "cat-3",
+    brandId: "brand-1",
     price: 14999,
     image: "https://images.unsplash.com/photo-1555617981-dac3880eac6e?w=400&q=80",
   },
   {
     id: "new-2",
     name: "14\" Ultrabook 16GB/512GB",
+    categoryId: "cat-1",
+    brandId: "brand-1",
     price: 52999,
     image: "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=400&q=80",
   },
   {
     id: "new-3",
     name: "ATX Mid Tower Case",
+    categoryId: "cat-3",
+    brandId: "brand-2",
     price: 3499,
     image: "https://images.unsplash.com/photo-1587202372775-e229f172b9d7?w=400&q=80",
   },
   {
     id: "new-4",
     name: "32GB DDR5 6000MHz Kit",
+    categoryId: "cat-3",
+    brandId: "brand-3",
     price: 6299,
     image: "https://images.unsplash.com/photo-1562976540-1502c2145186?w=400&q=80",
   },
+];
+
+export const allProducts: Product[] = [
+  ...flashDeals,
+  ...sulitPicks,
+  ...newArrivals,
 ];
 
 export const brands: Brand[] = [

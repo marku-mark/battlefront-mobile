@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import { Alert, Image, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCart } from "@/hooks/useCart";
+import { ScreenHeader } from "@/components/layout/ScreenHeader";
 
 function formatPrice(value: number): string {
   return `₱${value.toLocaleString("en-PH")}`;
@@ -16,16 +17,16 @@ export default function CartScreen() {
 
   if (items.length === 0) {
     return (
-      <SafeAreaView className="flex-1 bg-background">
-        <View className="px-4 pt-3 pb-4 border-b border-border bg-background">
-          <View className="flex-row items-center justify-between">
-            <Text className="text-foreground text-2xl font-bold">Your Cart</Text>
+      <SafeAreaView edges={["left", "right", "bottom"]} className="flex-1 bg-background">
+        <ScreenHeader
+          title="Your Cart"
+          right={
             <View className="flex-row items-center gap-1.5">
               <Ionicons name="shield-checkmark-outline" size={16} color="#94a3b8" />
               <Text className="text-muted-foreground text-xs">Secure checkout</Text>
             </View>
-          </View>
-        </View>
+          }
+        />
 
         <View className="flex-1 items-center justify-center px-6">
           <View className="w-20 h-20 rounded-full bg-secondary items-center justify-center border border-border">
@@ -48,16 +49,16 @@ export default function CartScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-background">
-      <View className="px-4 pt-3 pb-4 border-b border-border bg-background">
-        <View className="flex-row items-center justify-between">
-          <Text className="text-foreground text-2xl font-bold">Your Cart</Text>
+    <SafeAreaView edges={["left", "right", "bottom"]} className="flex-1 bg-background">
+      <ScreenHeader
+        title="Your Cart"
+        right={
           <View className="flex-row items-center gap-1.5">
             <Ionicons name="shield-checkmark-outline" size={16} color="#94a3b8" />
             <Text className="text-muted-foreground text-xs">Secure checkout</Text>
           </View>
-        </View>
-      </View>
+        }
+      />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 28 }}>
         <View className="mb-4 rounded-2xl border border-border bg-card p-3 shadow-soft">

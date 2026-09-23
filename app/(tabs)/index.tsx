@@ -18,6 +18,7 @@ import { Categories } from "@/components/sections/Categories";
 import { FlashDeals } from "@/components/sections/FlashDeals";
 import { TrustBar } from "@/components/sections/TrustBar";
 import { SulitPicks } from "@/components/sections/SulitPicks";
+import { NewArrivals } from "@/components/sections/NewArrivals";
 import { Brands } from "@/components/sections/Brands";
 import { Chatbot } from "@/components/support/Chatbot";
 import { ProductDetails } from "@/components/products/ProductDetails";
@@ -88,7 +89,7 @@ export default function HomeScreen() {
     return (
       <View className="flex-1 bg-background">
         <Header cartCount={itemCount} onCartPress={() => router.push("/cart")} onSearchPress={() => setIsSearchOpen(true)} />
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 28 }}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 112 }}>
           <LoadingHero />
           <LoadingRow title="Trending" />
           <LoadingCards />
@@ -123,6 +124,7 @@ export default function HomeScreen() {
         />
         <TrustBar />
         <SulitPicks products={sulitPicks} onSelectProduct={handleProductSelect} />
+        <NewArrivals products={newArrivals} onSelectProduct={handleProductSelect} />
         <Brands brands={brands} />
       </ScrollView>
       <Pressable

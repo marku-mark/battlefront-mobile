@@ -6,6 +6,7 @@ import {
   banners,
   brands,
   categories,
+  allProducts,
   flashDeals,
   newArrivals,
   sulitPicks,
@@ -39,6 +40,10 @@ export async function getSulitPicks(): Promise<Product[]> {
 
 export async function getNewArrivals(): Promise<Product[]> {
   return resolveAfter(newArrivals);
+}
+
+export async function getProducts(): Promise<Product[]> {
+  return resolveAfter(allProducts);
 }
 
 export async function getBrands(): Promise<Brand[]> {

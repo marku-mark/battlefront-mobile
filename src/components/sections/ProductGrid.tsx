@@ -1,11 +1,9 @@
-import { Dimensions, View } from "react-native";
+import { useWindowDimensions, View } from "react-native";
 import type { Product } from "@/lib/data";
 import { ProductCard } from "./ProductCard";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const GRID_GAP = 12;
 const HORIZONTAL_PADDING = 16;
-const CARD_WIDTH = (SCREEN_WIDTH - HORIZONTAL_PADDING * 2 - GRID_GAP) / 2;
 
 type ProductGridProps = {
   products: Product[];
@@ -13,6 +11,12 @@ type ProductGridProps = {
 };
 
 export function ProductGrid({ products, onSelectProduct }: ProductGridProps) {
+  const { width: screenWidth } = useWindowDimensions();
+  const cardWidth = Math.max(
+    136,
+    (screenWidth - HORIZONTAL_PADDING * 2 - GRID_GAP) / 2
+  );
+
   return (
     <View
       className="flex-row flex-wrap px-4"
@@ -22,7 +26,7 @@ export function ProductGrid({ products, onSelectProduct }: ProductGridProps) {
         <ProductCard
           key={product.id}
           product={product}
-          width={CARD_WIDTH}
+          width={cardWidth}
           onPress={onSelectProduct}
         />
       ))}

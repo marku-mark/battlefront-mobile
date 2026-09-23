@@ -1,7 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Image, Pressable, ScrollView, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
+import { useState, type ReactNode } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { Product } from "@/lib/data";
 import { useTheme } from "@/theme/ThemeProvider";
+import { useWishlist } from "@/hooks/useWishlist";
 
 type ProductDetailsProps = {
   product: Product;
@@ -23,6 +26,12 @@ export function ProductDetails({
   onClose,
 }: ProductDetailsProps) {
   const { isDark } = useTheme();
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const { isWishlisted, toggleWishlist } = useWishlist();
+  const [isSpecificationsOpen, setIsSpecificationsOpen] = useState(false);
+  const [isCompatibilityOpen, setIsCompatibilityOpen] = useState(false);
+  const wishlisted = isWishlisted(product.id);
   const hasDiscount =
     product.originalPrice !== undefined && product.originalPrice > product.price;
   const discountPct = hasDiscount
@@ -31,10 +40,14 @@ export function ProductDetails({
       )
     : 0;
   const subtotal = product.price * quantity;
+  const productFacts = getProductFacts(product);
 
   return (
     <View className="flex-1 bg-background">
-      <View className="flex-row items-center justify-between px-4 py-3 border-b border-border">
+      <View
+        className="flex-row items-center justify-between px-4 pb-3 border-b border-border"
+        style={{ paddingTop: Math.max(insets.top, 12) }}
+      >
         <Pressable
           accessibilityLabel="Close product details"
           onPress={onClose}
@@ -44,7 +57,20 @@ export function ProductDetails({
           <Ionicons name="arrow-back" size={22} color={isDark ? "#f8fafc" : "#30343b"} />
         </Pressable>
         <Text className="text-foreground text-base font-semibold">Product details</Text>
-        <View className="w-9 h-9" />
+        <Pressable
+          accessibilityLabel={`${wishlisted ? "Remove" : "Add"} ${product.name} ${wishlisted ? "from" : "to"} wishlist`}
+          accessibilityState={{ selected: wishlisted }}
+          onPress={() => toggleWishlist(product.id)}
+          hitSlop={8}
+          className="w-11 h-11 items-center justify-center rounded-xl border border-border bg-secondary"
+          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+        >
+          <Ionicons
+            name={wishlisted ? "heart" : "heart-outline"}
+            size={21}
+            color={wishlisted ? "#ef1b1b" : isDark ? "#f8fafc" : "#30343b"}
+          />
+        </Pressable>
       </View>
 
       <ScrollView
@@ -54,9 +80,20 @@ export function ProductDetails({
         <Image
           source={{ uri: product.image }}
           accessibilityLabel={product.name}
-          className="w-full aspect-square bg-card"
+          style={{ width, height: width }}
+          className="bg-card"
           resizeMode="cover"
         />
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 8, padding: 12 }}
+        >
+          <View className="h-16 w-16 overflow-hidden rounded-lg border-2 border-primary">
+            <Image source={{ uri: product.image }} accessibilityLabel={`${product.name} thumbnail`} className="h-full w-full" />
+          </View>
+        </ScrollView>
 
         <View className="px-4 pt-5">
           <View className="flex-row items-start justify-between gap-3">
@@ -100,14 +137,37 @@ export function ProductDetails({
           <View className="mt-6 pt-5 border-t border-border">
             <Text className="text-foreground text-base font-semibold">About this product</Text>
             <Text className="text-muted-foreground text-sm leading-5 mt-2">
-              Built for reliable performance in your next setup. This product is selected for high-performance use and backed by Battlefront support for a smoother shopping experience.
+              {productFacts.description}
             </Text>
             <View className="mt-3 gap-2">
-              <BulletPoint text="Reliable daily performance for demanding setups" />
-              <BulletPoint text="Built for compatibility and easy upgrades" />
-              <BulletPoint text="Backing support from Battlefront and warranty coverage" />
+              {productFacts.highlights.map((highlight) => (
+                <BulletPoint key={highlight} text={highlight} />
+              ))}
             </View>
           </View>
+
+          <DetailDisclosure
+            title="Specifications"
+            open={isSpecificationsOpen}
+            onPress={() => setIsSpecificationsOpen((current) => !current)}
+          >
+            {productFacts.specifications.map(([label, value]) => (
+              <View key={label} className="flex-row justify-between gap-4 py-2 border-b border-border">
+                <Text className="text-muted-foreground text-sm">{label}</Text>
+                <Text className="text-foreground text-sm font-medium flex-1 text-right">{value}</Text>
+              </View>
+            ))}
+          </DetailDisclosure>
+
+          <DetailDisclosure
+            title="Compatibility and support"
+            open={isCompatibilityOpen}
+            onPress={() => setIsCompatibilityOpen((current) => !current)}
+          >
+            <Text className="text-muted-foreground text-sm leading-5">
+              {productFacts.compatibility}
+            </Text>
+          </DetailDisclosure>
 
           <View className="flex-row items-center justify-between mt-6">
             <Text className="text-foreground text-sm font-semibold">Quantity</Text>
@@ -133,7 +193,10 @@ export function ProductDetails({
         </View>
       </ScrollView>
 
-      <View className="px-4 py-3 border-t border-border bg-background">
+      <View
+        className="px-4 pt-3 border-t border-border bg-background"
+        style={{ paddingBottom: Math.max(insets.bottom, 12) }}
+      >
         <View className="flex-row items-center justify-between mb-3">
           <Text className="text-muted-foreground text-xs uppercase tracking-[0.12em]">Total</Text>
           <Text className="text-foreground text-lg font-bold">{formatPrice(subtotal)}</Text>
@@ -147,6 +210,70 @@ export function ProductDetails({
           <Text className="text-primary-foreground text-sm font-bold">Add to cart</Text>
         </Pressable>
       </View>
+    </View>
+  );
+}
+
+type ProductFacts = {
+  description: string;
+  highlights: string[];
+  specifications: [string, string][];
+  compatibility: string;
+};
+
+function getProductFacts(product: Product): ProductFacts {
+  const factsByCategory: Record<string, ProductFacts> = {
+    "cat-1": {
+      description: `${product.name} is a portable everyday workstation for focused work, study, and travel-ready productivity.`,
+      highlights: ["Balanced performance for work and study", "Compact setup with fewer accessories", "Covered by Battlefront support and warranty"],
+      specifications: [["Category", "Laptop"], ["Use case", "Work, study, and portable gaming"], ["Availability", "Ready to ship"]],
+      compatibility: "Works with standard USB accessories, external displays, and common laptop docks.",
+    },
+    "cat-3": {
+      description: `${product.name} is a core desktop component selected for reliable performance in a custom PC build or upgrade.`,
+      highlights: ["Designed for upgrade-focused builds", "Check system fit before checkout", "Covered by Battlefront support and warranty"],
+      specifications: [["Category", "Component"], ["Build role", "Desktop upgrade"], ["Availability", "Ready to ship"]],
+      compatibility: "Confirm your motherboard, case clearance, power requirements, and connector standards before ordering.",
+    },
+    "cat-4": {
+      description: `${product.name} adds a more responsive, comfortable control setup for gaming and everyday desk work.`,
+      highlights: ["Built for repeated daily use", "Easy fit for a focused desk setup", "Covered by Battlefront support and warranty"],
+      specifications: [["Category", "Peripheral"], ["Connection", "USB or wireless depending on model"], ["Availability", "Ready to ship"]],
+      compatibility: "Compatible with standard desktop and laptop setups. Check the included connection type for your device.",
+    },
+  };
+
+  return factsByCategory[product.categoryId] ?? {
+    description: `${product.name} is selected for dependable performance in a practical Battlefront setup.`,
+    highlights: ["Built for reliable everyday use", "Suitable for common upgrade paths", "Covered by Battlefront support and warranty"],
+    specifications: [["Category", "Computer hardware"], ["Availability", "Ready to ship"]],
+    compatibility: "Review your current setup dimensions, connectors, and requirements before ordering.",
+  };
+}
+
+function DetailDisclosure({
+  title,
+  open,
+  onPress,
+  children,
+}: {
+  title: string;
+  open: boolean;
+  onPress: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <View className="mt-3 border-t border-border">
+      <Pressable
+        accessibilityLabel={`${open ? "Collapse" : "Expand"} ${title}`}
+        accessibilityState={{ expanded: open }}
+        onPress={onPress}
+        className="flex-row items-center justify-between py-4"
+      >
+        <Text className="text-foreground text-sm font-semibold">{title}</Text>
+        <Ionicons name={open ? "chevron-up" : "chevron-down"} size={18} color="#9ca3af" />
+      </Pressable>
+      {open && <View className="pb-3">{children}</View>}
     </View>
   );
 }
