@@ -43,6 +43,7 @@ export function Chatbot({ visible, onClose }: ChatbotProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([welcomeMessage]);
   const [draft, setDraft] = useState("");
   const [isReplying, setIsReplying] = useState(false);
+  const [failedMessage, setFailedMessage] = useState<string | null>(null);
   const listRef = useRef<FlatList<ChatMessage>>(null);
 
   useEffect(() => {
@@ -54,22 +55,7 @@ export function Chatbot({ visible, onClose }: ChatbotProps) {
   async function handleSend() {
     const text = draft.trim();
     if (!text || isReplying) return;
-
-    const userMessage: ChatMessage = {
-      id: `user-${Date.now()}`,
-      role: "user",
-      text,
-    };
-    setMessages((current) => [...current, userMessage]);
-    setDraft("");
-    setIsReplying(true);
-
-    const reply = await getChatbotReply(text);
-    setMessages((current) => [
-      ...current,
-      { id: `assistant-${Date.now()}`, role: "assistant", text: reply },
-    ]);
-    setIsReplying(false);
+    await sendMessage(text);
   }
 
   function handleQuickQuestion(question: string) {
@@ -77,24 +63,38 @@ export function Chatbot({ visible, onClose }: ChatbotProps) {
     void sendMessage(question);
   }
 
-  async function sendMessage(text: string) {
+  async function sendMessage(text: string, appendUser = true) {
     if (!text || isReplying) return;
 
-    const userMessage: ChatMessage = {
-      id: `user-${Date.now()}`,
-      role: "user",
-      text,
-    };
-    setMessages((current) => [...current, userMessage]);
+    if (appendUser) {
+      const userMessage: ChatMessage = {
+        id: `user-${Date.now()}`,
+        role: "user",
+        text,
+      };
+      setMessages((current) => [...current, userMessage]);
+    }
     setDraft("");
+    setFailedMessage(null);
     setIsReplying(true);
 
-    const reply = await getChatbotReply(text);
-    setMessages((current) => [
-      ...current,
-      { id: `assistant-${Date.now()}`, role: "assistant", text: reply },
-    ]);
-    setIsReplying(false);
+    try {
+      const reply = await getChatbotReply(text);
+      setMessages((current) => [
+        ...current,
+        { id: `assistant-${Date.now()}`, role: "assistant", text: reply },
+      ]);
+    } catch {
+      setFailedMessage(text);
+    } finally {
+      setIsReplying(false);
+    }
+  }
+
+  function clearConversation() {
+    setMessages([welcomeMessage]);
+    setDraft("");
+    setFailedMessage(null);
   }
 
   return (
@@ -120,6 +120,14 @@ export function Chatbot({ visible, onClose }: ChatbotProps) {
                 <Text className="text-muted-foreground text-[11px]">Quick answers, anytime</Text>
               </View>
             </View>
+            <Pressable
+              accessibilityLabel="Clear conversation"
+              onPress={clearConversation}
+              hitSlop={10}
+              className="w-9 h-9 items-center justify-center"
+            >
+              <Ionicons name="refresh-outline" size={20} color={isDark ? "#cbd5e1" : "#68717e"} />
+            </Pressable>
             <Pressable
               accessibilityLabel="Close chat"
               onPress={onClose}
@@ -160,6 +168,24 @@ export function Chatbot({ visible, onClose }: ChatbotProps) {
               ) : null
             }
           />
+
+          {failedMessage && (
+            <View className="mx-4 mb-3 rounded-xl border border-primary/30 bg-primary/10 px-3 py-3">
+              <Text className="text-foreground text-xs">We couldn’t reach support right now.</Text>
+              <View className="flex-row items-center gap-4 mt-2">
+                <Pressable
+                  accessibilityLabel="Retry support message"
+                  onPress={() => void sendMessage(failedMessage, false)}
+                  disabled={isReplying}
+                >
+                  <Text className="text-primary text-xs font-bold">Retry</Text>
+                </Pressable>
+                <Pressable onPress={() => setFailedMessage(null)}>
+                  <Text className="text-muted-foreground text-xs font-semibold">Dismiss</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
 
           <View className="px-4 pb-2">
             <Text className="text-muted-foreground text-[11px] mb-2">Quick questions</Text>

@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 type WishlistContextValue = {
+  items: string[];
   isWishlisted: (productId: string) => boolean;
   toggleWishlist: (productId: string) => void;
 };
@@ -33,6 +34,7 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<WishlistContextValue>(
     () => ({
+      items: productIds,
       isWishlisted: (productId) => productIds.includes(productId),
       toggleWishlist: (productId) => {
         setProductIds((current) =>

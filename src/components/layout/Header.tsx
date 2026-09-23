@@ -7,10 +7,11 @@ import { LogoMark } from "@/components/layout/LogoMark";
 type HeaderProps = {
   cartCount?: number;
   onCartPress?: () => void;
+  onNotificationPress?: () => void;
   onSearchPress?: () => void;
 };
 
-export function Header({ cartCount = 0, onCartPress, onSearchPress }: HeaderProps) {
+export function Header({ cartCount = 0, onCartPress, onNotificationPress, onSearchPress }: HeaderProps) {
   const insets = useSafeAreaInsets();
   const { isDark } = useTheme();
 
@@ -23,6 +24,15 @@ export function Header({ cartCount = 0, onCartPress, onSearchPress }: HeaderProp
         <View className="flex-1">
           <LogoMark isDark={isDark} size={48} />
         </View>
+
+        <Pressable
+          onPress={onNotificationPress}
+          accessibilityLabel="Open notifications"
+          className="w-11 h-11 items-center justify-center rounded-xl bg-secondary border border-border shadow-soft"
+          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+        >
+          <Ionicons name="notifications-outline" size={20} color={isDark ? "#f8fafc" : "#30343b"} />
+        </Pressable>
 
         <Pressable
           onPress={onCartPress}

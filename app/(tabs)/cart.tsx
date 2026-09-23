@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { Alert, Image, Pressable, ScrollView, Text, View } from "react-native";
+import { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useCart } from "@/hooks/useCart";
+import { useCart, type CartItem } from "@/hooks/useCart";
 import { ScreenHeader } from "@/components/layout/ScreenHeader";
 
 function formatPrice(value: number): string {
@@ -11,11 +12,12 @@ function formatPrice(value: number): string {
 
 export default function CartScreen() {
   const router = useRouter();
-  const { items, subtotal, updateQuantity, removeItem } = useCart();
+  const { items, subtotal, updateQuantity, removeItem, clearCart } = useCart();
+  const [removedItem, setRemovedItem] = useState<CartItem | null>(null);
   const shippingFee = subtotal > 5000 ? 0 : 150;
   const total = subtotal + shippingFee;
 
-  if (items.length === 0) {
+  if (items.length === 0 && !removedItem) {
     return (
       <SafeAreaView edges={["left", "right", "bottom"]} className="flex-1 bg-background">
         <ScreenHeader
@@ -53,10 +55,25 @@ export default function CartScreen() {
       <ScreenHeader
         title="Your Cart"
         right={
-          <View className="flex-row items-center gap-1.5">
-            <Ionicons name="shield-checkmark-outline" size={16} color="#94a3b8" />
-            <Text className="text-muted-foreground text-xs">Secure checkout</Text>
-          </View>
+          <Pressable
+            accessibilityLabel="Clear cart"
+            onPress={() =>
+              Alert.alert("Clear cart?", "Remove all items from your cart?", [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Clear cart",
+                  style: "destructive",
+                  onPress: () => {
+                    clearCart();
+                    setRemovedItem(null);
+                  },
+                },
+              ])
+            }
+            hitSlop={8}
+          >
+            <Text className="text-primary text-xs font-semibold">Clear all</Text>
+          </Pressable>
         }
       />
 
@@ -78,15 +95,27 @@ export default function CartScreen() {
 
         {items.map(({ product, quantity }) => (
           <View key={product.id} className="flex-row bg-card border border-border rounded-2xl p-3 mb-3 shadow-soft">
-            <Image source={{ uri: product.image }} className="w-20 h-20 rounded-xl bg-secondary" />
+            <Pressable
+              accessibilityLabel={`View details for ${product.name}`}
+              onPress={() => router.push({ pathname: "/product/[id]", params: { id: product.id } })}
+            >
+              <Image source={{ uri: product.image }} className="w-20 h-20 rounded-xl bg-secondary" />
+            </Pressable>
             <View className="flex-1 ml-3">
               <View className="flex-row items-start gap-2">
-                <Text className="flex-1 text-foreground text-sm font-semibold" numberOfLines={2}>
-                  {product.name}
-                </Text>
+                <Pressable
+                  accessibilityLabel={`View details for ${product.name}`}
+                  onPress={() => router.push({ pathname: "/product/[id]", params: { id: product.id } })}
+                  className="flex-1"
+                >
+                  <Text className="text-foreground text-sm font-semibold" numberOfLines={2}>{product.name}</Text>
+                </Pressable>
                 <Pressable
                   accessibilityLabel={`Remove ${product.name}`}
-                  onPress={() => removeItem(product.id)}
+                  onPress={() => {
+                    setRemovedItem({ product, quantity });
+                    removeItem(product.id);
+                  }}
                   hitSlop={8}
                 >
                   <Ionicons name="trash-outline" size={17} color="#94a3b8" />
@@ -117,6 +146,22 @@ export default function CartScreen() {
           </View>
         ))}
 
+        {removedItem && (
+          <View className="flex-row items-center justify-between rounded-xl border border-primary/30 bg-primary/10 px-3 py-3 mb-3">
+            <Text className="flex-1 text-foreground text-xs">{removedItem.product.name} removed</Text>
+            <Pressable
+              accessibilityLabel="Undo remove item"
+              onPress={() => {
+                updateQuantity(removedItem.product.id, removedItem.quantity);
+                setRemovedItem(null);
+              }}
+              className="px-2 py-1"
+            >
+              <Text className="text-primary text-xs font-bold">Undo</Text>
+            </Pressable>
+          </View>
+        )}
+
         <View className="bg-card border border-border rounded-2xl p-4 mt-2 shadow-soft">
           <View className="flex-row justify-between mb-2">
             <Text className="text-muted-foreground text-sm">Subtotal</Text>
@@ -133,6 +178,7 @@ export default function CartScreen() {
           <Text className="text-muted-foreground text-xs mt-3">Shipping and taxes are calculated at checkout.</Text>
           <Pressable
             onPress={() => router.push("/checkout")}
+            disabled={items.length === 0}
             className="bg-primary rounded-xl items-center py-3.5 mt-5"
             style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
           >

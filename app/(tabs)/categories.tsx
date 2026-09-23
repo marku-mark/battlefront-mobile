@@ -1,8 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   FlatList,
+  ActivityIndicator,
+  Modal,
   Pressable,
   ScrollView,
   Text,
@@ -17,6 +19,7 @@ import { ScreenHeader } from "@/components/layout/ScreenHeader";
 import { ProductGrid } from "@/components/sections/ProductGrid";
 
 export default function CategoriesScreen() {
+  const router = useRouter();
   const { categoryId } = useLocalSearchParams<{ categoryId?: string }>();
   const [query, setQuery] = useState("");
   const [selectedCategoryId, setSelectedCategoryId] = useState(categoryId ?? null);
@@ -24,6 +27,9 @@ export default function CategoriesScreen() {
   const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null);
   const [priceFilter, setPriceFilter] = useState<"all" | "under-5k" | "under-15k" | "over-15k">("all");
   const [sortOrder, setSortOrder] = useState<"featured" | "price-low" | "price-high">("featured");
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasLoadError, setHasLoadError] = useState(false);
   const { isDark } = useTheme();
 
   useEffect(() => {
@@ -31,7 +37,14 @@ export default function CategoriesScreen() {
   }, [categoryId]);
 
   useEffect(() => {
-    getProducts().then(setProducts).catch(() => setProducts([]));
+    setIsLoading(true);
+    getProducts()
+      .then(setProducts)
+      .catch(() => {
+        setProducts([]);
+        setHasLoadError(true);
+      })
+      .finally(() => setIsLoading(false));
   }, []);
 
   const filteredCategories = useMemo(() => {
@@ -127,7 +140,7 @@ export default function CategoriesScreen() {
           <Pressable
             accessibilityLabel={`Browse ${item.name}`}
             accessibilityState={{ selected: selectedCategoryId === item.id }}
-            onPress={() => setSelectedCategoryId(item.id)}
+            onPress={() => setSelectedCategoryId((current) => current === item.id ? null : item.id)}
             className={`flex-1 min-h-[128px] rounded-2xl border p-4 justify-between ${
               selectedCategoryId === item.id
                 ? "bg-primary/10 border-primary"
@@ -179,31 +192,10 @@ export default function CategoriesScreen() {
               contentContainerStyle={{ gap: 8, paddingBottom: 10 }}
             >
               <FilterButton
-                label={sortOrder === "featured" ? "Featured" : sortOrder === "price-low" ? "Price: low" : "Price: high"}
-                active={sortOrder !== "featured"}
-                onPress={() =>
-                  setSortOrder((current) =>
-                    current === "featured" ? "price-low" : current === "price-low" ? "price-high" : "featured"
-                  )
-                }
+                label="Filter and sort"
+                active={Boolean(selectedBrandId) || priceFilter !== "all" || sortOrder !== "featured"}
+                onPress={() => setIsFilterOpen(true)}
               />
-              <FilterButton
-                label={priceFilter === "all" ? "Any price" : priceFilter === "under-5k" ? "Under ₱5k" : priceFilter === "under-15k" ? "Under ₱15k" : "₱15k+"}
-                active={priceFilter !== "all"}
-                onPress={() =>
-                  setPriceFilter((current) =>
-                    current === "all" ? "under-5k" : current === "under-5k" ? "under-15k" : current === "under-15k" ? "over-15k" : "all"
-                  )
-                }
-              />
-              {brands.map((brand) => (
-                <FilterButton
-                  key={brand.id}
-                  label={brand.name}
-                  active={selectedBrandId === brand.id}
-                  onPress={() => setSelectedBrandId((current) => current === brand.id ? null : brand.id)}
-                />
-              ))}
               {(selectedBrandId || priceFilter !== "all" || sortOrder !== "featured") && (
                 <Pressable
                   accessibilityLabel="Reset category filters"
@@ -220,21 +212,110 @@ export default function CategoriesScreen() {
                 </Pressable>
               )}
             </ScrollView>
-            {previewProducts.length > 0 ? (
-              <ProductGrid products={previewProducts} />
+            {isLoading ? (
+              <View className="items-center border border-border bg-card py-10 px-4">
+                <ActivityIndicator color="#ef1b1b" />
+                <Text className="text-muted-foreground text-xs mt-3">Loading products...</Text>
+              </View>
+            ) : hasLoadError ? (
+              <View className="items-center border border-border bg-card py-8 px-4">
+                <Ionicons name="cloud-offline-outline" size={28} color={isDark ? "#9ca3af" : "#68717e"} />
+                <Text className="text-foreground text-sm font-semibold mt-3">Could not load products</Text>
+                <Text className="text-muted-foreground text-xs text-center mt-1">Check your connection and try again.</Text>
+                <Pressable
+                  onPress={() => {
+                    setIsLoading(true);
+                    setHasLoadError(false);
+                    getProducts()
+                      .then(setProducts)
+                      .catch(() => setHasLoadError(true))
+                      .finally(() => setIsLoading(false));
+                  }}
+                  className="bg-primary rounded-lg px-4 py-2.5 mt-4"
+                >
+                  <Text className="text-primary-foreground text-xs font-semibold">Try again</Text>
+                </Pressable>
+              </View>
+            ) : previewProducts.length > 0 ? (
+              <ProductGrid
+                products={previewProducts}
+                onSelectProduct={(product) =>
+                  router.push({ pathname: "/product/[id]", params: { id: product.id } })
+                }
+              />
             ) : (
               <View className="items-center border border-border bg-card py-8 px-4">
+                <Ionicons name="search-outline" size={26} color={isDark ? "#9ca3af" : "#68717e"} />
                 <Text className="text-foreground text-sm font-semibold">
-                  No products in this category yet
+                  No products match these filters
                 </Text>
                 <Text className="text-muted-foreground text-xs text-center mt-1">
-                  Try another category or browse all products.
+                  Clear a filter or choose another category to continue browsing.
                 </Text>
+                <Pressable
+                  onPress={() => {
+                    setSelectedBrandId(null);
+                    setPriceFilter("all");
+                    setSortOrder("featured");
+                  }}
+                  className="border border-border rounded-lg px-4 py-2.5 mt-4"
+                >
+                  <Text className="text-foreground text-xs font-semibold">Clear filters</Text>
+                </Pressable>
               </View>
             )}
           </View>
         }
       />
+      <Modal
+        visible={isFilterOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsFilterOpen(false)}
+      >
+        <View className="flex-1 justify-end bg-black/50">
+          <View className="bg-background rounded-t-3xl border-t border-border px-4 pt-4 pb-8">
+            <View className="flex-row items-center justify-between">
+              <Text className="text-foreground text-lg font-bold">Filter and sort</Text>
+              <Pressable
+                accessibilityLabel="Close filters"
+                onPress={() => setIsFilterOpen(false)}
+                hitSlop={8}
+                className="w-9 h-9 items-center justify-center"
+              >
+                <Ionicons name="close" size={22} color={isDark ? "#f8fafc" : "#30343b"} />
+              </Pressable>
+            </View>
+            <Text className="text-muted-foreground text-xs uppercase tracking-[0.12em] mt-5 mb-2">Sort by</Text>
+            <View className="flex-row flex-wrap gap-2">
+              <FilterButton label="Featured" active={sortOrder === "featured"} onPress={() => setSortOrder("featured")} />
+              <FilterButton label="Price: low" active={sortOrder === "price-low"} onPress={() => setSortOrder("price-low")} />
+              <FilterButton label="Price: high" active={sortOrder === "price-high"} onPress={() => setSortOrder("price-high")} />
+            </View>
+            <Text className="text-muted-foreground text-xs uppercase tracking-[0.12em] mt-5 mb-2">Price</Text>
+            <View className="flex-row flex-wrap gap-2">
+              <FilterButton label="Any price" active={priceFilter === "all"} onPress={() => setPriceFilter("all")} />
+              <FilterButton label="Under ₱5k" active={priceFilter === "under-5k"} onPress={() => setPriceFilter("under-5k")} />
+              <FilterButton label="Under ₱15k" active={priceFilter === "under-15k"} onPress={() => setPriceFilter("under-15k")} />
+              <FilterButton label="₱15k+" active={priceFilter === "over-15k"} onPress={() => setPriceFilter("over-15k")} />
+            </View>
+            <Text className="text-muted-foreground text-xs uppercase tracking-[0.12em] mt-5 mb-2">Brand</Text>
+            <View className="flex-row flex-wrap gap-2">
+              {brands.map((brand) => (
+                <FilterButton
+                  key={brand.id}
+                  label={brand.name}
+                  active={selectedBrandId === brand.id}
+                  onPress={() => setSelectedBrandId((current) => current === brand.id ? null : brand.id)}
+                />
+              ))}
+            </View>
+            <Pressable onPress={() => setIsFilterOpen(false)} className="bg-primary rounded-xl items-center py-3.5 mt-6">
+              <Text className="text-primary-foreground text-sm font-bold">Show {previewProducts.length} products</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

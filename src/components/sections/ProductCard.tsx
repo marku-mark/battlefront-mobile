@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Product } from "@/lib/data";
 import { useCart } from "@/hooks/useCart";
 import { useWishlist } from "@/hooks/useWishlist";
+import { useTheme } from "@/theme/ThemeProvider";
 
 type ProductCardProps = {
   product: Product;
@@ -18,6 +19,7 @@ function formatPrice(value: number): string {
 export function ProductCard({ product, width = 150, onPress }: ProductCardProps) {
   const { addItem } = useCart();
   const { isWishlisted, toggleWishlist } = useWishlist();
+  const { colors } = useTheme();
   const [justAdded, setJustAdded] = useState(false);
   const wishlisted = isWishlisted(product.id);
 
@@ -40,12 +42,16 @@ export function ProductCard({ product, width = 150, onPress }: ProductCardProps)
       <View className="rounded-2xl overflow-hidden bg-card border border-border shadow-soft">
         <Pressable
           accessibilityLabel={`View details for ${product.name}`}
+          accessibilityRole="button"
+          accessibilityHint="Opens product details"
           onPress={() => onPress?.(product)}
           style={({ pressed }) => ({ opacity: pressed ? 0.88 : 1 })}
         >
           <View className="relative">
             <Image
               source={{ uri: product.image }}
+              accessibilityLabel={`${product.name} product image`}
+              accessible
               style={{ width: "100%", height: width * 0.96 }}
               resizeMode="cover"
             />
@@ -105,6 +111,7 @@ export function ProductCard({ product, width = 150, onPress }: ProductCardProps)
         <View className="flex-row items-center gap-2 px-2.5 pb-2.5">
           <Pressable
             accessibilityLabel={`${wishlisted ? "Remove" : "Add"} ${product.name} ${wishlisted ? "from" : "to"} wishlist`}
+            accessibilityRole="button"
             accessibilityState={{ selected: wishlisted }}
             onPress={() => toggleWishlist(product.id)}
             className="w-9 h-9 rounded-lg border border-border items-center justify-center"
@@ -113,16 +120,18 @@ export function ProductCard({ product, width = 150, onPress }: ProductCardProps)
             <Ionicons
               name={wishlisted ? "heart" : "heart-outline"}
               size={18}
-              color={wishlisted ? "#ef1b1b" : "#9ca3af"}
+              color={wishlisted ? colors.primary : colors.icon}
             />
           </Pressable>
           <Pressable
             accessibilityLabel={`Add ${product.name} to cart`}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: false }}
             onPress={handleQuickAdd}
             className="flex-1 h-9 rounded-lg bg-primary flex-row items-center justify-center gap-1.5"
             style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
           >
-            <Ionicons name={justAdded ? "checkmark" : "cart-outline"} size={15} color="#f8fafc" />
+            <Ionicons name={justAdded ? "checkmark" : "cart-outline"} size={15} color={colors.foreground} />
             <Text className="text-primary-foreground text-[11px] font-bold">
               {justAdded ? "Added" : "Add"}
             </Text>

@@ -25,7 +25,7 @@ export function ProductDetails({
   onAddToCart,
   onClose,
 }: ProductDetailsProps) {
-  const { isDark } = useTheme();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { isWishlisted, toggleWishlist } = useWishlist();
@@ -50,15 +50,17 @@ export function ProductDetails({
       >
         <Pressable
           accessibilityLabel="Close product details"
+          accessibilityRole="button"
           onPress={onClose}
           hitSlop={10}
           className="w-9 h-9 items-center justify-center"
         >
-          <Ionicons name="arrow-back" size={22} color={isDark ? "#f8fafc" : "#30343b"} />
+          <Ionicons name="arrow-back" size={22} color={colors.foreground} />
         </Pressable>
         <Text className="text-foreground text-base font-semibold">Product details</Text>
         <Pressable
           accessibilityLabel={`${wishlisted ? "Remove" : "Add"} ${product.name} ${wishlisted ? "from" : "to"} wishlist`}
+          accessibilityRole="button"
           accessibilityState={{ selected: wishlisted }}
           onPress={() => toggleWishlist(product.id)}
           hitSlop={8}
@@ -68,7 +70,7 @@ export function ProductDetails({
           <Ionicons
             name={wishlisted ? "heart" : "heart-outline"}
             size={21}
-            color={wishlisted ? "#ef1b1b" : isDark ? "#f8fafc" : "#30343b"}
+            color={wishlisted ? colors.primary : colors.foreground}
           />
         </Pressable>
       </View>
@@ -119,10 +121,10 @@ export function ProductDetails({
           </View>
 
           <View className="flex-row flex-wrap gap-2 mt-4">
-            <InfoChip icon="shield-checkmark-outline" label="Warranty included" isDark={isDark} />
-            <InfoChip icon="cube-outline" label="Ready to ship" isDark={isDark} />
+            <InfoChip icon="shield-checkmark-outline" label="Warranty included" color={colors.icon} />
+            <InfoChip icon="cube-outline" label="Ready to ship" color={colors.icon} />
             {product.sold !== undefined && (
-              <InfoChip icon="trending-up-outline" label={`${product.sold} sold`} isDark={isDark} />
+              <InfoChip icon="trending-up-outline" label={`${product.sold} sold`} color={colors.icon} />
             )}
           </View>
 
@@ -149,6 +151,7 @@ export function ProductDetails({
           <DetailDisclosure
             title="Specifications"
             open={isSpecificationsOpen}
+            color={colors.muted}
             onPress={() => setIsSpecificationsOpen((current) => !current)}
           >
             {productFacts.specifications.map(([label, value]) => (
@@ -162,6 +165,7 @@ export function ProductDetails({
           <DetailDisclosure
             title="Compatibility and support"
             open={isCompatibilityOpen}
+            color={colors.muted}
             onPress={() => setIsCompatibilityOpen((current) => !current)}
           >
             <Text className="text-muted-foreground text-sm leading-5">
@@ -176,7 +180,7 @@ export function ProductDetails({
                 icon="remove"
                 accessibilityLabel="Decrease quantity"
                 disabled={quantity <= 1}
-                isDark={isDark}
+                color={colors.foreground}
                 onPress={() => onQuantityChange(Math.max(1, quantity - 1))}
               />
               <Text className="text-foreground text-sm font-semibold min-w-[36px] text-center">
@@ -185,7 +189,7 @@ export function ProductDetails({
               <QuantityButton
                 icon="add"
                 accessibilityLabel="Increase quantity"
-                isDark={isDark}
+                color={colors.foreground}
                 onPress={() => onQuantityChange(quantity + 1)}
               />
             </View>
@@ -203,6 +207,7 @@ export function ProductDetails({
         </View>
         <Pressable
           accessibilityLabel={`Add ${product.name} to cart`}
+          accessibilityRole="button"
           onPress={() => onAddToCart(product, quantity)}
           className="h-12 rounded-xl bg-primary items-center justify-center"
           style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
@@ -254,11 +259,13 @@ function getProductFacts(product: Product): ProductFacts {
 function DetailDisclosure({
   title,
   open,
+  color,
   onPress,
   children,
 }: {
   title: string;
   open: boolean;
+  color: string;
   onPress: () => void;
   children: ReactNode;
 }) {
@@ -266,12 +273,13 @@ function DetailDisclosure({
     <View className="mt-3 border-t border-border">
       <Pressable
         accessibilityLabel={`${open ? "Collapse" : "Expand"} ${title}`}
+        accessibilityRole="button"
         accessibilityState={{ expanded: open }}
         onPress={onPress}
         className="flex-row items-center justify-between py-4"
       >
         <Text className="text-foreground text-sm font-semibold">{title}</Text>
-        <Ionicons name={open ? "chevron-up" : "chevron-down"} size={18} color="#9ca3af" />
+        <Ionicons name={open ? "chevron-up" : "chevron-down"} size={18} color={color} />
       </Pressable>
       {open && <View className="pb-3">{children}</View>}
     </View>
@@ -281,13 +289,13 @@ function DetailDisclosure({
 type InfoChipProps = {
   icon: "shield-checkmark-outline" | "cube-outline" | "trending-up-outline";
   label: string;
-  isDark: boolean;
+  color: string;
 };
 
-function InfoChip({ icon, label, isDark }: InfoChipProps) {
+function InfoChip({ icon, label, color }: InfoChipProps) {
   return (
     <View className="flex-row items-center gap-1.5 bg-secondary border border-border rounded-xl px-2.5 py-2">
-      <Ionicons name={icon} size={14} color={isDark ? "#cbd5e1" : "#68717e"} />
+      <Ionicons name={icon} size={14} color={color} />
       <Text className="text-muted-foreground text-xs">{label}</Text>
     </View>
   );
@@ -309,7 +317,7 @@ function BulletPoint({ text }: BulletPointProps) {
 type QuantityButtonProps = {
   icon: "remove" | "add";
   accessibilityLabel: string;
-  isDark: boolean;
+  color: string;
   disabled?: boolean;
   onPress: () => void;
 };
@@ -317,20 +325,21 @@ type QuantityButtonProps = {
 function QuantityButton({
   icon,
   accessibilityLabel,
-  isDark,
+  color,
   disabled = false,
   onPress,
 }: QuantityButtonProps) {
   return (
     <Pressable
       accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
       className="w-10 h-10 items-center justify-center"
       style={({ pressed }) => ({ opacity: disabled ? 0.35 : pressed ? 0.7 : 1 })}
     >
-      <Ionicons name={icon} size={16} color={isDark ? "#f8fafc" : "#30343b"} />
+      <Ionicons name={icon} size={16} color={color} />
     </Pressable>
   );
 }

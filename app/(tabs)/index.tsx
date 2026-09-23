@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Alert, Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import {
   getBanners,
   getBrands,
@@ -21,7 +21,6 @@ import { SulitPicks } from "@/components/sections/SulitPicks";
 import { NewArrivals } from "@/components/sections/NewArrivals";
 import { Brands } from "@/components/sections/Brands";
 import { Chatbot } from "@/components/support/Chatbot";
-import { ProductDetails } from "@/components/products/ProductDetails";
 import { ProductSearch } from "@/components/search/ProductSearch";
 import { useCart } from "@/hooks/useCart";
 
@@ -35,8 +34,6 @@ export default function HomeScreen() {
   const [sulitPicks, setSulitPicks] = useState<Product[]>([]);
   const [newArrivals, setNewArrivals] = useState<Product[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [quantity, setQuantity] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const { addItem, itemCount } = useCart();
 
@@ -48,21 +45,7 @@ export default function HomeScreen() {
 
   function handleProductSelect(product: Product) {
     setIsSearchOpen(false);
-    setSelectedProduct(product);
-    setQuantity(1);
-  }
-
-  function handleProductClose() {
-    setSelectedProduct(null);
-  }
-
-  function handleAddToCart(product: Product, itemQuantity: number) {
-    addItem(product, itemQuantity);
-    Alert.alert(
-      "Added to cart",
-      `${itemQuantity} x ${product.name} added to your cart.`,
-      [{ text: "Continue shopping", onPress: handleProductClose }]
-    );
+    router.push({ pathname: "/product/[id]", params: { id: product.id } });
   }
 
   useEffect(() => {
@@ -88,7 +71,14 @@ export default function HomeScreen() {
   if (isLoading) {
     return (
       <View className="flex-1 bg-background">
-        <Header cartCount={itemCount} onCartPress={() => router.push("/cart")} onSearchPress={() => setIsSearchOpen(true)} />
+        <Header
+          cartCount={itemCount}
+          onCartPress={() => router.push("/cart")}
+          onNotificationPress={() =>
+            Alert.alert("Notifications", "Your deals and order updates will appear here.")
+          }
+          onSearchPress={() => setIsSearchOpen(true)}
+        />
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 112 }}>
           <LoadingHero />
           <LoadingRow title="Trending" />
@@ -101,7 +91,12 @@ export default function HomeScreen() {
 
   return (
     <View className="flex-1 bg-background">
-      <Header cartCount={itemCount} onCartPress={() => router.push("/cart")} onSearchPress={() => setIsSearchOpen(true)} />
+      <Header
+        cartCount={itemCount}
+        onCartPress={() => router.push("/cart")}
+        onNotificationPress={() => router.push("/notifications")}
+        onSearchPress={() => setIsSearchOpen(true)}
+      />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 28 }}
@@ -142,21 +137,6 @@ export default function HomeScreen() {
         onClose={() => setIsSearchOpen(false)}
         onSelectProduct={handleProductSelect}
       />
-      <Modal
-        visible={selectedProduct !== null}
-        animationType="slide"
-        onRequestClose={handleProductClose}
-      >
-        {selectedProduct && (
-          <ProductDetails
-            product={selectedProduct}
-            quantity={quantity}
-            onQuantityChange={setQuantity}
-            onAddToCart={handleAddToCart}
-            onClose={handleProductClose}
-          />
-        )}
-      </Modal>
     </View>
   );
 }
