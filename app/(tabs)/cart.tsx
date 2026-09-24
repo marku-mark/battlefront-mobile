@@ -12,7 +12,7 @@ function formatPrice(value: number): string {
 
 export default function CartScreen() {
   const router = useRouter();
-  const { items, subtotal, updateQuantity, removeItem, clearCart } = useCart();
+  const { items, subtotal, addItem, updateQuantity, removeItem, clearCart } = useCart();
   const [removedItem, setRemovedItem] = useState<CartItem | null>(null);
   const shippingFee = subtotal > 5000 ? 0 : 150;
   const total = subtotal + shippingFee;
@@ -93,7 +93,7 @@ export default function CartScreen() {
           </View>
         </View>
 
-        {items.map(({ product, quantity }) => (
+        {items.map(({ product, quantity, variant }) => (
           <View key={product.id} className="flex-row bg-card border border-border rounded-2xl p-3 mb-3 shadow-soft">
             <Pressable
               accessibilityLabel={`View details for ${product.name}`}
@@ -113,20 +113,21 @@ export default function CartScreen() {
                 <Pressable
                   accessibilityLabel={`Remove ${product.name}`}
                   onPress={() => {
-                    setRemovedItem({ product, quantity });
-                    removeItem(product.id);
+                    setRemovedItem({ product, quantity, variant });
+                    removeItem(product.id, variant);
                   }}
                   hitSlop={8}
                 >
                   <Ionicons name="trash-outline" size={17} color="#94a3b8" />
                 </Pressable>
               </View>
+              {variant && <Text className="text-muted-foreground text-xs mt-1">Option: {variant}</Text>}
               <Text className="text-primary text-sm font-bold mt-2">{formatPrice(product.price)}</Text>
               <View className="flex-row items-center justify-between mt-2">
                 <View className="flex-row items-center border border-border rounded-xl overflow-hidden bg-secondary">
                   <Pressable
                     accessibilityLabel={`Decrease ${product.name} quantity`}
-                    onPress={() => updateQuantity(product.id, quantity - 1)}
+                    onPress={() => updateQuantity(product.id, quantity - 1, variant)}
                     className="w-8 h-8 items-center justify-center"
                   >
                     <Ionicons name="remove" size={14} color="#f8fafc" />
@@ -134,7 +135,7 @@ export default function CartScreen() {
                   <Text className="text-foreground text-xs font-bold min-w-[34px] text-center">{quantity}</Text>
                   <Pressable
                     accessibilityLabel={`Increase ${product.name} quantity`}
-                    onPress={() => updateQuantity(product.id, quantity + 1)}
+                    onPress={() => updateQuantity(product.id, quantity + 1, variant)}
                     className="w-8 h-8 items-center justify-center"
                   >
                     <Ionicons name="add" size={14} color="#f8fafc" />
@@ -152,7 +153,7 @@ export default function CartScreen() {
             <Pressable
               accessibilityLabel="Undo remove item"
               onPress={() => {
-                updateQuantity(removedItem.product.id, removedItem.quantity);
+                addItem(removedItem.product, removedItem.quantity, removedItem.variant);
                 setRemovedItem(null);
               }}
               className="px-2 py-1"

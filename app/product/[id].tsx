@@ -57,8 +57,8 @@ export default function ProductRoute() {
       product={product}
       quantity={quantity}
       onQuantityChange={setQuantity}
-      onAddToCart={(selectedProduct, itemQuantity) => {
-        addItem(selectedProduct, itemQuantity);
+      onAddToCart={(selectedProduct, itemQuantity, variant) => {
+        addItem(selectedProduct, itemQuantity, variant);
         router.back();
       }}
       onClose={() => router.back()}

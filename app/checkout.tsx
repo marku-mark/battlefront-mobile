@@ -13,7 +13,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useCart } from "@/hooks/useCart";
+import { useCart, type CartItem } from "@/hooks/useCart";
 import { useTheme } from "@/theme/ThemeProvider";
 
 function formatPrice(value: number): string {
@@ -42,7 +42,7 @@ const paymentOptions = [
 export default function CheckoutScreen() {
   const router = useRouter();
   const { colors } = useTheme();
-  const { items, subtotal, clearCart } = useCart();
+  const { items, subtotal, clearCart, removeItem, updateQuantity } = useCart();
   const [step, setStep] = useState<CheckoutStep>("address");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
@@ -51,6 +51,7 @@ export default function CheckoutScreen() {
   const [paymentId, setPaymentId] = useState<(typeof paymentOptions)[number]["id"]>("cod");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
+  const [removedItem, setRemovedItem] = useState<CartItem | null>(null);
   const shippingFee = deliveryId === "pickup" || subtotal > 5000 ? 0 : 150;
   const total = subtotal + shippingFee;
 
@@ -90,6 +91,21 @@ export default function CheckoutScreen() {
         </View>
         <View className="flex-1 items-center justify-center px-6">
           <Text className="text-foreground text-base font-semibold">Your cart is empty</Text>
+          {removedItem && (
+            <View className="flex-row items-center rounded-xl border border-primary/30 bg-primary/10 px-3 py-3 mt-4">
+              <Text className="text-foreground text-xs">{removedItem.product.name} removed</Text>
+              <Pressable
+                accessibilityLabel="Undo remove checkout item"
+                onPress={() => {
+                  updateQuantity(removedItem.product.id, removedItem.quantity, removedItem.variant);
+                  setRemovedItem(null);
+                }}
+                className="ml-3 px-2 py-1"
+              >
+                <Text className="text-primary text-xs font-bold">Undo</Text>
+              </Pressable>
+            </View>
+          )}
           <Pressable onPress={() => router.replace("/")} className="bg-primary rounded-xl px-5 py-3 mt-5">
             <Text className="text-primary-foreground text-sm font-semibold">Browse products</Text>
           </Pressable>
@@ -213,16 +229,39 @@ export default function CheckoutScreen() {
 
           <Text className="text-foreground text-base font-bold mt-7 mb-3">Order summary</Text>
           <View className="bg-card border border-border rounded-2xl p-4 shadow-soft">
-            {items.map(({ product, quantity }) => (
+            {items.map(({ product, quantity, variant }) => (
               <View key={product.id} className="flex-row justify-between mb-3 gap-3">
-                <Text className="flex-1 text-muted-foreground text-sm" numberOfLines={1}>
-                  {quantity} x {product.name}
-                </Text>
+                <Text className="flex-1 text-muted-foreground text-sm" numberOfLines={2}>{quantity} x {product.name}{variant ? ` • ${variant}` : ""}</Text>
                 <Text className="text-foreground text-sm font-medium ml-3">
                   {formatPrice(product.price * quantity)}
                 </Text>
+                <Pressable
+                  accessibilityLabel={`Remove ${product.name} from checkout`}
+                  onPress={() => {
+                    setRemovedItem({ product, quantity });
+                    removeItem(product.id, variant);
+                  }}
+                  hitSlop={8}
+                >
+                  <Ionicons name="trash-outline" size={17} color={colors.muted} />
+                </Pressable>
               </View>
             ))}
+            {removedItem && items.length > 0 && (
+              <View className="flex-row items-center justify-between rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 mb-2">
+                <Text className="flex-1 text-foreground text-xs">{removedItem.product.name} removed</Text>
+                <Pressable
+                  accessibilityLabel="Undo remove checkout item"
+                  onPress={() => {
+                    updateQuantity(removedItem.product.id, removedItem.quantity, removedItem.variant);
+                    setRemovedItem(null);
+                  }}
+                  className="px-2 py-1"
+                >
+                  <Text className="text-primary text-xs font-bold">Undo</Text>
+                </Pressable>
+              </View>
+            )}
             <View className="border-t border-border pt-3 mt-1">
               <SummaryRow label="Subtotal" value={formatPrice(subtotal)} />
               <SummaryRow label="Shipping" value={shippingFee === 0 ? "FREE" : formatPrice(shippingFee)} />

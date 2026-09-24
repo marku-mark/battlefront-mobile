@@ -3,7 +3,7 @@ import { useRouter } from "expo-router";
 import { Image, Pressable, ScrollView, Text, View } from "react-native";
 import { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { allProducts } from "@/lib/data";
+import { allProducts, getProductVariants } from "@/lib/data";
 import { useWishlist } from "@/hooks/useWishlist";
 import { useCart } from "@/hooks/useCart";
 
@@ -125,7 +125,7 @@ export default function WishlistScreen() {
                   <Pressable
                     accessibilityLabel={`${cartItems.some((item) => item.product.id === product.id) ? "Added" : "Add"} ${product.name} to cart`}
                     onPress={() => {
-                      addItem(product);
+                      addItem(product, 1, getProductVariants(product)[0] ?? null);
                     }}
                     className="bg-primary rounded-lg px-3 py-2"
                     style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}

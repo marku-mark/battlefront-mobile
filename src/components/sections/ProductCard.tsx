@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image, Pressable, Text, View } from "react-native";
 import { useState } from "react";
-import type { Product } from "@/lib/data";
+import { getProductVariants, type Product } from "@/lib/data";
 import { useCart } from "@/hooks/useCart";
 import { useWishlist } from "@/hooks/useWishlist";
 import { useTheme } from "@/theme/ThemeProvider";
@@ -24,12 +24,16 @@ export function ProductCard({ product, width = 150, onPress }: ProductCardProps)
   const wishlisted = isWishlisted(product.id);
 
   function handleQuickAdd() {
-    addItem(product);
+    addItem(product, 1, variants[0] ?? null);
     setJustAdded(true);
     setTimeout(() => setJustAdded(false), 1400);
   }
   const hasDiscount =
     product.originalPrice !== undefined && product.originalPrice > product.price;
+  const rating = product.rating ?? 4.8;
+  const reviewCount = product.reviewCount ?? 24;
+  const stockQuantity = product.stockQuantity ?? 12;
+  const variants = getProductVariants(product);
   const discountPct = hasDiscount
     ? Math.round(
         ((product.originalPrice! - product.price) / product.originalPrice!) * 100
@@ -90,21 +94,23 @@ export function ProductCard({ product, width = 150, onPress }: ProductCardProps)
             </View>
 
             <View className="flex-row items-center justify-between mt-1.5 gap-2">
-              {product.sold !== undefined ? (
-                <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.12em]">
-                  {product.sold} sold
-                </Text>
-              ) : (
-                <View />
-              )}
-
               <View className="flex-row items-center gap-1">
-                <View className="h-1.5 w-1.5 rounded-full bg-primary" />
-                <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.08em]">
-                  Ready to ship
+                <Ionicons name="star" size={12} color="#f59e0b" />
+                <Text className="text-foreground text-[10px] font-semibold">{rating.toFixed(1)}</Text>
+                <Text className="text-muted-foreground text-[10px]">({reviewCount})</Text>
+              </View>
+              <View className="flex-row items-center gap-1">
+                <View className={`h-1.5 w-1.5 rounded-full ${stockQuantity > 0 ? "bg-success" : "bg-danger"}`} />
+                <Text className={`text-[10px] uppercase tracking-[0.08em] ${stockQuantity > 0 ? "text-muted-foreground" : "text-danger"}`}>
+                  {stockQuantity > 0 ? `${stockQuantity} in stock` : "Out of stock"}
                 </Text>
               </View>
             </View>
+            {variants.length > 0 && (
+              <Text className="text-muted-foreground text-[10px] mt-1.5" numberOfLines={1}>
+                Options: {variants.join(" • ")}
+              </Text>
+            )}
           </View>
         </Pressable>
 

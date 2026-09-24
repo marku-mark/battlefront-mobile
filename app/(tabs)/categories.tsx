@@ -2,7 +2,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-  FlatList,
   ActivityIndicator,
   Modal,
   Pressable,
@@ -22,7 +21,7 @@ export default function CategoriesScreen() {
   const router = useRouter();
   const { categoryId } = useLocalSearchParams<{ categoryId?: string }>();
   const [query, setQuery] = useState("");
-  const [selectedCategoryId, setSelectedCategoryId] = useState(categoryId ?? null);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>(categoryId ? [categoryId] : []);
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null);
   const [priceFilter, setPriceFilter] = useState<"all" | "under-5k" | "under-15k" | "over-15k">("all");
@@ -33,7 +32,7 @@ export default function CategoriesScreen() {
   const { isDark } = useTheme();
 
   useEffect(() => {
-    setSelectedCategoryId(categoryId ?? null);
+    setSelectedCategoryIds(categoryId ? [categoryId] : []);
   }, [categoryId]);
 
   useEffect(() => {
@@ -58,7 +57,7 @@ export default function CategoriesScreen() {
 
   const previewProducts = useMemo(() => {
     const filtered = products.filter((product) => {
-      const matchesCategory = !selectedCategoryId || product.categoryId === selectedCategoryId;
+      const matchesCategory = selectedCategoryIds.length === 0 || selectedCategoryIds.includes(product.categoryId);
       const matchesBrand = !selectedBrandId || product.brandId === selectedBrandId;
       const matchesPrice =
         priceFilter === "all" ||
@@ -73,9 +72,9 @@ export default function CategoriesScreen() {
       if (sortOrder === "price-high") return right.price - left.price;
       return 0;
     });
-  }, [priceFilter, products, selectedBrandId, selectedCategoryId, sortOrder]);
+  }, [priceFilter, products, selectedBrandId, selectedCategoryIds, sortOrder]);
 
-  const selectedCategory = categories.find((category) => category.id === selectedCategoryId);
+  const selectedCategories = categories.filter((category) => selectedCategoryIds.includes(category.id));
 
   return (
     <SafeAreaView edges={["left", "right", "bottom"]} className="flex-1 bg-background">
@@ -84,9 +83,9 @@ export default function CategoriesScreen() {
         subtitle="Find the right parts for your next build."
       />
       <View className="px-4 pt-4">
-        {selectedCategoryId && (
+        {selectedCategoryIds.length > 0 && (
           <Text className="text-primary text-xs font-semibold mt-2">
-            Category selected
+            {selectedCategoryIds.length} categor{selectedCategoryIds.length === 1 ? "y" : "ies"} selected
           </Text>
         )}
 
@@ -113,71 +112,57 @@ export default function CategoriesScreen() {
         </View>
       </View>
 
-      <FlatList
-        data={filteredCategories}
-        keyExtractor={(item) => item.id}
-        numColumns={2}
-        contentContainerStyle={{ padding: 16, gap: 12 }}
-        columnWrapperStyle={{ gap: 12 }}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        ListHeaderComponent={
-          <Text className="text-muted-foreground text-xs uppercase tracking-[0.14em] mb-1">
-            {query.trim() ? `${filteredCategories.length} results` : "Shop by needs"}
-          </Text>
-        }
-        ListEmptyComponent={
-          <View className="items-center py-12">
-            <Ionicons name="search-outline" size={28} color={isDark ? "#9ca3af" : "#68717e"} />
-            <Text className="text-foreground text-sm font-semibold mt-3">
-              No categories found
-            </Text>
-            <Text className="text-muted-foreground text-xs mt-1">
-              Try a different search term.
-            </Text>
+        contentContainerStyle={{ paddingBottom: 32 }}
+      >
+        <Text className="text-muted-foreground text-xs uppercase tracking-[0.14em] px-4 mt-5 mb-3">
+          {query.trim() ? `${filteredCategories.length} results` : "Shop by needs"}
+        </Text>
+        {filteredCategories.length > 0 ? (
+          <View className="flex-row flex-wrap gap-3 px-4">
+            {filteredCategories.map((item) => (
+              <Pressable
+                key={item.id}
+                accessibilityLabel={`Browse ${item.name}`}
+                accessibilityState={{ selected: selectedCategoryIds.includes(item.id) }}
+                onPress={() => setSelectedCategoryIds((current) => current.includes(item.id) ? current.filter((id) => id !== item.id) : [...current, item.id])}
+                className={`w-[48%] min-h-[128px] rounded-2xl border p-4 justify-between ${selectedCategoryIds.includes(item.id) ? "bg-primary/10 border-primary" : "bg-card border-border"}`}
+                style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1 })}
+              >
+                <View className="w-11 h-11 rounded-xl bg-secondary items-center justify-center">
+                  <Ionicons name={item.icon as any} size={24} color={isDark ? "#f8fafc" : "#30343b"} />
+                </View>
+                <View className="flex-row items-center justify-between mt-4">
+                  <Text className="text-foreground text-sm font-semibold flex-1">{item.name}</Text>
+                  <Ionicons name={selectedCategoryIds.includes(item.id) ? "checkmark-circle" : "arrow-forward"} size={16} color="#ef1b1b" />
+                </View>
+              </Pressable>
+            ))}
           </View>
-        }
-        renderItem={({ item }) => (
-          <Pressable
-            accessibilityLabel={`Browse ${item.name}`}
-            accessibilityState={{ selected: selectedCategoryId === item.id }}
-            onPress={() => setSelectedCategoryId((current) => current === item.id ? null : item.id)}
-            className={`flex-1 min-h-[128px] rounded-2xl border p-4 justify-between ${
-              selectedCategoryId === item.id
-                ? "bg-primary/10 border-primary"
-                : "bg-card border-border"
-            }`}
-            style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1 })}
-          >
-            <View className="w-11 h-11 rounded-xl bg-secondary items-center justify-center">
-              <Ionicons name={item.icon as any} size={24} color={isDark ? "#f8fafc" : "#30343b"} />
-            </View>
-            <View className="flex-row items-center justify-between mt-4">
-              <Text className="text-foreground text-sm font-semibold flex-1">
-                {item.name}
-              </Text>
-              <Ionicons
-                name={selectedCategoryId === item.id ? "checkmark-circle" : "arrow-forward"}
-                size={16}
-                color="#ef1b1b"
-              />
-            </View>
-          </Pressable>
+        ) : (
+          <View className="items-center py-12 px-4">
+            <Ionicons name="search-outline" size={28} color={isDark ? "#9ca3af" : "#68717e"} />
+            <Text className="text-foreground text-sm font-semibold mt-3">No categories found</Text>
+            <Text className="text-muted-foreground text-xs mt-1">Try a different search term.</Text>
+          </View>
         )}
-        ListFooterComponent={
-          <View className="mt-6">
+
+        <View className="mt-6">
             <View className="flex-row items-end justify-between mb-3">
               <View>
                 <Text className="text-foreground text-base font-bold">
-                  {selectedCategory ? selectedCategory.name : "All products"}
+                  {selectedCategories.length > 0 ? selectedCategories.map((category) => category.name).join(", ") : "All products"}
                 </Text>
                 <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.14em] mt-1">
                   {previewProducts.length} available previews
                 </Text>
               </View>
-              {selectedCategoryId && (
+              {selectedCategoryIds.length > 0 && (
                 <Pressable
                   accessibilityLabel="Show all category products"
-                  onPress={() => setSelectedCategoryId(null)}
+                  onPress={() => setSelectedCategoryIds([])}
                   hitSlop={8}
                 >
                   <Text className="text-primary text-[11px] font-semibold uppercase tracking-[0.12em]">
@@ -200,6 +185,7 @@ export default function CategoriesScreen() {
                 <Pressable
                   accessibilityLabel="Reset category filters"
                   onPress={() => {
+                    setSelectedCategoryIds([]);
                     setSelectedBrandId(null);
                     setPriceFilter("all");
                     setSortOrder("featured");
@@ -265,8 +251,7 @@ export default function CategoriesScreen() {
               </View>
             )}
           </View>
-        }
-      />
+      </ScrollView>
       <Modal
         visible={isFilterOpen}
         animationType="slide"

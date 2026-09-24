@@ -6,15 +6,16 @@ import type { Product } from "@/lib/data";
 export type CartItem = {
   product: Product;
   quantity: number;
+  variant?: string | null;
 };
 
 type CartContextValue = {
   items: CartItem[];
   itemCount: number;
   subtotal: number;
-  addItem: (product: Product, quantity?: number) => void;
-  updateQuantity: (productId: string, quantity: number) => void;
-  removeItem: (productId: string) => void;
+  addItem: (product: Product, quantity?: number, variant?: string | null) => void;
+  updateQuantity: (productId: string, quantity: number, variant?: string | null) => void;
+  removeItem: (productId: string, variant?: string | null) => void;
   clearCart: () => void;
 };
 
@@ -52,30 +53,30 @@ export function CartProvider({ children }: { children: ReactNode }) {
       items,
       itemCount,
       subtotal,
-      addItem: (product, quantity = 1) => {
+      addItem: (product, quantity = 1, variant = null) => {
         setItems((current) => {
-          const existing = current.find((item) => item.product.id === product.id);
+          const existing = current.find((item) => item.product.id === product.id && item.variant === variant);
           if (existing) {
             return current.map((item) =>
-              item.product.id === product.id
+              item.product.id === product.id && item.variant === variant
                 ? { ...item, quantity: item.quantity + quantity }
                 : item
             );
           }
-          return [...current, { product, quantity }];
+          return [...current, { product, quantity, variant }];
         });
       },
-      updateQuantity: (productId, quantity) => {
+      updateQuantity: (productId, quantity, variant = null) => {
         setItems((current) =>
           quantity > 0
             ? current.map((item) =>
-                item.product.id === productId ? { ...item, quantity } : item
+                item.product.id === productId && item.variant === variant ? { ...item, quantity } : item
               )
-            : current.filter((item) => item.product.id !== productId)
+            : current.filter((item) => !(item.product.id === productId && item.variant === variant))
         );
       },
-      removeItem: (productId) => {
-        setItems((current) => current.filter((item) => item.product.id !== productId));
+      removeItem: (productId, variant = null) => {
+        setItems((current) => current.filter((item) => !(item.product.id === productId && item.variant === variant)));
       },
       clearCart: () => setItems([]),
     };

@@ -17,7 +17,31 @@ export type Product = {
   originalPrice?: number;
   image: string;
   sold?: number;
+  /** Placeholder merchandising metadata until the catalog API supplies it. */
+  rating?: number;
+  reviewCount?: number;
+  stockQuantity?: number;
+  variants?: string[];
 };
+
+export function getProductVariants(product: Product): string[] {
+  if (product.variants && product.variants.length > 0) return product.variants;
+
+  switch (product.categoryId) {
+    case "cat-1":
+      return ["14-inch", "16-inch"];
+    case "cat-3":
+      return ["Standard", "Performance"];
+    case "cat-4":
+      return ["Black", "White"];
+    case "cat-5":
+      return ["27-inch", "32-inch"];
+    case "cat-7":
+      return ["1TB", "2TB"];
+    default:
+      return [];
+  }
+}
 
 export type Banner = {
   id: string;
