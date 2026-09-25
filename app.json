@@ -15,7 +15,8 @@
     "backgroundColor": "#090b10",
     "plugins": [
       "expo-router",
-      "expo-font"
+      "expo-font",
+      "expo-sqlite"
     ],
     "ios": {
       "supportsTablet": false,

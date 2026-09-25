@@ -7,6 +7,8 @@ import { CartProvider } from "@/hooks/useCart";
 import { WishlistProvider } from "@/hooks/useWishlist";
 import { ThemeProvider } from "@/theme/ThemeProvider";
 import { useTheme } from "@/theme/ThemeProvider";
+import { initializeCatalogDatabase } from "@/lib/database";
+import { useEffect } from "react";
 
 function AppStack() {
   const { isDark } = useTheme();
@@ -22,6 +24,10 @@ function AppStack() {
 }
 
 export default function RootLayout() {
+  useEffect(() => {
+    initializeCatalogDatabase().catch(() => undefined);
+  }, []);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
