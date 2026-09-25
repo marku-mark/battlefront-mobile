@@ -5,6 +5,7 @@ import { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCart, type CartItem } from "@/hooks/useCart";
 import { ScreenHeader } from "@/components/layout/ScreenHeader";
+import { getProductImageSource } from "@/lib/data";
 
 function formatPrice(value: number): string {
   return `₱${value.toLocaleString("en-PH")}`;
@@ -99,7 +100,7 @@ export default function CartScreen() {
               accessibilityLabel={`View details for ${product.name}`}
               onPress={() => router.push({ pathname: "/product/[id]", params: { id: product.id } })}
             >
-              <Image source={{ uri: product.image }} className="w-20 h-20 rounded-xl bg-secondary" />
+              <Image source={getProductImageSource(product.image)} className="w-20 h-20 rounded-xl bg-secondary" />
             </Pressable>
             <View className="flex-1 ml-3">
               <View className="flex-row items-start gap-2">

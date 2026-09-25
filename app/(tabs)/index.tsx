@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, FlatList, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import {
   getBanners,
   getBrands,
@@ -9,6 +9,7 @@ import {
   getFlashDealEndTime,
   getFlashDeals,
   getNewArrivals,
+  getProducts,
   getSulitPicks,
 } from "@/lib/api";
 import type { Banner, Brand, Category, Product } from "@/lib/data";
@@ -23,6 +24,7 @@ import { Brands } from "@/components/sections/Brands";
 import { Chatbot } from "@/components/support/Chatbot";
 import { ProductSearch } from "@/components/search/ProductSearch";
 import { useCart } from "@/hooks/useCart";
+import { ProductCard } from "@/components/sections/ProductCard";
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -33,14 +35,16 @@ export default function HomeScreen() {
   const [flashDeals, setFlashDeals] = useState<Product[]>([]);
   const [sulitPicks, setSulitPicks] = useState<Product[]>([]);
   const [newArrivals, setNewArrivals] = useState<Product[]>([]);
+  const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { addItem, itemCount } = useCart();
+  const { width } = useWindowDimensions();
 
   const flashDealEndTime = useMemo(() => getFlashDealEndTime(), []);
   const searchableProducts = useMemo(
-    () => [...flashDeals, ...sulitPicks, ...newArrivals],
-    [flashDeals, newArrivals, sulitPicks]
+    () => catalogProducts.length > 0 ? catalogProducts : [...flashDeals, ...sulitPicks, ...newArrivals],
+    [catalogProducts, flashDeals, newArrivals, sulitPicks]
   );
 
   function handleProductSelect(product: Product) {
@@ -55,6 +59,7 @@ export default function HomeScreen() {
       getFlashDeals().then(setFlashDeals),
       getSulitPicks().then(setSulitPicks),
       getNewArrivals().then(setNewArrivals),
+      getProducts().then(setCatalogProducts),
       getBrands().then(setBrands),
     ])
       .catch(() => {
@@ -63,6 +68,7 @@ export default function HomeScreen() {
         setFlashDeals([]);
         setSulitPicks([]);
         setNewArrivals([]);
+        setCatalogProducts([]);
         setBrands([]);
       })
       .finally(() => setIsLoading(false));
@@ -73,13 +79,13 @@ export default function HomeScreen() {
       <View className="flex-1 bg-background">
         <Header
           cartCount={itemCount}
-          onCartPress={() => router.push("/cart")}
+          onCartPress={() => router.navigate("/cart")}
           onNotificationPress={() =>
             Alert.alert("Notifications", "Your deals and order updates will appear here.")
           }
           onSearchPress={() => setIsSearchOpen(true)}
         />
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 112 }}>
+        <ScrollView showsVerticalScrollIndicator={false} removeClippedSubviews contentContainerStyle={{ paddingBottom: 112 }}>
           <LoadingHero />
           <LoadingRow title="Trending" />
           <LoadingCards />
@@ -93,15 +99,23 @@ export default function HomeScreen() {
     <View className="flex-1 bg-background">
       <Header
         cartCount={itemCount}
-        onCartPress={() => router.push("/cart")}
+        onCartPress={() => router.navigate("/cart")}
         onNotificationPress={() => router.push("/notifications")}
         onSearchPress={() => setIsSearchOpen(true)}
       />
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 28 }}
-      >
-        <PromoBanners banners={banners} />
+      <FlatList
+        data={catalogProducts}
+        numColumns={2}
+        keyExtractor={(item) => item.id}
+        columnWrapperStyle={{ gap: 12, paddingHorizontal: 16 }}
+        contentContainerStyle={{ paddingBottom: 28, paddingTop: 16 }}
+        initialNumToRender={12}
+        maxToRenderPerBatch={12}
+        windowSize={5}
+        removeClippedSubviews
+        ListHeaderComponent={
+          <View>
+            <PromoBanners banners={banners} onSelect={() => router.push("/categories")} />
         <Categories
           categories={categories}
           onBrowseAll={() => router.push("/categories")}
@@ -120,8 +134,16 @@ export default function HomeScreen() {
         <TrustBar />
         <SulitPicks products={sulitPicks} onSelectProduct={handleProductSelect} />
         <NewArrivals products={newArrivals} onSelectProduct={handleProductSelect} />
-        <Brands brands={brands} />
-      </ScrollView>
+        <Brands brands={brands} onSelect={(brand) => router.push({ pathname: "/categories", params: { brandId: brand.id } })} />
+        <View className="px-4 mt-7 mb-3">
+          <Text className="text-foreground text-base font-bold">All products</Text>
+          <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.14em] mt-1">Browse the complete catalog</Text>
+        </View>
+          </View>
+        }
+        ListEmptyComponent={!isLoading ? <View className="items-center px-6 py-12"><Text className="text-foreground text-sm font-semibold">No products available</Text><Text className="text-muted-foreground text-xs mt-1">Try refreshing the catalog.</Text></View> : null}
+        renderItem={({ item }) => <ProductCard product={item} width={Math.max(136, (width - 44) / 2)} onPress={handleProductSelect} />}
+      />
       <Pressable
         accessibilityLabel="Open Battlefront Support chat"
         onPress={() => setIsChatOpen(true)}

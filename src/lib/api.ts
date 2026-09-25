@@ -1,20 +1,6 @@
-// API stub layer. Every function returns a Promise so screens already
-// call this the way they would a real network request. Swap the body
-// of each function for a real `fetch()`/SDK call later — no screen
-// code should need to change.
-import {
-  banners,
-  brands,
-  categories,
-  allProducts,
-  flashDeals,
-  newArrivals,
-  sulitPicks,
-  type Banner,
-  type Brand,
-  type Category,
-  type Product,
-} from "./data";
+import { banners, type Banner, type Brand, type Category, type Product } from "./data";
+import { databasePromise, initializeCatalogDatabase } from "./database";
+import { productImages } from "./productImages";
 
 const MOCK_DELAY_MS = 0; // set > 0 to simulate network latency during dev
 
@@ -23,7 +9,9 @@ function resolveAfter<T>(value: T): Promise<T> {
 }
 
 export async function getCategories(): Promise<Category[]> {
-  return resolveAfter(categories);
+  await initializeCatalogDatabase();
+  const rows = await (await databasePromise).getAllAsync<{ id: string; name: string }>("SELECT id, name FROM categories ORDER BY name");
+  return rows.map((row) => ({ id: row.id, name: row.name, icon: getCategoryIcon(row.name) }));
 }
 
 export async function getBanners(): Promise<Banner[]> {
@@ -31,23 +19,62 @@ export async function getBanners(): Promise<Banner[]> {
 }
 
 export async function getFlashDeals(): Promise<Product[]> {
-  return resolveAfter(flashDeals);
+  const products = await getProducts();
+  return products.filter((product) => product.stockQuantity === undefined || product.stockQuantity > 0).slice(0, 12);
 }
 
 export async function getSulitPicks(): Promise<Product[]> {
-  return resolveAfter(sulitPicks);
+  const products = await getProducts();
+  return [...products].sort((left, right) => left.price - right.price).slice(0, 12);
 }
 
 export async function getNewArrivals(): Promise<Product[]> {
-  return resolveAfter(newArrivals);
+  const products = await getProducts();
+  return products.slice(12, 24);
 }
 
 export async function getProducts(): Promise<Product[]> {
-  return resolveAfter(allProducts);
+  await initializeCatalogDatabase();
+  const rows = await (await databasePromise).getAllAsync<{
+    id: string;
+    name: string;
+    category_id: string;
+    brand_id: string;
+    price: number;
+    image_key: string;
+    stock_quantity: number;
+    variant_name: string | null;
+  }>(`SELECT p.id, p.name, p.category_id, p.brand_id, p.price, p.image_key, p.stock_quantity, v.name AS variant_name FROM products p LEFT JOIN product_variants v ON v.product_id = p.id ORDER BY p.name`);
+
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    categoryId: row.category_id,
+    brandId: row.brand_id,
+    price: row.price,
+    image: productImages[row.image_key],
+    stockQuantity: row.stock_quantity,
+    rating: 0,
+    reviewCount: 0,
+    variants: row.variant_name ? [row.variant_name] : [],
+  }));
 }
 
 export async function getBrands(): Promise<Brand[]> {
-  return resolveAfter(brands);
+  await initializeCatalogDatabase();
+  const rows = await (await databasePromise).getAllAsync<{ id: string; name: string }>("SELECT id, name FROM brands ORDER BY name");
+  return rows.map((row) => ({ id: row.id, name: row.name, logo: "" }));
+}
+
+function getCategoryIcon(name: string): string {
+  const normalizedName = name.toLowerCase();
+  if (normalizedName.includes("processor") || normalizedName.includes("component")) return "hardware-chip-outline";
+  if (normalizedName.includes("laptop")) return "laptop-outline";
+  if (normalizedName.includes("monitor") || normalizedName.includes("display")) return "tv-outline";
+  if (normalizedName.includes("network")) return "wifi-outline";
+  if (normalizedName.includes("storage")) return "server-outline";
+  if (normalizedName.includes("keyboard") || normalizedName.includes("mouse")) return "game-controller-outline";
+  return "cube-outline";
 }
 
 // Flash deal countdown target — replace with a real deal-end timestamp

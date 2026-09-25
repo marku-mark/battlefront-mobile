@@ -31,7 +31,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
       .then((storedCart) => {
         if (!storedCart) return;
         const parsedCart = JSON.parse(storedCart) as CartItem[];
-        if (Array.isArray(parsedCart)) setItems(parsedCart);
+        if (Array.isArray(parsedCart)) {
+          setItems(parsedCart.filter((item) => item?.product?.id && typeof item.product.price === "number" && typeof item.quantity === "number" && item.quantity > 0));
+        }
       })
       .catch(() => undefined)
       .finally(() => setIsHydrated(true));

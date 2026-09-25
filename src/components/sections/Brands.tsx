@@ -1,11 +1,12 @@
-import { FlatList, Text, View } from "react-native";
+import { FlatList, Pressable, Text, View } from "react-native";
 import type { Brand } from "@/lib/data";
 
 type BrandsProps = {
   brands: Brand[];
+  onSelect?: (brand: Brand) => void;
 };
 
-export function Brands({ brands }: BrandsProps) {
+export function Brands({ brands, onSelect }: BrandsProps) {
   if (brands.length === 0) return null;
 
   return (
@@ -20,11 +21,11 @@ export function Brands({ brands }: BrandsProps) {
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ paddingHorizontal: 16, paddingRight: 20, gap: 10 }}
         renderItem={({ item }) => (
-          <View className="border border-border rounded-xl bg-card min-w-[96px] px-4 py-3.5 items-center justify-center">
+          <Pressable accessibilityLabel={`Browse ${item.name} products`} accessibilityRole="button" onPress={() => onSelect?.(item)} className="border border-border rounded-xl bg-card min-w-[96px] px-4 py-3.5 items-center justify-center">
             <Text className="text-foreground text-xs font-bold uppercase tracking-[0.08em]">
               {item.name}
             </Text>
-          </View>
+          </Pressable>
         )}
       />
     </View>

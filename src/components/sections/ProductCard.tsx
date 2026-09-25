@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image, Pressable, Text, View } from "react-native";
 import { useState } from "react";
-import { getProductVariants, type Product } from "@/lib/data";
+import { getProductImageSource, getProductVariants, type Product } from "@/lib/data";
 import { useCart } from "@/hooks/useCart";
 import { useWishlist } from "@/hooks/useWishlist";
 import { useTheme } from "@/theme/ThemeProvider";
@@ -53,7 +53,7 @@ export function ProductCard({ product, width = 150, onPress }: ProductCardProps)
         >
           <View className="relative">
             <Image
-              source={{ uri: product.image }}
+              source={getProductImageSource(product.image)}
               accessibilityLabel={`${product.name} product image`}
               accessible
               style={{ width: "100%", height: width * 0.96 }}

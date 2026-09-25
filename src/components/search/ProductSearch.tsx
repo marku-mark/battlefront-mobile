@@ -82,6 +82,10 @@ export function ProductSearch({
           numColumns={2}
           columnWrapperStyle={{ gap: 12 }}
           contentContainerStyle={{ padding: 16, gap: 18 }}
+          initialNumToRender={8}
+          maxToRenderPerBatch={8}
+          windowSize={5}
+          removeClippedSubviews
           keyboardShouldPersistTaps="handled"
           ListHeaderComponent={
             <View className="mb-3">

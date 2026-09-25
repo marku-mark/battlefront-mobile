@@ -5,6 +5,7 @@ import {
   Image,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  Pressable,
   Text,
   View,
 } from "react-native";
@@ -15,9 +16,10 @@ const BANNER_WIDTH = SCREEN_WIDTH - 32; // 16px horizontal margin each side
 
 type PromoBannersProps = {
   banners: Banner[];
+  onSelect?: (banner: Banner) => void;
 };
 
-export function PromoBanners({ banners }: PromoBannersProps) {
+export function PromoBanners({ banners, onSelect }: PromoBannersProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const listRef = useRef<FlatList>(null);
 
@@ -43,7 +45,10 @@ export function PromoBanners({ banners }: PromoBannersProps) {
         onScroll={handleScroll}
         scrollEventThrottle={16}
         renderItem={({ item }) => (
-          <View
+          <Pressable
+            accessibilityLabel={`Open promotion: ${item.title}`}
+            accessibilityRole="button"
+            onPress={() => onSelect?.(item)}
             style={{ width: BANNER_WIDTH }}
             className="rounded-xl overflow-hidden bg-card border border-border"
           >
@@ -60,7 +65,7 @@ export function PromoBanners({ banners }: PromoBannersProps) {
                 {item.subtitle}
               </Text>
             </View>
-          </View>
+          </Pressable>
         )}
       />
 

@@ -26,6 +26,10 @@ export function SulitPicks({ products, onSelectProduct }: SulitPicksProps) {
         showsHorizontalScrollIndicator={false}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ paddingHorizontal: 16, paddingRight: 20, gap: 12 }}
+        initialNumToRender={4}
+        maxToRenderPerBatch={4}
+        windowSize={3}
+        removeClippedSubviews
         renderItem={({ item }) => (
           <ProductCard product={item} width={140} onPress={onSelectProduct} />
         )}

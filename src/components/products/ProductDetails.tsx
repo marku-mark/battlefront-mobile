@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Image, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { useState, type ReactNode } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { getProductVariants, type Product } from "@/lib/data";
+import { getProductImageSource, getProductVariants, type Product } from "@/lib/data";
 import { useTheme } from "@/theme/ThemeProvider";
 import { useWishlist } from "@/hooks/useWishlist";
 
@@ -51,9 +51,9 @@ export function ProductDetails({ product, quantity, onQuantityChange, onAddToCar
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 28 }}>
-        <Image source={{ uri: product.image }} accessibilityLabel={`${product.name} product image`} accessible style={{ width, height: width }} className="bg-card" resizeMode="cover" />
+        <Image source={getProductImageSource(product.image)} accessibilityLabel={`${product.name} product image`} accessible style={{ width, height: width }} className="bg-card" resizeMode="cover" />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, padding: 12 }}>
-          <View className="h-16 w-16 overflow-hidden rounded-lg border-2 border-primary"><Image source={{ uri: product.image }} accessibilityLabel={`${product.name} thumbnail`} className="h-full w-full" /></View>
+          <View className="h-16 w-16 overflow-hidden rounded-lg border-2 border-primary"><Image source={getProductImageSource(product.image)} accessibilityLabel={`${product.name} thumbnail`} className="h-full w-full" /></View>
         </ScrollView>
 
         <View className="px-4 pt-5">

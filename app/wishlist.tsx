@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { Image, Pressable, ScrollView, Text, View } from "react-native";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { allProducts, getProductVariants } from "@/lib/data";
+import { getProductImageSource, getProductVariants, type Product } from "@/lib/data";
+import { getProducts } from "@/lib/api";
 import { useWishlist } from "@/hooks/useWishlist";
 import { useCart } from "@/hooks/useCart";
 
@@ -15,9 +16,14 @@ export default function WishlistScreen() {
   const router = useRouter();
   const { items: wishlistIds, toggleWishlist } = useWishlist();
   const { addItem, items: cartItems } = useCart();
-  const [removedProduct, setRemovedProduct] = useState<(typeof allProducts)[number] | null>(null);
+  const [removedProduct, setRemovedProduct] = useState<Product | null>(null);
+  const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
 
-  const products = allProducts.filter((product) => wishlistIds.includes(product.id));
+  useEffect(() => {
+    getProducts().then(setCatalogProducts).catch(() => setCatalogProducts([]));
+  }, []);
+
+  const products = catalogProducts.filter((product) => wishlistIds.includes(product.id));
 
   return (
     <SafeAreaView className="flex-1 bg-background">
@@ -93,7 +99,7 @@ export default function WishlistScreen() {
                 accessibilityLabel={`View details for ${product.name}`}
                 onPress={() => router.push({ pathname: "/product/[id]", params: { id: product.id } })}
               >
-                <Image source={{ uri: product.image }} className="w-20 h-20 rounded-xl bg-secondary" />
+                <Image source={getProductImageSource(product.image)} className="w-20 h-20 rounded-xl bg-secondary" />
               </Pressable>
               <View className="flex-1 ml-3">
                 <View className="flex-row items-start gap-2">
