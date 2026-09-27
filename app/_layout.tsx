@@ -5,6 +5,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { CartProvider } from "@/hooks/useCart";
 import { WishlistProvider } from "@/hooks/useWishlist";
+import { SessionProvider } from "@/hooks/useSession";
 import { ThemeProvider } from "@/theme/ThemeProvider";
 import { useTheme } from "@/theme/ThemeProvider";
 import { initializeCatalogDatabase } from "@/lib/database";
@@ -32,11 +33,13 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ThemeProvider>
-          <CartProvider>
-            <WishlistProvider>
-              <AppStack />
-            </WishlistProvider>
-          </CartProvider>
+          <SessionProvider>
+            <CartProvider>
+              <WishlistProvider>
+                <AppStack />
+              </WishlistProvider>
+            </CartProvider>
+          </SessionProvider>
         </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

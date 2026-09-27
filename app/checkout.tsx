@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Alert,
   ActivityIndicator,
@@ -14,6 +14,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCart, type CartItem } from "@/hooks/useCart";
+import { useSession } from "@/hooks/useSession";
+import { DEMO_ACCOUNT } from "@/lib/mockAccount";
 import { useTheme } from "@/theme/ThemeProvider";
 
 function formatPrice(value: number): string {
@@ -43,6 +45,7 @@ export default function CheckoutScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { items, subtotal, clearCart, removeItem, updateQuantity } = useCart();
+  const { session, isHydrated } = useSession();
   const [step, setStep] = useState<CheckoutStep>("address");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
@@ -54,6 +57,13 @@ export default function CheckoutScreen() {
   const [removedItem, setRemovedItem] = useState<CartItem | null>(null);
   const shippingFee = deliveryId === "pickup" || subtotal > 5000 ? 0 : 150;
   const total = subtotal + shippingFee;
+
+  useEffect(() => {
+    if (!isHydrated || session.mode !== "mock-account") return;
+    setFullName((current) => current || DEMO_ACCOUNT.displayName);
+    setPhone((current) => current || DEMO_ACCOUNT.phone);
+    setAddress((current) => current || DEMO_ACCOUNT.address);
+  }, [isHydrated, session]);
 
   function hasValidAddress() {
     return Boolean(fullName.trim() && phone.trim() && address.trim());
@@ -121,9 +131,9 @@ export default function CheckoutScreen() {
           <View className="w-20 h-20 rounded-full bg-primary/15 items-center justify-center border border-primary/30">
             <Ionicons name="checkmark" size={42} color={colors.primary} />
           </View>
-          <Text className="text-foreground text-2xl font-bold text-center mt-6">Order confirmed</Text>
+          <Text className="text-foreground text-2xl font-bold text-center mt-6">Demo checkout complete</Text>
           <Text className="text-muted-foreground text-sm text-center mt-2 leading-5">
-            Your order BF-20260924-1842 has been received. We will keep you updated about delivery.
+            This preview did not submit a real order or payment. Your cart has been cleared from this device.
           </Text>
           <View className="w-full bg-card border border-border rounded-2xl p-4 mt-7">
             <SummaryRow label="Total" value={formatPrice(total)} />
@@ -151,10 +161,10 @@ export default function CheckoutScreen() {
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
           <View className="rounded-2xl border border-border bg-card p-3 mb-5 shadow-soft">
             <View className="flex-row items-center gap-2">
-              <Ionicons name="lock-closed-outline" size={15} color={colors.primary} />
-              <Text className="text-foreground text-sm font-semibold">Secure checkout</Text>
+              <Ionicons name="information-circle-outline" size={16} color={colors.primary} />
+              <Text className="text-foreground text-sm font-semibold">Checkout preview</Text>
             </View>
-            <Text className="text-muted-foreground text-xs mt-1">Protected payment flow • Verified local delivery • Warranty support</Text>
+            <Text className="text-muted-foreground text-xs mt-1">No payment is charged and no order is sent to a store.</Text>
           </View>
 
           <View className="flex-row items-start justify-between mb-7">

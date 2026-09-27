@@ -3,24 +3,42 @@ import { useRouter } from "expo-router";
 import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useSession } from "@/hooks/useSession";
+import { DEMO_ACCOUNT, DEMO_ADDRESSES, DEMO_ORDERS } from "@/lib/mockAccount";
 import { useTheme } from "@/theme/ThemeProvider";
 
 const accountLinks = [
-  { icon: "receipt-outline", label: "My orders", detail: "Track purchases and deliveries", badge: "Soon" },
-  { icon: "heart-outline", label: "Wishlist", detail: "Save products for later", badge: "Saved" },
-  { icon: "location-outline", label: "Delivery addresses", detail: "Manage your saved locations", badge: "Soon" },
-  { icon: "help-circle-outline", label: "Help center", detail: "Get support from Battlefront", badge: "Live" },
+  { icon: "receipt-outline", label: "My orders", detail: "View sample order history", badge: "Demo" },
+  { icon: "heart-outline", label: "Wishlist", detail: "Saved on this device", badge: "Local" },
+  { icon: "location-outline", label: "Delivery addresses", detail: "Use the sample saved address", badge: "Demo" },
+  { icon: "help-circle-outline", label: "Help center", detail: "Preview support information", badge: "Preview" },
 ] as const;
 
 export default function AccountScreen() {
   const router = useRouter();
   const { isDark, toggleMode } = useTheme();
-  const [isSignedIn, setIsSignedIn] = useState(false);
-  const [authMode, setAuthMode] = useState<"signin" | "register">("signin");
+  const { session, signIn, signOut } = useSession();
+  const isMockAccount = session.mode === "mock-account";
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [selectedUtility, setSelectedUtility] = useState<string | null>(null);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState<string>(DEMO_ACCOUNT.email);
+  const [password, setPassword] = useState<string>(DEMO_ACCOUNT.password);
+  const [authError, setAuthError] = useState("");
+
+  function openSignIn(message = "") {
+    setAuthError(message);
+    setIsAuthOpen(true);
+  }
+
+  function handleSignIn() {
+    if (!signIn(email, password)) {
+      setAuthError("Those details don't match the local demo account.");
+      return;
+    }
+
+    setAuthError("");
+    setIsAuthOpen(false);
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-background">
@@ -42,10 +60,10 @@ export default function AccountScreen() {
             </View>
             <View className="flex-1 ml-3">
               <Text className="text-foreground text-base font-semibold">
-                {isSignedIn ? "Welcome back" : "Shop as a guest"}
+                {isMockAccount ? `Welcome, ${session.user.displayName}` : "Shop as a guest"}
               </Text>
               <Text className="text-muted-foreground text-xs mt-1">
-                {isSignedIn ? "Your orders and saved details are ready." : "Sign in to track orders and save your details."}
+                {isMockAccount ? "Mock account · sample data saved on this device." : "Browse, shop, and save items locally without signing in."}
               </Text>
             </View>
           </View>
@@ -53,32 +71,34 @@ export default function AccountScreen() {
           <View className="flex-row gap-3 mt-5">
             <Pressable
               onPress={() => {
-                setAuthMode("signin");
-                setIsAuthOpen(true);
+                if (isMockAccount) {
+                  signOut();
+                  return;
+                }
+                openSignIn();
               }}
-              accessibilityLabel="Sign in"
+              accessibilityLabel={isMockAccount ? "Sign out of demo account" : "Sign in to demo account"}
               className="flex-1 bg-primary rounded-xl items-center py-3"
               style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
             >
               <Text className="text-primary-foreground text-sm font-semibold">
-                {isSignedIn ? "Sign out" : "Sign in"}
+                {isMockAccount ? "Sign out" : "Sign in to demo"}
               </Text>
             </Pressable>
             <Pressable
               onPress={() => {
-                if (isSignedIn) {
-                  setIsSignedIn(false);
+                if (isMockAccount) {
+                  setSelectedUtility("Account settings");
                   return;
                 }
-                setAuthMode("register");
-                setIsAuthOpen(true);
+                signOut();
               }}
-              accessibilityLabel="Create account"
+              accessibilityLabel={isMockAccount ? "Open demo account settings" : "Continue as guest"}
               className="flex-1 border border-border rounded-xl items-center py-3"
               style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
             >
               <Text className="text-foreground text-sm font-semibold">
-                {isSignedIn ? "Account settings" : "Create account"}
+                {isMockAccount ? "Account settings" : "Continue as guest"}
               </Text>
             </Pressable>
           </View>
@@ -87,7 +107,7 @@ export default function AccountScreen() {
         <View className="flex-row items-center justify-between px-4 mt-7 mb-3">
           <Text className="text-foreground text-base font-bold">Account shortcuts</Text>
           <Text className="text-muted-foreground text-[11px] uppercase tracking-[0.14em]">
-            Guest mode
+            {isMockAccount ? "Mock account" : "Guest mode"}
           </Text>
         </View>
         <View className="mx-4 rounded-2xl bg-card border border-border overflow-hidden">
@@ -114,6 +134,10 @@ export default function AccountScreen() {
                   router.push("/wishlist");
                   return;
                 }
+                if ((link.label === "My orders" || link.label === "Delivery addresses") && !isMockAccount) {
+                  openSignIn(`Sign in to the demo account to view ${link.label.toLowerCase()}.`);
+                  return;
+                }
                 setSelectedUtility(link.label);
               }}
               className={`flex-row items-center p-4 ${index < accountLinks.length - 1 ? "border-b border-border" : ""}`}
@@ -127,8 +151,8 @@ export default function AccountScreen() {
                   <Text className="text-foreground text-sm font-medium">
                     {link.label}
                   </Text>
-                  <View className={`rounded-full px-1.5 py-0.5 ${link.badge === "Live" ? "bg-primary/15" : "bg-secondary"}`}>
-                    <Text className={`text-[9px] font-bold uppercase tracking-[0.08em] ${link.badge === "Live" ? "text-primary" : "text-muted-foreground"}`}>
+                  <View className={`rounded-full px-1.5 py-0.5 ${link.badge === "Demo" ? "bg-primary/15" : "bg-secondary"}`}>
+                    <Text className={`text-[9px] font-bold uppercase tracking-[0.08em] ${link.badge === "Demo" ? "text-primary" : "text-muted-foreground"}`}>
                       {link.badge}
                     </Text>
                   </View>
@@ -163,7 +187,7 @@ export default function AccountScreen() {
         <View className="flex-row items-center justify-center gap-1.5 mt-7">
           <Ionicons name="shield-checkmark-outline" size={15} color="#9ca3af" />
           <Text className="text-muted-foreground text-xs">
-            Your information stays secure with Battlefront.
+            Guest and mock account data stay on this device.
           </Text>
         </View>
       </ScrollView>
@@ -173,16 +197,17 @@ export default function AccountScreen() {
           <View className="bg-background rounded-t-3xl border-t border-border px-4 pt-4 pb-8">
             <View className="flex-row items-center justify-between">
               <View>
-                <Text className="text-foreground text-xl font-bold">{authMode === "signin" ? "Sign in" : "Create account"}</Text>
-                <Text className="text-muted-foreground text-xs mt-1">Use a demo account to preview the account experience.</Text>
+                <Text className="text-foreground text-xl font-bold">Sign in to demo account</Text>
+                <Text className="text-muted-foreground text-xs mt-1">Local preview only. These details are not sent anywhere.</Text>
               </View>
-              <Pressable accessibilityLabel="Close account access" onPress={() => setIsAuthOpen(false)} hitSlop={8} className="w-9 h-9 items-center justify-center">
+              <Pressable accessibilityLabel="Close demo sign in" onPress={() => setIsAuthOpen(false)} hitSlop={8} className="w-9 h-9 items-center justify-center">
                 <Ionicons name="close" size={22} color={isDark ? "#f8fafc" : "#30343b"} />
               </Pressable>
             </View>
             <TextInput
               value={email}
               onChangeText={setEmail}
+              accessibilityLabel="Demo account email"
               placeholder="Email address"
               placeholderTextColor="#94a3b8"
               keyboardType="email-address"
@@ -192,23 +217,29 @@ export default function AccountScreen() {
             <TextInput
               value={password}
               onChangeText={setPassword}
+              accessibilityLabel="Demo account password"
               placeholder="Password"
               placeholderTextColor="#94a3b8"
               secureTextEntry
               className="bg-secondary border border-border rounded-xl px-3 h-12 text-foreground text-sm mt-3"
             />
+            {authError.length > 0 && <Text accessibilityRole="alert" className="text-danger text-xs mt-3">{authError}</Text>}
             <Pressable
-              accessibilityLabel={authMode === "signin" ? "Continue with sign in" : "Create demo account"}
-              onPress={() => {
-                setIsSignedIn(true);
-                setIsAuthOpen(false);
-              }}
+              accessibilityLabel="Sign in to the local demo account"
+              onPress={handleSignIn}
               className="bg-primary rounded-xl items-center py-3.5 mt-5"
             >
-              <Text className="text-primary-foreground text-sm font-bold">Continue</Text>
+              <Text className="text-primary-foreground text-sm font-bold">Sign in</Text>
             </Pressable>
-            <Pressable onPress={() => setAuthMode((current) => current === "signin" ? "register" : "signin")} className="items-center py-3">
-              <Text className="text-primary text-xs font-semibold">{authMode === "signin" ? "Create a new account" : "Already have an account? Sign in"}</Text>
+            <Pressable
+              onPress={() => {
+                signOut();
+                setAuthError("");
+                setIsAuthOpen(false);
+              }}
+              className="items-center py-3"
+            >
+              <Text className="text-muted-foreground text-xs font-semibold">Continue as guest</Text>
             </Pressable>
           </View>
         </View>
@@ -218,9 +249,42 @@ export default function AccountScreen() {
         <View className="flex-1 items-center justify-center px-6 bg-black/50">
           <View className="w-full bg-background border border-border rounded-2xl p-5">
             <Text className="text-foreground text-lg font-bold">{selectedUtility}</Text>
-            <Text className="text-muted-foreground text-sm leading-5 mt-2">
-              This mock surface is ready for the next account and support UI pass.
-            </Text>
+            {selectedUtility === "My orders" && isMockAccount ? (
+              <View className="mt-3 gap-3">
+                <Text className="text-muted-foreground text-xs">Sample order history · not connected to a store</Text>
+                {DEMO_ORDERS.map((order) => (
+                  <View key={order.id} className="rounded-xl border border-border bg-card p-3">
+                    <View className="flex-row items-center justify-between gap-3">
+                      <Text className="text-foreground text-sm font-semibold">{order.id}</Text>
+                      <Text className="text-primary text-xs font-semibold">{order.status}</Text>
+                    </View>
+                    <Text className="text-muted-foreground text-xs mt-1">{order.date} · {order.items}</Text>
+                    <Text className="text-foreground text-sm font-bold mt-2">{order.total}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : selectedUtility === "Delivery addresses" && isMockAccount ? (
+              <View className="mt-3 gap-3">
+                <Text className="text-muted-foreground text-xs">Sample address · stored in this demo only</Text>
+                {DEMO_ADDRESSES.map((address) => (
+                  <View key={address.label} className="rounded-xl border border-border bg-card p-3">
+                    <Text className="text-foreground text-sm font-semibold">{address.label} · {address.recipient}</Text>
+                    <Text className="text-muted-foreground text-xs leading-5 mt-1">{address.address}</Text>
+                    <Text className="text-muted-foreground text-xs mt-1">{address.phone}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : selectedUtility === "Account settings" && isMockAccount ? (
+              <View className="mt-3 rounded-xl border border-border bg-card p-3">
+                <Text className="text-muted-foreground text-xs">Mock profile · saved on this device</Text>
+                <Text className="text-foreground text-sm mt-2">{session.user.displayName}</Text>
+                <Text className="text-muted-foreground text-xs mt-1">{session.user.email}</Text>
+              </View>
+            ) : (
+              <Text className="text-muted-foreground text-sm leading-5 mt-2">
+                Support information is a preview and is not connected to a live service.
+              </Text>
+            )}
             <Pressable onPress={() => setSelectedUtility(null)} className="bg-primary rounded-xl items-center py-3 mt-5">
               <Text className="text-primary-foreground text-sm font-semibold">Close</Text>
             </Pressable>

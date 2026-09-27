@@ -5,10 +5,14 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
   type ReactNode,
 } from "react";
+import { useSession } from "@/hooks/useSession";
+
+type WishlistMode = "guest" | "mock-account";
 
 type WishlistContextValue = {
   items: string[];
@@ -20,43 +24,67 @@ const WishlistContext = createContext<WishlistContextValue | null>(null);
 type Listener = () => void;
 
 type WishlistStore = {
-  getItems: () => string[];
-  isWishlisted: (productId: string) => boolean;
-  toggleWishlist: (productId: string) => void;
-  setItems: (items: string[]) => void;
-  subscribe: (listener: Listener) => () => void;
-  subscribeToProduct: (productId: string, listener: Listener) => () => void;
+  getItems: (mode: WishlistMode) => string[];
+  isWishlisted: (mode: WishlistMode, productId: string) => boolean;
+  toggleWishlist: (mode: WishlistMode, productId: string) => void;
+  setItems: (mode: WishlistMode, items: string[]) => void;
+  subscribe: (mode: WishlistMode, listener: Listener) => () => void;
+  subscribeToProduct: (mode: WishlistMode, productId: string, listener: Listener) => () => void;
 };
 
 const WishlistStoreContext = createContext<WishlistStore | null>(null);
-const WISHLIST_STORAGE_KEY = "battlefront-wishlist";
+const MOCK_WISHLIST_STORAGE_KEY = "battlefront-mock-account-wishlist";
 
 export function WishlistProvider({ children }: { children: ReactNode }) {
+  const { session } = useSession();
   const [store] = useState(createWishlistStore);
-  const [isHydrated, setIsHydrated] = useState(false);
-  const productIds = useSyncExternalStore(store.subscribe, store.getItems, store.getItems);
+  const [isMockWishlistLoaded, setIsMockWishlistLoaded] = useState(false);
+  const isMockWishlistLoadedRef = useRef(false);
+  const pendingMockToggles = useRef<string[]>([]);
+  const subscribe = useCallback(
+    (listener: Listener) => store.subscribe(session.mode, listener),
+    [session.mode, store]
+  );
+  const getSnapshot = useCallback(() => store.getItems(session.mode), [session.mode, store]);
+  const productIds = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const toggleWishlist = useCallback((productId: string) => {
+    store.toggleWishlist(session.mode, productId);
+    if (session.mode === "mock-account" && !isMockWishlistLoadedRef.current) {
+      pendingMockToggles.current.push(productId);
+    }
+  }, [session.mode, store]);
 
   useEffect(() => {
-    AsyncStorage.getItem(WISHLIST_STORAGE_KEY)
+    AsyncStorage.getItem(MOCK_WISHLIST_STORAGE_KEY)
       .then((storedWishlist) => {
-        if (!storedWishlist) return;
-        const parsedWishlist = JSON.parse(storedWishlist) as unknown;
-        if (Array.isArray(parsedWishlist) && parsedWishlist.every((id) => typeof id === "string")) {
-          store.setItems(parsedWishlist);
-        }
+        const parsedWishlist: unknown = storedWishlist ? JSON.parse(storedWishlist) : [];
+        if (!Array.isArray(parsedWishlist) || !parsedWishlist.every((id) => typeof id === "string")) return;
+        const storedIds = parsedWishlist as string[];
+        const hydratedWishlist = pendingMockToggles.current.reduce(
+          (items, productId) => toggleId(items, productId),
+          storedIds
+        );
+        store.setItems("mock-account", hydratedWishlist);
       })
       .catch(() => undefined)
-      .finally(() => setIsHydrated(true));
+      .finally(() => {
+        isMockWishlistLoadedRef.current = true;
+        setIsMockWishlistLoaded(true);
+      });
   }, [store]);
 
   useEffect(() => {
-    if (!isHydrated) return;
-    AsyncStorage.setItem(WISHLIST_STORAGE_KEY, JSON.stringify(productIds)).catch(() => undefined);
-  }, [isHydrated, productIds]);
+    if (!isMockWishlistLoaded || session.mode !== "mock-account") return;
+    AsyncStorage.setItem(MOCK_WISHLIST_STORAGE_KEY, JSON.stringify(store.getItems("mock-account"))).catch(() => undefined);
+  }, [isMockWishlistLoaded, productIds, session.mode, store]);
 
   const value = useMemo<WishlistContextValue>(
-    () => ({ items: productIds, isWishlisted: store.isWishlisted, toggleWishlist: store.toggleWishlist }),
-    [productIds, store]
+    () => ({
+      items: productIds,
+      isWishlisted: (productId) => store.isWishlisted(session.mode, productId),
+      toggleWishlist,
+    }),
+    [productIds, session.mode, store, toggleWishlist]
   );
 
   return (
@@ -73,16 +101,19 @@ export function useWishlist(): WishlistContextValue {
 }
 
 export function useWishlistActions(): (productId: string) => void {
-  return useWishlistStore().toggleWishlist;
+  const store = useWishlistStore();
+  const { session } = useSession();
+  return useCallback((productId: string) => store.toggleWishlist(session.mode, productId), [session.mode, store]);
 }
 
 export function useIsWishlisted(productId: string): boolean {
   const store = useWishlistStore();
+  const { session } = useSession();
   const subscribe = useCallback(
-    (listener: Listener) => store.subscribeToProduct(productId, listener),
-    [productId, store]
+    (listener: Listener) => store.subscribeToProduct(session.mode, productId, listener),
+    [productId, session.mode, store]
   );
-  const getSnapshot = useCallback(() => store.isWishlisted(productId), [productId, store]);
+  const getSnapshot = useCallback(() => store.isWishlisted(session.mode, productId), [productId, session.mode, store]);
 
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
@@ -94,48 +125,59 @@ function useWishlistStore(): WishlistStore {
 }
 
 function createWishlistStore(): WishlistStore {
-  let items: string[] = [];
-  const listeners = new Set<Listener>();
-  const productListeners = new Map<string, Set<Listener>>();
+  let itemsByMode: Record<WishlistMode, string[]> = { guest: [], "mock-account": [] };
+  const listeners = new Map<WishlistMode, Set<Listener>>();
+  const productListeners = new Map<WishlistMode, Map<string, Set<Listener>>>();
 
-  function setItems(nextItems: string[]) {
+  function setItems(mode: WishlistMode, nextItems: string[]) {
+    const items = itemsByMode[mode];
     if (items === nextItems) return;
 
     const previousIds = new Set(items);
     const nextIds = new Set(nextItems);
     const changedIds = new Set([...previousIds, ...nextIds]);
-    items = nextItems;
-    listeners.forEach((listener) => listener());
+    itemsByMode = { ...itemsByMode, [mode]: nextItems };
+    listeners.get(mode)?.forEach((listener) => listener());
 
     changedIds.forEach((productId) => {
       if (previousIds.has(productId) === nextIds.has(productId)) return;
-      productListeners.get(productId)?.forEach((listener) => listener());
+      productListeners.get(mode)?.get(productId)?.forEach((listener) => listener());
     });
   }
 
   return {
-    getItems: () => items,
-    isWishlisted: (productId) => items.includes(productId),
-    toggleWishlist: (productId) => {
-      setItems(
-        items.includes(productId)
-          ? items.filter((id) => id !== productId)
-          : [...items, productId]
-      );
+    getItems: (mode) => itemsByMode[mode],
+    isWishlisted: (mode, productId) => itemsByMode[mode].includes(productId),
+    toggleWishlist: (mode, productId) => {
+      setItems(mode, toggleId(itemsByMode[mode], productId));
     },
     setItems,
-    subscribe: (listener) => {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-    subscribeToProduct: (productId, listener) => {
-      const subscribers = productListeners.get(productId) ?? new Set<Listener>();
+    subscribe: (mode, listener) => {
+      const subscribers = listeners.get(mode) ?? new Set<Listener>();
       subscribers.add(listener);
-      productListeners.set(productId, subscribers);
+      listeners.set(mode, subscribers);
       return () => {
         subscribers.delete(listener);
-        if (subscribers.size === 0) productListeners.delete(productId);
+        if (subscribers.size === 0) listeners.delete(mode);
+      };
+    },
+    subscribeToProduct: (mode, productId, listener) => {
+      const modeListeners = productListeners.get(mode) ?? new Map<string, Set<Listener>>();
+      const subscribers = modeListeners.get(productId) ?? new Set<Listener>();
+      subscribers.add(listener);
+      modeListeners.set(productId, subscribers);
+      productListeners.set(mode, modeListeners);
+      return () => {
+        subscribers.delete(listener);
+        if (subscribers.size === 0) modeListeners.delete(productId);
+        if (modeListeners.size === 0) productListeners.delete(mode);
       };
     },
   };
+}
+
+function toggleId(items: string[], productId: string): string[] {
+  return items.includes(productId)
+    ? items.filter((id) => id !== productId)
+    : [...items, productId];
 }

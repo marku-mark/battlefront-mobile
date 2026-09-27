@@ -1,7 +1,8 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useRef, useState, type ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect } from "react";
 import type { Product } from "@/lib/data";
+import { useSession } from "@/hooks/useSession";
 
 export type CartItem = {
   product: Product;
@@ -24,56 +25,83 @@ type CartActions = {
 
 const CartContext = createContext<CartContextValue | null>(null);
 const CartActionsContext = createContext<CartActions | null>(null);
-const CART_STORAGE_KEY = "battlefront-cart";
+const MOCK_CART_STORAGE_KEY = "battlefront-mock-account-cart";
+type CartMode = "guest" | "mock-account";
+type CartMutation = (items: CartItem[]) => CartItem[];
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>([]);
-  const [isHydrated, setIsHydrated] = useState(false);
+  const { session } = useSession();
+  const [itemsByMode, setItemsByMode] = useState<Record<CartMode, CartItem[]>>({
+    guest: [],
+    "mock-account": [],
+  });
+  const [isMockCartLoaded, setIsMockCartLoaded] = useState(false);
+  const isMockCartLoadedRef = useRef(false);
+  const pendingMockMutations = useRef<CartMutation[]>([]);
 
   useEffect(() => {
-    AsyncStorage.getItem(CART_STORAGE_KEY)
+    AsyncStorage.getItem(MOCK_CART_STORAGE_KEY)
       .then((storedCart) => {
         if (!storedCart) return;
         const parsedCart = JSON.parse(storedCart) as CartItem[];
         if (Array.isArray(parsedCart)) {
-          setItems(parsedCart.filter((item) => item?.product?.id && typeof item.product.price === "number" && typeof item.quantity === "number" && item.quantity > 0));
+          const validCart = parsedCart.filter((item) => item?.product?.id && typeof item.product.price === "number" && typeof item.quantity === "number" && item.quantity > 0);
+          setItemsByMode((current) => ({
+            ...current,
+            "mock-account": pendingMockMutations.current.reduce((items, mutation) => mutation(items), validCart),
+          }));
         }
       })
       .catch(() => undefined)
-      .finally(() => setIsHydrated(true));
+      .finally(() => {
+        isMockCartLoadedRef.current = true;
+        setIsMockCartLoaded(true);
+      });
   }, []);
 
   useEffect(() => {
-    if (!isHydrated) return;
-    AsyncStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items)).catch(() => undefined);
-  }, [items, isHydrated]);
+    if (!isMockCartLoaded) return;
+    AsyncStorage.setItem(MOCK_CART_STORAGE_KEY, JSON.stringify(itemsByMode["mock-account"])).catch(() => undefined);
+  }, [isMockCartLoaded, itemsByMode["mock-account"]]);
 
-  const actions = useMemo<CartActions>(() => ({
-    addItem: (product, quantity = 1, variant = null) => {
-      setItems((current) => {
-        const existing = current.find((item) => item.product.id === product.id && item.variant === variant);
-        if (existing) {
-          return current.map((item) =>
-            item.product.id === product.id && item.variant === variant
-              ? { ...item, quantity: item.quantity + quantity }
-              : item
-          );
-        }
-        return [...current, { product, quantity, variant }];
-      });
-    },
-    updateQuantity: (productId, quantity, variant = null) => {
-      setItems((current) =>
+  const items = itemsByMode[session.mode];
+
+  const actions = useMemo<CartActions>(() => {
+    function applyMutation(mutation: CartMutation) {
+      setItemsByMode((current) => ({
+        ...current,
+        [session.mode]: mutation(current[session.mode]),
+      }));
+      if (session.mode === "mock-account" && !isMockCartLoadedRef.current) {
+        pendingMockMutations.current.push(mutation);
+      }
+    }
+
+    return {
+      addItem: (product, quantity = 1, variant = null) => {
+        applyMutation((current) => {
+          const existing = current.find((item) => item.product.id === product.id && item.variant === variant);
+          if (existing) {
+            return current.map((item) =>
+              item.product.id === product.id && item.variant === variant
+                ? { ...item, quantity: item.quantity + quantity }
+                : item
+            );
+          }
+          return [...current, { product, quantity, variant }];
+        });
+      },
+      updateQuantity: (productId, quantity, variant = null) => applyMutation((current) =>
         quantity > 0
           ? current.map((item) =>
               item.product.id === productId && item.variant === variant ? { ...item, quantity } : item
             )
           : current.filter((item) => !(item.product.id === productId && item.variant === variant))
-      );
-    },
-    removeItem: (productId, variant = null) => setItems((current) => current.filter((item) => !(item.product.id === productId && item.variant === variant))),
-    clearCart: () => setItems([]),
-  }), []);
+      ),
+      removeItem: (productId, variant = null) => applyMutation((current) => current.filter((item) => !(item.product.id === productId && item.variant === variant))),
+      clearCart: () => applyMutation(() => []),
+    };
+  }, [session.mode]);
 
   const value = useMemo<CartContextValue>(() => {
     const itemCount = items.reduce((total, item) => total + item.quantity, 0);

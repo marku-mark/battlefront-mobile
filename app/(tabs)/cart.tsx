@@ -25,8 +25,8 @@ export default function CartScreen() {
           title="Your Cart"
           right={
             <View className="flex-row items-center gap-1.5">
-              <Ionicons name="shield-checkmark-outline" size={16} color="#94a3b8" />
-              <Text className="text-muted-foreground text-xs">Secure checkout</Text>
+              <Ionicons name="information-circle-outline" size={16} color="#94a3b8" />
+              <Text className="text-muted-foreground text-xs">Checkout preview</Text>
             </View>
           }
         />
@@ -177,7 +177,7 @@ export default function CartScreen() {
             <Text className="text-foreground text-base font-bold">Total</Text>
             <Text className="text-primary text-base font-bold">{formatPrice(total)}</Text>
           </View>
-          <Text className="text-muted-foreground text-xs mt-3">Shipping and taxes are calculated at checkout.</Text>
+          <Text className="text-muted-foreground text-xs mt-3">Guest checkout is available. The current checkout is a preview and will not submit a real order.</Text>
           <Pressable
             onPress={() => router.push("/checkout")}
             disabled={items.length === 0}
