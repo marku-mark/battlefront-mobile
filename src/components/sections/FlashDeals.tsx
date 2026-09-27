@@ -11,8 +11,6 @@ type FlashDealsProps = {
 };
 
 export function FlashDeals({ products, endTime, onSelectProduct }: FlashDealsProps) {
-  const { hours, minutes, seconds, isDone } = useCountdown(endTime);
-
   if (products.length === 0) return null;
 
   return (
@@ -32,22 +30,7 @@ export function FlashDeals({ products, endTime, onSelectProduct }: FlashDealsPro
           </View>
         </View>
 
-        {!isDone ? (
-          <View className="items-end">
-            <Text className="text-muted-foreground text-[9px] uppercase tracking-[0.14em] mb-1.5">
-              Ends in
-            </Text>
-            <View className="flex-row items-center gap-1.5">
-              <TimeBlock value={hours} />
-              <Text className="text-muted-foreground text-[10px] font-bold">:</Text>
-              <TimeBlock value={minutes} />
-              <Text className="text-muted-foreground text-[10px] font-bold">:</Text>
-              <TimeBlock value={seconds} />
-            </View>
-          </View>
-        ) : (
-          <Text className="text-muted-foreground text-xs">Deal ended</Text>
-        )}
+        <FlashDealCountdown endTime={endTime} />
       </View>
 
       <FlatList
@@ -64,6 +47,29 @@ export function FlashDeals({ products, endTime, onSelectProduct }: FlashDealsPro
           <ProductCard product={item} width={140} onPress={onSelectProduct} />
         )}
       />
+    </View>
+  );
+}
+
+function FlashDealCountdown({ endTime }: { endTime: Date }) {
+  const { hours, minutes, seconds, isDone } = useCountdown(endTime);
+
+  if (isDone) {
+    return <Text className="text-muted-foreground text-xs">Deal ended</Text>;
+  }
+
+  return (
+    <View className="items-end">
+      <Text className="text-muted-foreground text-[9px] uppercase tracking-[0.14em] mb-1.5">
+        Ends in
+      </Text>
+      <View className="flex-row items-center gap-1.5">
+        <TimeBlock value={hours} />
+        <Text className="text-muted-foreground text-[10px] font-bold">:</Text>
+        <TimeBlock value={minutes} />
+        <Text className="text-muted-foreground text-[10px] font-bold">:</Text>
+        <TimeBlock value={seconds} />
+      </View>
     </View>
   );
 }

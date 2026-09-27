@@ -1,9 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Image, Pressable, Text, View } from "react-native";
-import { useState } from "react";
+import { Image as ExpoImage } from "expo-image";
+import * as Haptics from "expo-haptics";
+import { Pressable, Text, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
 import { getProductImageSource, getProductVariants, type Product } from "@/lib/data";
-import { useCart } from "@/hooks/useCart";
-import { useWishlist } from "@/hooks/useWishlist";
+import { useCartActions } from "@/hooks/useCart";
+import { useIsWishlisted, useWishlistActions } from "@/hooks/useWishlist";
+import { prefetchProductById } from "@/lib/api";
 import { useTheme } from "@/theme/ThemeProvider";
 
 type ProductCardProps = {
@@ -17,16 +20,26 @@ function formatPrice(value: number): string {
 }
 
 export function ProductCard({ product, width = 150, onPress }: ProductCardProps) {
-  const { addItem } = useCart();
-  const { isWishlisted, toggleWishlist } = useWishlist();
+  const { addItem } = useCartActions();
+  const toggleWishlist = useWishlistActions();
   const { colors } = useTheme();
   const [justAdded, setJustAdded] = useState(false);
-  const wishlisted = isWishlisted(product.id);
+  const feedbackTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wishlisted = useIsWishlisted(product.id);
+
+  useEffect(() => () => {
+    if (feedbackTimeout.current) clearTimeout(feedbackTimeout.current);
+  }, []);
 
   function handleQuickAdd() {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
     addItem(product, 1, variants[0] ?? null);
     setJustAdded(true);
-    setTimeout(() => setJustAdded(false), 1400);
+    if (feedbackTimeout.current) clearTimeout(feedbackTimeout.current);
+    feedbackTimeout.current = setTimeout(() => {
+      setJustAdded(false);
+      feedbackTimeout.current = null;
+    }, 1400);
   }
   const hasDiscount =
     product.originalPrice !== undefined && product.originalPrice > product.price;
@@ -48,16 +61,19 @@ export function ProductCard({ product, width = 150, onPress }: ProductCardProps)
           accessibilityLabel={`View details for ${product.name}`}
           accessibilityRole="button"
           accessibilityHint="Opens product details"
+          onPressIn={() => prefetchProductById(product.id)}
           onPress={() => onPress?.(product)}
           style={({ pressed }) => ({ opacity: pressed ? 0.88 : 1 })}
         >
           <View className="relative">
-            <Image
+            <ExpoImage
               source={getProductImageSource(product.image)}
+              recyclingKey={product.id}
               accessibilityLabel={`${product.name} product image`}
               accessible
               style={{ width: "100%", height: width * 0.96 }}
-              resizeMode="cover"
+              contentFit="cover"
+              cachePolicy="memory-disk"
             />
 
             {hasDiscount && (
@@ -119,7 +135,10 @@ export function ProductCard({ product, width = 150, onPress }: ProductCardProps)
             accessibilityLabel={`${wishlisted ? "Remove" : "Add"} ${product.name} ${wishlisted ? "from" : "to"} wishlist`}
             accessibilityRole="button"
             accessibilityState={{ selected: wishlisted }}
-            onPress={() => toggleWishlist(product.id)}
+            onPress={() => {
+              void Haptics.selectionAsync().catch(() => undefined);
+              toggleWishlist(product.id);
+            }}
             className="w-9 h-9 rounded-lg border border-border items-center justify-center"
             style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
           >

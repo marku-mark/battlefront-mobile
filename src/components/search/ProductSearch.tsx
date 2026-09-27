@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useMemo, useState } from "react";
-import { FlatList, Modal, Pressable, Text, TextInput, View } from "react-native";
+import { FlashList } from "@shopify/flash-list";
+import { useDeferredValue, useMemo, useState } from "react";
+import { Modal, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
 import type { Product } from "@/lib/data";
 import { ProductCard } from "@/components/sections/ProductCard";
 
@@ -18,7 +19,9 @@ export function ProductSearch({
   onSelectProduct,
 }: ProductSearchProps) {
   const [query, setQuery] = useState("");
-  const normalizedQuery = query.trim().toLowerCase();
+  const { width } = useWindowDimensions();
+  const deferredQuery = useDeferredValue(query.trim());
+  const normalizedQuery = deferredQuery.toLowerCase();
 
   const popularSuggestions = useMemo(() => {
     const suggestions = ["monitor", "keyboard", "ssd", "gpu", "laptop", "mouse"];
@@ -76,22 +79,20 @@ export function ProductSearch({
           </View>
         </View>
 
-        <FlatList
+        <FlashList
           data={filteredProducts}
           keyExtractor={(item) => item.id}
           numColumns={2}
-          columnWrapperStyle={{ gap: 12 }}
-          contentContainerStyle={{ padding: 16, gap: 18 }}
-          initialNumToRender={8}
-          maxToRenderPerBatch={8}
-          windowSize={5}
-          removeClippedSubviews
+          masonry
+          optimizeItemArrangement={false}
+          contentContainerStyle={{ paddingHorizontal: 10, paddingVertical: 16 }}
+          ListHeaderComponentStyle={{ marginHorizontal: -10, marginBottom: 18 }}
           keyboardShouldPersistTaps="handled"
           ListHeaderComponent={
             <View className="mb-3">
               {normalizedQuery ? (
                 <Text className="text-muted-foreground text-xs mb-2">
-                  {filteredProducts.length} results for “{query.trim()}”
+                  {filteredProducts.length} results for “{deferredQuery}”
                 </Text>
               ) : (
                 <>
@@ -124,7 +125,13 @@ export function ProductSearch({
             </View>
           }
           renderItem={({ item }) => (
-            <ProductCard product={item} width={150} onPress={handleSelectProduct} />
+            <View style={{ paddingHorizontal: 6, marginBottom: 18 }}>
+              <ProductCard
+                product={item}
+                width={Math.max(136, (width - 44) / 2)}
+                onPress={handleSelectProduct}
+              />
+            </View>
           )}
         />
       </View>

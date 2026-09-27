@@ -1,16 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
+import { FlashList } from "@shopify/flash-list";
 import { useRouter } from "expo-router";
-import { Alert, FlatList, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
+import { Alert, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import {
   getBanners,
   getBrands,
   getCategories,
   getFlashDealEndTime,
-  getFlashDeals,
-  getNewArrivals,
-  getProducts,
-  getSulitPicks,
+  getHomeCatalog,
 } from "@/lib/api";
 import type { Banner, Brand, Category, Product } from "@/lib/data";
 import { Header } from "@/components/layout/Header";
@@ -56,10 +54,12 @@ export default function HomeScreen() {
     Promise.all([
       getBanners().then(setBanners),
       getCategories().then(setCategories),
-      getFlashDeals().then(setFlashDeals),
-      getSulitPicks().then(setSulitPicks),
-      getNewArrivals().then(setNewArrivals),
-      getProducts().then(setCatalogProducts),
+      getHomeCatalog().then((homeCatalog) => {
+        setFlashDeals(homeCatalog.flashDeals);
+        setSulitPicks(homeCatalog.sulitPicks);
+        setNewArrivals(homeCatalog.newArrivals);
+        setCatalogProducts(homeCatalog.catalogProducts);
+      }),
       getBrands().then(setBrands),
     ])
       .catch(() => {
@@ -86,10 +86,11 @@ export default function HomeScreen() {
           onSearchPress={() => setIsSearchOpen(true)}
         />
         <ScrollView showsVerticalScrollIndicator={false} removeClippedSubviews contentContainerStyle={{ paddingBottom: 112 }}>
-          <LoadingHero />
-          <LoadingRow title="Trending" />
-          <LoadingCards />
-          <LoadingCards />
+          <LoadingHero width={width} />
+          <LoadingCategories />
+          <LoadingProductRail showCountdown />
+          <LoadingTrustBar />
+          <LoadingProductRail />
         </ScrollView>
       </View>
     );
@@ -103,16 +104,14 @@ export default function HomeScreen() {
         onNotificationPress={() => router.push("/notifications")}
         onSearchPress={() => setIsSearchOpen(true)}
       />
-      <FlatList
+      <FlashList
         data={catalogProducts}
         numColumns={2}
+        masonry
+        optimizeItemArrangement={false}
         keyExtractor={(item) => item.id}
-        columnWrapperStyle={{ gap: 12, paddingHorizontal: 16 }}
-        contentContainerStyle={{ paddingBottom: 28, paddingTop: 16 }}
-        initialNumToRender={12}
-        maxToRenderPerBatch={12}
-        windowSize={5}
-        removeClippedSubviews
+        contentContainerStyle={{ paddingBottom: 28, paddingTop: 16, paddingHorizontal: 10 }}
+        ListHeaderComponentStyle={{ marginHorizontal: -10 }}
         ListHeaderComponent={
           <View>
             <PromoBanners banners={banners} onSelect={() => router.push("/categories")} />
@@ -142,7 +141,15 @@ export default function HomeScreen() {
           </View>
         }
         ListEmptyComponent={!isLoading ? <View className="items-center px-6 py-12"><Text className="text-foreground text-sm font-semibold">No products available</Text><Text className="text-muted-foreground text-xs mt-1">Try refreshing the catalog.</Text></View> : null}
-        renderItem={({ item }) => <ProductCard product={item} width={Math.max(136, (width - 44) / 2)} onPress={handleProductSelect} />}
+        renderItem={({ item }) => (
+          <View style={{ paddingHorizontal: 6 }}>
+            <ProductCard
+              product={item}
+              width={Math.max(136, (width - 44) / 2)}
+              onPress={handleProductSelect}
+            />
+          </View>
+        )}
       />
       <Pressable
         accessibilityLabel="Open Battlefront Support chat"
@@ -163,40 +170,106 @@ export default function HomeScreen() {
   );
 }
 
-function LoadingHero() {
+function LoadingHero({ width }: { width: number }) {
   return (
-    <View className="px-4 pt-4">
-      <View className="rounded-2xl bg-card border border-border p-4">
-        <View className="h-2.5 w-20 rounded-full bg-secondary" />
-        <View className="mt-3 h-6 w-4/5 rounded-full bg-secondary" />
-        <View className="mt-2 h-4 w-full rounded-full bg-secondary" />
-        <View className="mt-2 h-4 w-3/4 rounded-full bg-secondary" />
-      </View>
-    </View>
-  );
-}
-
-function LoadingRow({ title }: { title: string }) {
-  return (
-    <View className="mt-6 px-4 mb-3">
-      <View className="flex-row items-center justify-between">
-        <View className="h-4 w-28 rounded-full bg-secondary" />
-        <View className="h-3 w-16 rounded-full bg-secondary" />
-      </View>
-    </View>
-  );
-}
-
-function LoadingCards() {
-  return (
-    <View className="px-4 flex-row gap-3">
-      {Array.from({ length: 3 }).map((_, index) => (
-        <View key={index} className="w-[140px]">
-          <View className="h-[134px] rounded-2xl bg-secondary border border-border" />
-          <View className="mt-2 h-3.5 w-20 rounded-full bg-secondary" />
-          <View className="mt-2 h-3 w-16 rounded-full bg-secondary" />
+    <View className="mt-4">
+      <View style={{ width: width - 32, height: 172 }} className="mx-4 rounded-xl overflow-hidden bg-card border border-border">
+        <View className="absolute bottom-0 left-0 right-0 px-4 py-3.5">
+          <View className="h-4 w-40 rounded-full bg-secondary" />
+          <View className="mt-2 h-3 w-56 rounded-full bg-secondary" />
         </View>
-      ))}
+      </View>
+      <View className="flex-row justify-center gap-2 mt-2.5">
+        <View className="h-1.5 w-4 rounded-full bg-secondary" />
+        <View className="h-1.5 w-1.5 rounded-full bg-secondary" />
+        <View className="h-1.5 w-1.5 rounded-full bg-secondary" />
+      </View>
+    </View>
+  );
+}
+
+function LoadingCategories() {
+  return (
+    <View className="mt-6">
+      <View className="flex-row items-center justify-between px-4 mb-3">
+        <View>
+          <View className="h-4 w-32 rounded-full bg-secondary" />
+          <View className="mt-1.5 h-2.5 w-24 rounded-full bg-secondary" />
+        </View>
+        <View className="h-3 w-14 rounded-full bg-secondary" />
+      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}
+      >
+        {Array.from({ length: 5 }).map((_, index) => (
+          <View key={index} className="items-center w-[74px]">
+            <View className="w-14 h-14 rounded-2xl bg-secondary border border-border" />
+            <View className="mt-1.5 h-3 w-14 rounded-full bg-secondary" />
+            <View className="mt-1 h-3 w-10 rounded-full bg-secondary" />
+          </View>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+function LoadingProductRail({ showCountdown = false }: { showCountdown?: boolean }) {
+  return (
+    <View className="mt-6">
+      <View className="flex-row items-center justify-between px-4 mb-3">
+        <View className="flex-row items-center gap-2">
+          {showCountdown && <View className="w-7 h-7 rounded-full bg-secondary" />}
+          <View>
+            <View className="h-4 w-24 rounded-full bg-secondary" />
+            <View className="mt-1.5 h-2.5 w-28 rounded-full bg-secondary" />
+          </View>
+        </View>
+        {showCountdown && (
+          <View className="flex-row gap-1.5">
+            <View className="h-5 w-6 rounded-md bg-secondary" />
+            <View className="h-5 w-6 rounded-md bg-secondary" />
+            <View className="h-5 w-6 rounded-md bg-secondary" />
+          </View>
+        )}
+      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}
+      >
+        {Array.from({ length: 3 }).map((_, index) => (
+          <View key={index} className="w-[140px] rounded-2xl overflow-hidden bg-card border border-border">
+            <View className="h-[134px] bg-secondary" />
+            <View className="px-2.5 pt-2.5 pb-3">
+              <View className="h-3.5 w-5/6 rounded-full bg-secondary" />
+              <View className="mt-1.5 h-3 w-2/3 rounded-full bg-secondary" />
+              <View className="mt-2 h-4 w-3/5 rounded-full bg-secondary" />
+              <View className="mt-1.5 h-3 w-1/2 rounded-full bg-secondary" />
+            </View>
+            <View className="flex-row items-center gap-2 px-2.5 pb-2.5">
+              <View className="w-9 h-9 rounded-lg bg-secondary" />
+              <View className="flex-1 h-9 rounded-lg bg-secondary" />
+            </View>
+          </View>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+function LoadingTrustBar() {
+  return (
+    <View className="mx-4 mt-6 overflow-hidden rounded-2xl border border-border bg-card">
+      <View className="flex-row px-3 py-3.5">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <View key={index} className={`flex-1 flex-row items-center justify-center gap-1.5 ${index > 0 ? "border-l border-border" : ""}`}>
+            <View className="w-4 h-4 rounded-full bg-secondary" />
+            <View className="h-2.5 w-12 rounded-full bg-secondary" />
+          </View>
+        ))}
+      </View>
     </View>
   );
 }

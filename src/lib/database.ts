@@ -44,35 +44,41 @@ async function initialize() {
   const existing = await database.getFirstAsync<{ count: number }>("SELECT COUNT(*) AS count FROM products");
   if (existing?.count) return;
 
-  for (const category of catalogSeed.categories) {
-    await database.runAsync("INSERT INTO categories (id, name) VALUES (?, ?)", category.id, category.name);
-  }
-  for (const brand of catalogSeed.brands) {
-    await database.runAsync("INSERT INTO brands (id, name) VALUES (?, ?)", brand.id, brand.name);
-  }
-  for (const product of catalogSeed.products) {
-    await database.runAsync(
-      "INSERT INTO products (id, name, category_id, brand_id, price, image_key, stock_quantity, performance_tier, use_case, special_traits) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      product.id,
-      product.name,
-      product.categoryId,
-      product.brandId,
-      product.price,
-      product.imageKey,
-      product.stockQuantity,
-      product.performanceTier,
-      product.useCase,
-      product.specialTraits
-    );
-    for (const variant of product.variants) {
+  await database.withTransactionAsync(async () => {
+    for (const category of catalogSeed.categories) {
       await database.runAsync(
-        "INSERT INTO product_variants (id, product_id, name, price, stock_quantity) VALUES (?, ?, ?, ?, ?)",
-        variant.id,
-        product.id,
-        variant.name,
-        variant.price,
-        variant.stockQuantity
+        "INSERT INTO categories (id, name) VALUES (?, ?)",
+        category.id,
+        category.name
       );
     }
-  }
+    for (const brand of catalogSeed.brands) {
+      await database.runAsync("INSERT INTO brands (id, name) VALUES (?, ?)", brand.id, brand.name);
+    }
+    for (const product of catalogSeed.products) {
+      await database.runAsync(
+        "INSERT INTO products (id, name, category_id, brand_id, price, image_key, stock_quantity, performance_tier, use_case, special_traits) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        product.id,
+        product.name,
+        product.categoryId,
+        product.brandId,
+        product.price,
+        product.imageKey,
+        product.stockQuantity,
+        product.performanceTier,
+        product.useCase,
+        product.specialTraits
+      );
+      for (const variant of product.variants) {
+        await database.runAsync(
+          "INSERT INTO product_variants (id, product_id, name, price, stock_quantity) VALUES (?, ?, ?, ?, ?)",
+          variant.id,
+          product.id,
+          variant.name,
+          variant.price,
+          variant.stockQuantity
+        );
+      }
+    }
+  });
 }

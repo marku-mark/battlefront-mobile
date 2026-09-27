@@ -5,7 +5,7 @@ import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ProductDetails } from "@/components/products/ProductDetails";
 import { useCart } from "@/hooks/useCart";
-import { getProducts } from "@/lib/api";
+import { getProductById } from "@/lib/api";
 import type { Product } from "@/lib/data";
 
 export default function ProductRoute() {
@@ -19,9 +19,17 @@ export default function ProductRoute() {
   useEffect(() => {
     let isActive = true;
 
-    getProducts()
-      .then((products) => {
-        if (isActive) setProduct(products.find((item) => item.id === id) ?? null);
+    if (!id) {
+      setProduct(null);
+      setIsLoading(false);
+      return () => {
+        isActive = false;
+      };
+    }
+
+    getProductById(id)
+      .then((loadedProduct) => {
+        if (isActive) setProduct(loadedProduct);
       })
       .finally(() => {
         if (isActive) setIsLoading(false);

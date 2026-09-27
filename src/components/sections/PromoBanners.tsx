@@ -1,8 +1,8 @@
 import { useRef, useState } from "react";
+import { Image as ExpoImage } from "expo-image";
 import {
   Dimensions,
   FlatList,
-  Image,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
@@ -21,10 +21,14 @@ type PromoBannersProps = {
 
 export function PromoBanners({ banners, onSelect }: PromoBannersProps) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const activeIndexRef = useRef(0);
   const listRef = useRef<FlatList>(null);
 
   function handleScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
     const index = Math.round(e.nativeEvent.contentOffset.x / BANNER_WIDTH);
+    if (index === activeIndexRef.current) return;
+
+    activeIndexRef.current = index;
     setActiveIndex(index);
   }
 
@@ -52,10 +56,11 @@ export function PromoBanners({ banners, onSelect }: PromoBannersProps) {
             style={{ width: BANNER_WIDTH }}
             className="rounded-xl overflow-hidden bg-card border border-border"
           >
-            <Image
+            <ExpoImage
               source={{ uri: item.image }}
               style={{ width: BANNER_WIDTH, height: 172 }}
-              resizeMode="cover"
+              contentFit="cover"
+              cachePolicy="memory-disk"
             />
             <View className="absolute bottom-0 left-0 right-0 px-4 py-3.5 bg-background/75">
               <Text className="text-foreground font-bold text-base">

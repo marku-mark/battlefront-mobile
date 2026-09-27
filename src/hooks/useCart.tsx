@@ -13,6 +13,9 @@ type CartContextValue = {
   items: CartItem[];
   itemCount: number;
   subtotal: number;
+} & CartActions;
+
+type CartActions = {
   addItem: (product: Product, quantity?: number, variant?: string | null) => void;
   updateQuantity: (productId: string, quantity: number, variant?: string | null) => void;
   removeItem: (productId: string, variant?: string | null) => void;
@@ -20,6 +23,7 @@ type CartContextValue = {
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
+const CartActionsContext = createContext<CartActions | null>(null);
 const CART_STORAGE_KEY = "battlefront-cart";
 
 export function CartProvider({ children }: { children: ReactNode }) {
@@ -44,6 +48,33 @@ export function CartProvider({ children }: { children: ReactNode }) {
     AsyncStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items)).catch(() => undefined);
   }, [items, isHydrated]);
 
+  const actions = useMemo<CartActions>(() => ({
+    addItem: (product, quantity = 1, variant = null) => {
+      setItems((current) => {
+        const existing = current.find((item) => item.product.id === product.id && item.variant === variant);
+        if (existing) {
+          return current.map((item) =>
+            item.product.id === product.id && item.variant === variant
+              ? { ...item, quantity: item.quantity + quantity }
+              : item
+          );
+        }
+        return [...current, { product, quantity, variant }];
+      });
+    },
+    updateQuantity: (productId, quantity, variant = null) => {
+      setItems((current) =>
+        quantity > 0
+          ? current.map((item) =>
+              item.product.id === productId && item.variant === variant ? { ...item, quantity } : item
+            )
+          : current.filter((item) => !(item.product.id === productId && item.variant === variant))
+      );
+    },
+    removeItem: (productId, variant = null) => setItems((current) => current.filter((item) => !(item.product.id === productId && item.variant === variant))),
+    clearCart: () => setItems([]),
+  }), []);
+
   const value = useMemo<CartContextValue>(() => {
     const itemCount = items.reduce((total, item) => total + item.quantity, 0);
     const subtotal = items.reduce(
@@ -52,45 +83,32 @@ export function CartProvider({ children }: { children: ReactNode }) {
     );
 
     return {
+      ...actions,
       items,
       itemCount,
       subtotal,
-      addItem: (product, quantity = 1, variant = null) => {
-        setItems((current) => {
-          const existing = current.find((item) => item.product.id === product.id && item.variant === variant);
-          if (existing) {
-            return current.map((item) =>
-              item.product.id === product.id && item.variant === variant
-                ? { ...item, quantity: item.quantity + quantity }
-                : item
-            );
-          }
-          return [...current, { product, quantity, variant }];
-        });
-      },
-      updateQuantity: (productId, quantity, variant = null) => {
-        setItems((current) =>
-          quantity > 0
-            ? current.map((item) =>
-                item.product.id === productId && item.variant === variant ? { ...item, quantity } : item
-              )
-            : current.filter((item) => !(item.product.id === productId && item.variant === variant))
-        );
-      },
-      removeItem: (productId, variant = null) => {
-        setItems((current) => current.filter((item) => !(item.product.id === productId && item.variant === variant)));
-      },
-      clearCart: () => setItems([]),
     };
-  }, [items]);
+  }, [actions, items]);
 
-  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
+  return (
+    <CartActionsContext.Provider value={actions}>
+      <CartContext.Provider value={value}>{children}</CartContext.Provider>
+    </CartActionsContext.Provider>
+  );
 }
 
 export function useCart(): CartContextValue {
   const context = useContext(CartContext);
   if (!context) {
     throw new Error("useCart must be used inside CartProvider");
+  }
+  return context;
+}
+
+export function useCartActions(): CartActions {
+  const context = useContext(CartActionsContext);
+  if (!context) {
+    throw new Error("useCartActions must be used inside CartProvider");
   }
   return context;
 }

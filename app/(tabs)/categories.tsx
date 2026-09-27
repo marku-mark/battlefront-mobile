@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
+import { FlashList } from "@shopify/flash-list";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, Modal, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Modal, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ProductCard } from "@/components/sections/ProductCard";
 import { ScreenHeader } from "@/components/layout/ScreenHeader";
@@ -98,17 +99,15 @@ export default function CategoriesScreen() {
         </View>
       </View>
 
-      <FlatList
+      <FlashList
         data={isLoading || hasLoadError ? [] : filteredProducts}
         keyExtractor={(item) => item.id}
         numColumns={2}
-        columnWrapperStyle={{ gap: 12, paddingHorizontal: 16 }}
-        contentContainerStyle={{ paddingBottom: 32, paddingTop: 16 }}
+        masonry
+        optimizeItemArrangement={false}
+        contentContainerStyle={{ paddingBottom: 32, paddingTop: 16, paddingHorizontal: 10 }}
+        ListHeaderComponentStyle={{ marginHorizontal: -10 }}
         keyboardShouldPersistTaps="handled"
-        initialNumToRender={12}
-        maxToRenderPerBatch={12}
-        windowSize={5}
-        removeClippedSubviews
         ListHeaderComponent={
           <View>
             <Text className="text-muted-foreground text-xs uppercase tracking-[0.14em] px-4 mb-3">{query.trim() ? `${filteredCategories.length} results` : "Shop by needs"}</Text>
@@ -123,7 +122,15 @@ export default function CategoriesScreen() {
           </View>
         }
         ListEmptyComponent={isLoading ? <CatalogState icon="refresh-outline" title="Loading products" message="Preparing the offline catalog." showSpinner /> : hasLoadError ? <CatalogState icon="cloud-offline-outline" title="Could not load products" message="Check the local catalog and try again." actionLabel="Try again" onAction={loadCatalog} /> : <CatalogState icon="search-outline" title="No products match these filters" message="Clear a filter or choose another category." actionLabel="Clear filters" onAction={resetFilters} />}
-        renderItem={({ item }) => <ProductCard product={item} width={cardWidth} onPress={(product) => router.push({ pathname: "/product/[id]", params: { id: product.id } })} />}
+        renderItem={({ item }) => (
+          <View style={{ paddingHorizontal: 6 }}>
+            <ProductCard
+              product={item}
+              width={cardWidth}
+              onPress={(product) => router.push({ pathname: "/product/[id]", params: { id: product.id } })}
+            />
+          </View>
+        )}
       />
 
       <Modal visible={isFilterOpen} animationType="slide" transparent onRequestClose={() => setIsFilterOpen(false)}>
