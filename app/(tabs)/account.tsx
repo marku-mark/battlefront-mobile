@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MockSignInSheet } from "@/components/account/MockSignInSheet";
@@ -18,6 +18,7 @@ const accountLinks = [
 
 export default function AccountScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
   const { isDark, toggleMode } = useTheme();
   const { session, isHydrated, signIn, signOut } = useSession();
   const isMockAccount = session.mode === "mock-account";
@@ -42,7 +43,7 @@ export default function AccountScreen() {
     <SafeAreaView className="flex-1 bg-background">
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 24 }}
+        contentContainerStyle={{ paddingBottom: 24, width: "100%", maxWidth: Math.min(width, 800), alignSelf: "center" }}
       >
         <View className="px-4 pt-3 pb-5 border-b border-border">
           <Text className="text-foreground text-2xl font-bold">Account</Text>
@@ -198,7 +199,7 @@ export default function AccountScreen() {
 
       <Modal visible={selectedUtility !== null} animationType="fade" transparent onRequestClose={() => setSelectedUtility(null)}>
         <View className="flex-1 items-center justify-center px-6 bg-black/50">
-          <View className="w-full bg-background border border-border rounded-2xl p-5">
+          <View className="w-full self-center bg-background border border-border rounded-2xl p-5" style={{ maxWidth: 560 }}>
             <Text className="text-foreground text-lg font-bold">{selectedUtility}</Text>
             {selectedUtility === "My orders" && isMockAccount ? (
               <View className="mt-3 gap-3">

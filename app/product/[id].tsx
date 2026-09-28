@@ -14,10 +14,14 @@ export default function ProductRoute() {
   const { addItem } = useCart();
   const [product, setProduct] = useState<Product | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasLoadError, setHasLoadError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const [quantity, setQuantity] = useState(1);
 
   useEffect(() => {
     let isActive = true;
+    setIsLoading(true);
+    setHasLoadError(false);
 
     if (!id) {
       setProduct(null);
@@ -31,6 +35,12 @@ export default function ProductRoute() {
       .then((loadedProduct) => {
         if (isActive) setProduct(loadedProduct);
       })
+      .catch(() => {
+        if (isActive) {
+          setProduct(null);
+          setHasLoadError(true);
+        }
+      })
       .finally(() => {
         if (isActive) setIsLoading(false);
       });
@@ -38,7 +48,7 @@ export default function ProductRoute() {
     return () => {
       isActive = false;
     };
-  }, [id]);
+  }, [id, retryCount]);
 
   if (isLoading) {
     return <ProductRouteState label="Loading product" showSpinner />;
@@ -46,10 +56,18 @@ export default function ProductRoute() {
 
   if (!product) {
     return (
-      <ProductRouteState label="Product not found">
+      <ProductRouteState label={hasLoadError ? "Could not load product" : "Product not found"}>
         <Text className="text-muted-foreground text-sm text-center mt-2">
-          This product may no longer be available.
+          {hasLoadError ? "We couldn't read this product from the local catalog. Try again." : "This product may no longer be available."}
         </Text>
+        {hasLoadError && (
+          <Pressable
+            onPress={() => setRetryCount((count) => count + 1)}
+            className="bg-primary rounded-xl px-5 py-3 mt-5"
+          >
+            <Text className="text-primary-foreground text-sm font-semibold">Try again</Text>
+          </Pressable>
+        )}
         <Pressable
           onPress={() => router.back()}
           className="bg-primary rounded-xl px-5 py-3 mt-5"

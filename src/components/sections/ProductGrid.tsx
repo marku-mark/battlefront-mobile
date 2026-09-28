@@ -1,9 +1,9 @@
 import { useWindowDimensions, View } from "react-native";
 import type { Product } from "@/lib/data";
+import { getResponsiveLayout, MAX_CONTENT_WIDTH } from "@/lib/responsive";
 import { ProductCard } from "./ProductCard";
 
 const GRID_GAP = 12;
-const HORIZONTAL_PADDING = 16;
 
 type ProductGridProps = {
   products: Product[];
@@ -12,15 +12,13 @@ type ProductGridProps = {
 
 export function ProductGrid({ products, onSelectProduct }: ProductGridProps) {
   const { width: screenWidth } = useWindowDimensions();
-  const cardWidth = Math.max(
-    136,
-    (screenWidth - HORIZONTAL_PADDING * 2 - GRID_GAP) / 2
-  );
+  const layout = getResponsiveLayout(screenWidth);
+  const cardWidth = (layout.contentWidth - layout.horizontalPadding * 2 - GRID_GAP * (layout.productColumns - 1)) / layout.productColumns;
 
   return (
     <View
-      className="flex-row flex-wrap px-4"
-      style={{ gap: GRID_GAP }}
+      className="flex-row flex-wrap self-center"
+      style={{ gap: GRID_GAP, width: "100%", maxWidth: MAX_CONTENT_WIDTH, paddingHorizontal: layout.horizontalPadding }}
     >
       {products.map((product) => (
         <ProductCard

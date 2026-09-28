@@ -25,6 +25,7 @@ import { useCart } from "@/hooks/useCart";
 import { ProductCard } from "@/components/sections/ProductCard";
 import { BuilderEntryCard } from "@/components/builder/BuilderEntryCard";
 import { LoadingMoreFooter } from "@/components/layout/LoadingMoreFooter";
+import { getGridCardWidth, getResponsiveLayout, MAX_CONTENT_WIDTH } from "@/lib/responsive";
 
 const PRODUCTS_PER_PAGE = 24;
 const PAGE_LOAD_DELAY_MS = 250;
@@ -45,8 +46,11 @@ export default function HomeScreen() {
   const loadMoreTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasLoadError, setHasLoadError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const { addItem, itemCount } = useCart();
   const { width } = useWindowDimensions();
+  const layout = getResponsiveLayout(width);
 
   const flashDealEndTime = useMemo(() => getFlashDealEndTime(), []);
   const searchableProducts = useMemo(
@@ -80,28 +84,32 @@ export default function HomeScreen() {
   }
 
   useEffect(() => {
-    Promise.all([
-      getBanners().then(setBanners),
-      getCategories().then(setCategories),
-      getHomeCatalog().then((homeCatalog) => {
+    let isActive = true;
+    setIsLoading(true);
+    setHasLoadError(false);
+
+    Promise.all([getBanners(), getCategories(), getHomeCatalog(), getBrands()])
+      .then(([loadedBanners, loadedCategories, homeCatalog, loadedBrands]) => {
+        if (!isActive) return;
+        setBanners(loadedBanners);
+        setCategories(loadedCategories);
         setFlashDeals(homeCatalog.flashDeals);
         setSulitPicks(homeCatalog.sulitPicks);
         setNewArrivals(homeCatalog.newArrivals);
         setCatalogProducts(homeCatalog.catalogProducts);
-      }),
-      getBrands().then(setBrands),
-    ])
-      .catch(() => {
-        setBanners([]);
-        setCategories([]);
-        setFlashDeals([]);
-        setSulitPicks([]);
-        setNewArrivals([]);
-        setCatalogProducts([]);
-        setBrands([]);
+        setBrands(loadedBrands);
       })
-      .finally(() => setIsLoading(false));
-  }, []);
+      .catch(() => {
+        if (isActive) setHasLoadError(true);
+      })
+      .finally(() => {
+        if (isActive) setIsLoading(false);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [retryCount]);
 
   if (isLoading) {
     return (
@@ -113,6 +121,7 @@ export default function HomeScreen() {
             Alert.alert("Notifications", "Your deals and order updates will appear here.")
           }
           onSearchPress={() => setIsSearchOpen(true)}
+          searchDisabled
         />
         <ScrollView showsVerticalScrollIndicator={false} removeClippedSubviews contentContainerStyle={{ paddingBottom: 112 }}>
           <LoadingHero width={width} />
@@ -121,6 +130,32 @@ export default function HomeScreen() {
           <LoadingTrustBar />
           <LoadingProductRail />
         </ScrollView>
+      </View>
+    );
+  }
+
+  if (hasLoadError) {
+    return (
+      <View className="flex-1 bg-background">
+        <Header
+          cartCount={itemCount}
+          onCartPress={() => router.navigate("/cart")}
+          onNotificationPress={() => router.push("/notifications")}
+          onSearchPress={() => setIsSearchOpen(true)}
+          searchDisabled
+        />
+        <View className="flex-1 items-center justify-center px-6">
+          <Ionicons name="cloud-offline-outline" size={32} color="#9ca3af" />
+          <Text className="mt-3 text-foreground text-base font-semibold">Could not load the catalog</Text>
+          <Text className="mt-1 text-center text-muted-foreground text-sm">Check your local catalog and try again.</Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setRetryCount((count) => count + 1)}
+            className="mt-5 rounded-xl bg-primary px-5 py-3"
+          >
+            <Text className="text-primary-foreground text-sm font-semibold">Try again</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -135,14 +170,15 @@ export default function HomeScreen() {
       />
       <FlashList
         data={visibleCatalogProducts}
-        numColumns={2}
+        key={`home-products-${layout.productColumns}`}
+        numColumns={layout.productColumns}
         masonry
         optimizeItemArrangement={false}
         keyExtractor={(item) => item.id}
         onEndReached={loadMoreProducts}
         onEndReachedThreshold={0.4}
         ListFooterComponent={isLoadingMore ? <LoadingMoreFooter /> : null}
-        contentContainerStyle={{ paddingBottom: 28, paddingTop: 16, paddingHorizontal: 10 }}
+        contentContainerStyle={{ paddingBottom: 28, paddingTop: 16, paddingHorizontal: 10, width: "100%", maxWidth: MAX_CONTENT_WIDTH, alignSelf: "center" }}
         ListHeaderComponentStyle={{ marginHorizontal: -10 }}
         ListHeaderComponent={
           <View>
@@ -178,7 +214,7 @@ export default function HomeScreen() {
           <View style={{ paddingHorizontal: 6 }}>
             <ProductCard
               product={item}
-              width={Math.max(136, (width - 44) / 2)}
+              width={getGridCardWidth(width, layout.productColumns)}
               onPress={handleProductSelect}
             />
           </View>

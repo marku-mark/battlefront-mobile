@@ -1,18 +1,16 @@
 import { useRef, useState } from "react";
 import { Image as ExpoImage } from "expo-image";
 import {
-  Dimensions,
   FlatList,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
   Text,
   View,
+  useWindowDimensions,
 } from "react-native";
 import type { Banner } from "@/lib/data";
-
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const BANNER_WIDTH = SCREEN_WIDTH - 32; // 16px horizontal margin each side
+import { getResponsiveLayout } from "@/lib/responsive";
 
 type PromoBannersProps = {
   banners: Banner[];
@@ -20,12 +18,16 @@ type PromoBannersProps = {
 };
 
 export function PromoBanners({ banners, onSelect }: PromoBannersProps) {
+  const { width } = useWindowDimensions();
+  const layout = getResponsiveLayout(width);
+  const bannerWidth = Math.min(layout.contentWidth - layout.horizontalPadding * 2, 920);
+  const bannerHeight = Math.max(160, Math.min(280, bannerWidth * 0.42));
   const [activeIndex, setActiveIndex] = useState(0);
   const activeIndexRef = useRef(0);
   const listRef = useRef<FlatList>(null);
 
   function handleScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
-    const index = Math.round(e.nativeEvent.contentOffset.x / BANNER_WIDTH);
+    const index = Math.round(e.nativeEvent.contentOffset.x / bannerWidth);
     if (index === activeIndexRef.current) return;
 
     activeIndexRef.current = index;
@@ -43,8 +45,8 @@ export function PromoBanners({ banners, onSelect }: PromoBannersProps) {
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingRight: 20 }}
-        snapToInterval={BANNER_WIDTH}
+        contentContainerStyle={{ paddingHorizontal: Math.max(layout.horizontalPadding, (width - bannerWidth) / 2) }}
+        snapToInterval={bannerWidth}
         decelerationRate="fast"
         onScroll={handleScroll}
         scrollEventThrottle={16}
@@ -53,12 +55,12 @@ export function PromoBanners({ banners, onSelect }: PromoBannersProps) {
             accessibilityLabel={`Open promotion: ${item.title}`}
             accessibilityRole="button"
             onPress={() => onSelect?.(item)}
-            style={{ width: BANNER_WIDTH }}
+            style={{ width: bannerWidth }}
             className="rounded-xl overflow-hidden bg-card border border-border"
           >
             <ExpoImage
               source={{ uri: item.image }}
-              style={{ width: BANNER_WIDTH, height: 172 }}
+              style={{ width: bannerWidth, height: bannerHeight }}
               contentFit="cover"
               cachePolicy="memory-disk"
             />

@@ -1,10 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ScreenHeader } from "@/components/layout/ScreenHeader";
 import { useTheme } from "@/theme/ThemeProvider";
+import { getResponsiveLayout } from "@/lib/responsive";
 
 type Notification = {
   id: string;
@@ -40,6 +41,8 @@ const demoNotifications: Notification[] = [
 
 export default function NotificationsScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const layout = getResponsiveLayout(width);
   const { isDark } = useTheme();
   const [readIds, setReadIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -92,7 +95,7 @@ export default function NotificationsScreen() {
           <Text className="text-muted-foreground text-sm text-center mt-2">Deals and order updates will appear here.</Text>
         </View>
       ) : (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 28 }}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: layout.horizontalPadding, paddingBottom: 28, width: "100%", maxWidth: 760, alignSelf: "center" }}>
           {demoNotifications.map((notification) => {
             const isRead = readIds.includes(notification.id);
             return (

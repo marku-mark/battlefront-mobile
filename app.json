@@ -4,7 +4,7 @@
     "slug": "battlefront-mobile",
     "scheme": "battlefront",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "userInterfaceStyle": "dark",
     "icon": "./assets/battlefront-app-icon.png",
     "backgroundColor": "#090b10",
@@ -24,11 +24,12 @@
       ]
     ],
     "ios": {
-      "supportsTablet": false,
+      "supportsTablet": true,
       "bundleIdentifier": "com.battlefront.mobile"
     },
     "android": {
       "package": "com.battlefront.mobile",
+      "resizeableActivity": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/battlefront-adaptive-icon.png",
         "backgroundColor": "#ffffff"

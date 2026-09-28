@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Image, Pressable, ScrollView, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MockSignInSheet } from "@/components/account/MockSignInSheet";
@@ -10,6 +10,7 @@ import { ScreenHeader } from "@/components/layout/ScreenHeader";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { ConfirmClearModal } from "@/components/layout/ConfirmClearModal";
 import { getProductImageSource } from "@/lib/data";
+import { getResponsiveLayout } from "@/lib/responsive";
 
 function formatPrice(value: number): string {
   return `₱${value.toLocaleString("en-PH")}`;
@@ -17,6 +18,8 @@ function formatPrice(value: number): string {
 
 export default function CartScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const layout = getResponsiveLayout(width);
   const { items, subtotal, addItem, updateQuantity, removeItem, clearCart, isLoading: isCartLoading } = useCart();
   const { session, isHydrated } = useSession();
   const [removedItem, setRemovedItem] = useState<CartItem | null>(null);
@@ -82,7 +85,7 @@ export default function CartScreen() {
         }
       />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 28 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: layout.horizontalPadding, paddingBottom: 28, width: "100%", maxWidth: 800, alignSelf: "center" }}>
         <View className="mb-4 rounded-2xl border border-border bg-card p-3 shadow-soft">
           <View className="flex-row items-center justify-between">
             <Text className="text-foreground text-sm font-semibold">Order summary</Text>

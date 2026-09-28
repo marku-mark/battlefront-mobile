@@ -23,6 +23,7 @@ import { getProductImageSource, type Brand, type Product } from "@/lib/data";
 import { useTheme } from "@/theme/ThemeProvider";
 import { LoadingMoreFooter } from "@/components/layout/LoadingMoreFooter";
 import { ConfirmClearModal } from "@/components/layout/ConfirmClearModal";
+import { MAX_CONTENT_WIDTH } from "@/lib/responsive";
 
 const BUILD_STORAGE_KEY = "battlefront-saved-builds";
 const PARTS_PER_PAGE = 20;
@@ -72,10 +73,16 @@ export default function BuilderScreen() {
   const [query, setQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [hasLoadError, setHasLoadError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
+    let isActive = true;
+    setIsLoading(true);
+    setHasLoadError(false);
+
     Promise.all([getProducts(), getBrands(), AsyncStorage.getItem(BUILD_STORAGE_KEY)])
       .then(([catalog, catalogBrands, storedBuilds]) => {
+        if (!isActive) return;
         setProducts(catalog);
         setBrands(catalogBrands);
         if (storedBuilds) {
@@ -83,9 +90,17 @@ export default function BuilderScreen() {
           setSavedBuilds(Array.isArray(parsed) ? parsed : []);
         }
       })
-      .catch(() => setHasLoadError(true))
-      .finally(() => setIsLoading(false));
-  }, []);
+      .catch(() => {
+        if (isActive) setHasLoadError(true);
+      })
+      .finally(() => {
+        if (isActive) setIsLoading(false);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [retryCount]);
 
   const visibleProducts = useMemo(() => {
     if (!activeSlot) return [];
@@ -229,10 +244,17 @@ export default function BuilderScreen() {
           <Ionicons name="cloud-offline-outline" size={30} color={isDark ? "#9ca3af" : "#68717e"} />
           <Text className="mt-3 text-foreground text-base font-semibold">Could not load the catalog</Text>
           <Text className="mt-1 text-center text-muted-foreground text-sm">The builder needs the local product catalog to show available parts.</Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setRetryCount((count) => count + 1)}
+            className="mt-5 rounded-xl bg-primary px-5 py-3"
+          >
+            <Text className="text-primary-foreground text-sm font-semibold">Try again</Text>
+          </Pressable>
         </View>
       ) : (
         <>
-          <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 28 }}>
+          <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 28, width: "100%", maxWidth: 960, alignSelf: "center" }}>
             <View className="mb-4 flex-row items-center justify-between">
               <View>
                 <Text className="text-muted-foreground text-[10px] font-semibold uppercase tracking-[0.12em]">Required components</Text>
@@ -316,7 +338,7 @@ export default function BuilderScreen() {
             onEndReachedThreshold={0.4}
             ListFooterComponent={isLoadingMoreParts ? <LoadingMoreFooter /> : null}
             keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ padding: 16, paddingBottom: 32, flexGrow: 1 }}
+            contentContainerStyle={{ padding: 16, paddingBottom: 32, flexGrow: 1, width: "100%", maxWidth: MAX_CONTENT_WIDTH, alignSelf: "center" }}
             ItemSeparatorComponent={() => <View className="h-2" />}
             ListEmptyComponent={<View className="flex-1 items-center justify-center px-8"><Ionicons name="cube-outline" size={30} color={isDark ? "#9ca3af" : "#68717e"} /><Text className="mt-3 text-foreground text-sm font-semibold">No matching parts</Text><Text className="mt-1 text-center text-muted-foreground text-xs">Try another search or check back when this category has catalog items.</Text></View>}
             renderItem={({ item }) => (
@@ -340,7 +362,7 @@ export default function BuilderScreen() {
             </Pressable>
             <Text className="text-foreground text-base font-bold">Saved builds</Text>
           </View>
-          <ScrollView contentContainerStyle={{ padding: 16, gap: 8 }}>
+          <ScrollView contentContainerStyle={{ padding: 16, gap: 8, width: "100%", maxWidth: 760, alignSelf: "center" }}>
             {savedBuilds.length === 0 ? (
               <Text className="py-10 text-center text-muted-foreground text-sm">No saved builds on this device.</Text>
             ) : savedBuilds.map((build) => {

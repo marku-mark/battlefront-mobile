@@ -11,6 +11,7 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MockSignInSheet } from "@/components/account/MockSignInSheet";
@@ -19,6 +20,7 @@ import { useCart, type CartItem } from "@/hooks/useCart";
 import { useSession } from "@/hooks/useSession";
 import { DEMO_ACCOUNT } from "@/lib/mockAccount";
 import { useTheme } from "@/theme/ThemeProvider";
+import { getResponsiveLayout } from "@/lib/responsive";
 
 function formatPrice(value: number): string {
   return `₱${value.toLocaleString("en-PH")}`;
@@ -45,6 +47,8 @@ const paymentOptions = [
 
 export default function CheckoutScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const layout = getResponsiveLayout(width);
   const { colors } = useTheme();
   const { items, subtotal, clearCart, removeItem, updateQuantity, isLoading: isCartLoading } = useCart();
   const { session, isHydrated } = useSession();
@@ -199,7 +203,7 @@ export default function CheckoutScreen() {
           <Text className="text-foreground text-lg font-semibold ml-2">Checkout</Text>
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: layout.horizontalPadding, paddingBottom: 32, width: "100%", maxWidth: 720, alignSelf: "center" }}>
           <View className="rounded-2xl border border-border bg-card p-3 mb-5 shadow-soft">
             <View className="flex-row items-center gap-2">
               <Ionicons name="information-circle-outline" size={16} color={colors.primary} />

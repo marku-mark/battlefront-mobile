@@ -4,6 +4,7 @@ import { useDeferredValue, useMemo, useState } from "react";
 import { Modal, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
 import type { Product } from "@/lib/data";
 import { ProductCard } from "@/components/sections/ProductCard";
+import { getGridCardWidth, getResponsiveLayout, MAX_CONTENT_WIDTH } from "@/lib/responsive";
 
 type ProductSearchProps = {
   visible: boolean;
@@ -20,6 +21,7 @@ export function ProductSearch({
 }: ProductSearchProps) {
   const [query, setQuery] = useState("");
   const { width } = useWindowDimensions();
+  const layout = getResponsiveLayout(width);
   const deferredQuery = useDeferredValue(query.trim());
   const normalizedQuery = deferredQuery.toLowerCase();
 
@@ -51,7 +53,7 @@ export function ProductSearch({
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={handleClose}>
       <View className="flex-1 bg-background">
-        <View className="flex-row items-center gap-3 px-4 pt-3 pb-4 border-b border-border">
+        <View className="self-center w-full flex-row items-center gap-3 px-4 pt-3 pb-4 border-b border-border" style={{ maxWidth: MAX_CONTENT_WIDTH }}>
           <Pressable
             accessibilityLabel="Close product search"
             onPress={handleClose}
@@ -80,12 +82,13 @@ export function ProductSearch({
         </View>
 
         <FlashList
+          key={`product-search-${layout.productColumns}`}
           data={filteredProducts}
           keyExtractor={(item) => item.id}
-          numColumns={2}
+          numColumns={layout.productColumns}
           masonry
           optimizeItemArrangement={false}
-          contentContainerStyle={{ paddingHorizontal: 10, paddingVertical: 16 }}
+          contentContainerStyle={{ paddingHorizontal: 10, paddingVertical: 16, width: "100%", maxWidth: MAX_CONTENT_WIDTH, alignSelf: "center" }}
           ListHeaderComponentStyle={{ marginHorizontal: -10, marginBottom: 18 }}
           keyboardShouldPersistTaps="handled"
           ListHeaderComponent={
@@ -128,7 +131,7 @@ export function ProductSearch({
             <View style={{ paddingHorizontal: 6, marginBottom: 18 }}>
               <ProductCard
                 product={item}
-                width={Math.max(136, (width - 44) / 2)}
+                width={getGridCardWidth(width, layout.productColumns)}
                 onPress={handleSelectProduct}
               />
             </View>

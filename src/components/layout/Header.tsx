@@ -3,15 +3,17 @@ import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
 import { LogoMark } from "@/components/layout/LogoMark";
+import { MAX_CONTENT_WIDTH } from "@/lib/responsive";
 
 type HeaderProps = {
   cartCount?: number;
   onCartPress?: () => void;
   onNotificationPress?: () => void;
   onSearchPress?: () => void;
+  searchDisabled?: boolean;
 };
 
-export function Header({ cartCount = 0, onCartPress, onNotificationPress, onSearchPress }: HeaderProps) {
+export function Header({ cartCount = 0, onCartPress, onNotificationPress, onSearchPress, searchDisabled = false }: HeaderProps) {
   const insets = useSafeAreaInsets();
   const { isDark } = useTheme();
 
@@ -20,7 +22,7 @@ export function Header({ cartCount = 0, onCartPress, onNotificationPress, onSear
       style={{ paddingTop: insets.top }}
       className="bg-background border-b border-border"
     >
-      <View className="flex-row items-center gap-3 px-4 py-3.5">
+      <View className="flex-row items-center gap-3 self-center w-full px-4 py-3.5" style={{ maxWidth: MAX_CONTENT_WIDTH }}>
         <View className="flex-1">
           <LogoMark size={52} />
         </View>
@@ -51,12 +53,14 @@ export function Header({ cartCount = 0, onCartPress, onNotificationPress, onSear
         </Pressable>
       </View>
 
-      <View className="px-4 pb-3.5">
+      <View className="self-center w-full px-4 pb-3.5" style={{ maxWidth: MAX_CONTENT_WIDTH }}>
         <Pressable
           onPress={onSearchPress}
+          disabled={searchDisabled}
           accessibilityLabel="Search products"
+          accessibilityState={{ disabled: searchDisabled }}
           className="flex-row items-center gap-2 bg-secondary border border-border rounded-xl px-3 py-2.5"
-          style={({ pressed }) => ({ opacity: pressed ? 0.82 : 1 })}
+          style={({ pressed }) => ({ opacity: searchDisabled ? 0.5 : pressed ? 0.82 : 1 })}
         >
           <Ionicons name="search-outline" size={16} color={isDark ? "#cbd5e1" : "#68717e"} />
           <Text className="text-muted-foreground text-sm">

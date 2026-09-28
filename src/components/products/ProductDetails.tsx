@@ -7,6 +7,7 @@ import { useTheme } from "@/theme/ThemeProvider";
 import { useWishlist } from "@/hooks/useWishlist";
 import { useSession } from "@/hooks/useSession";
 import { MockSignInSheet } from "@/components/account/MockSignInSheet";
+import { getResponsiveLayout, MAX_CONTENT_WIDTH } from "@/lib/responsive";
 
 type ProductDetailsProps = {
   product: Product;
@@ -26,6 +27,11 @@ export function ProductDetails({ product, quantity, onQuantityChange, onAddToCar
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const layout = getResponsiveLayout(width);
+  const useTwoColumnLayout = width >= 760;
+  const imageWidth = useTwoColumnLayout
+    ? Math.min(560, (layout.contentWidth - 72) * 0.44)
+    : Math.min(layout.contentWidth, layout.isTablet ? 560 : width);
   const { isWishlisted, toggleWishlist } = useWishlist();
   const { session } = useSession();
   const variants = getProductVariants(product);
@@ -55,13 +61,19 @@ export function ProductDetails({ product, quantity, onQuantityChange, onAddToCar
         </Pressable>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 28 }}>
-        <Image source={getProductImageSource(product.image)} accessibilityLabel={`${product.name} product image`} accessible style={{ width, height: width }} className="bg-card" resizeMode="cover" />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, padding: 12 }}>
-          <View className="h-16 w-16 overflow-hidden rounded-lg border-2 border-primary"><Image source={getProductImageSource(product.image)} accessibilityLabel={`${product.name} thumbnail`} className="h-full w-full" /></View>
-        </ScrollView>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 28, width: "100%", maxWidth: MAX_CONTENT_WIDTH, alignSelf: "center" }}>
+        <View
+          className={useTwoColumnLayout ? "self-center w-full flex-row items-start gap-6 px-6" : "w-full"}
+          style={{ maxWidth: MAX_CONTENT_WIDTH }}
+        >
+          <View style={{ width: useTwoColumnLayout ? imageWidth : "100%", maxWidth: useTwoColumnLayout ? 560 : undefined, alignSelf: useTwoColumnLayout ? undefined : "center" }}>
+            <Image source={getProductImageSource(product.image)} accessibilityLabel={`${product.name} product image`} accessible style={{ width: imageWidth, height: imageWidth }} className="self-center bg-card" resizeMode="cover" />
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ width: imageWidth, alignSelf: "center" }} contentContainerStyle={{ gap: 8, padding: 12 }}>
+              <View className="h-16 w-16 overflow-hidden rounded-lg border-2 border-primary"><Image source={getProductImageSource(product.image)} accessibilityLabel={`${product.name} thumbnail`} className="h-full w-full" /></View>
+            </ScrollView>
+          </View>
 
-        <View className="px-4 pt-5">
+        <View className={useTwoColumnLayout ? "flex-1 pt-5" : "self-center w-full px-4 pt-5"} style={{ maxWidth: 760 }}>
           <View className="flex-row items-start justify-between gap-3">
             <Text className="flex-1 text-foreground text-xl font-bold leading-7">{product.name}</Text>
             {hasDiscount && <View className="bg-ring rounded-full px-2 py-1"><Text className="text-primary-foreground text-xs font-bold">-{discount}%</Text></View>}
@@ -94,9 +106,10 @@ export function ProductDetails({ product, quantity, onQuantityChange, onAddToCar
 
           <View className="flex-row items-center justify-between mt-6"><Text className="text-foreground text-sm font-semibold">Quantity</Text><View className="flex-row items-center border border-border rounded-xl overflow-hidden bg-secondary"><QuantityButton icon="remove" accessibilityLabel="Decrease quantity" color={colors.foreground} disabled={quantity <= 1} onPress={() => onQuantityChange(Math.max(1, quantity - 1))} /><Text className="text-foreground text-sm font-semibold min-w-[36px] text-center">{quantity}</Text><QuantityButton icon="add" accessibilityLabel="Increase quantity" color={colors.foreground} disabled={quantity >= stockQuantity} onPress={() => onQuantityChange(Math.min(stockQuantity, quantity + 1))} /></View></View>
         </View>
+        </View>
       </ScrollView>
 
-      <View className="px-4 pt-3 border-t border-border bg-background" style={{ paddingBottom: Math.max(insets.bottom, 12) }}><View className="flex-row items-center justify-between mb-3"><Text className="text-muted-foreground text-xs uppercase tracking-[0.12em]">Total</Text><Text className="text-foreground text-lg font-bold">{formatPrice(subtotal)}</Text></View><Pressable accessibilityLabel={`Add ${product.name} to cart`} accessibilityRole="button" disabled={stockQuantity === 0 || (variants.length > 0 && !selectedVariant)} onPress={() => onAddToCart(product, quantity, selectedVariant)} className="h-12 rounded-xl bg-primary items-center justify-center" style={({ pressed }) => ({ opacity: stockQuantity === 0 || (variants.length > 0 && !selectedVariant) ? 0.45 : pressed ? 0.8 : 1 })}><Text className="text-primary-foreground text-sm font-bold">{stockQuantity === 0 ? "Out of stock" : variants.length > 0 && !selectedVariant ? "Choose an option" : "Add to cart"}</Text></Pressable></View>
+      <View className="self-center w-full px-4 pt-3 border-t border-border bg-background" style={{ maxWidth: 760, paddingBottom: Math.max(insets.bottom, 12) }}><View className="flex-row items-center justify-between mb-3"><Text className="text-muted-foreground text-xs uppercase tracking-[0.12em]">Total</Text><Text className="text-foreground text-lg font-bold">{formatPrice(subtotal)}</Text></View><Pressable accessibilityLabel={`Add ${product.name} to cart`} accessibilityRole="button" disabled={stockQuantity === 0 || (variants.length > 0 && !selectedVariant)} onPress={() => onAddToCart(product, quantity, selectedVariant)} className="h-12 rounded-xl bg-primary items-center justify-center" style={({ pressed }) => ({ opacity: stockQuantity === 0 || (variants.length > 0 && !selectedVariant) ? 0.45 : pressed ? 0.8 : 1 })}><Text className="text-primary-foreground text-sm font-bold">{stockQuantity === 0 ? "Out of stock" : variants.length > 0 && !selectedVariant ? "Choose an option" : "Add to cart"}</Text></Pressable></View>
       <MockSignInSheet visible={isSignInOpen} onClose={() => setIsSignInOpen(false)} />
     </View>
   );

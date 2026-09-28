@@ -1,14 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { Alert, Linking, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, Linking, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { stores, type Store } from "@/lib/data";
 import { useTheme } from "@/theme/ThemeProvider";
+import { getResponsiveLayout } from "@/lib/responsive";
 
 export default function StoreLocatorScreen() {
   const router = useRouter();
   const { isDark } = useTheme();
+  const { width } = useWindowDimensions();
+  const layout = getResponsiveLayout(width);
   const [query, setQuery] = useState("");
 
   const filteredStores = useMemo(() => {
@@ -42,7 +45,7 @@ export default function StoreLocatorScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ padding: 16, paddingBottom: 28 }}
+        contentContainerStyle={{ padding: layout.horizontalPadding, paddingBottom: 28, width: "100%", maxWidth: 900, alignSelf: "center" }}
       >
         <View className="flex-row items-center gap-2 bg-secondary border border-border rounded-xl px-3 h-11">
           <Ionicons name="search-outline" size={18} color={isDark ? "#cbd5e1" : "#68717e"} />

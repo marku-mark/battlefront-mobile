@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Image, Pressable, ScrollView, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { useEffect, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getProductImageSource, getProductVariants, type Product } from "@/lib/data";
@@ -9,6 +9,7 @@ import { LoadingState } from "@/components/layout/LoadingState";
 import { useWishlist } from "@/hooks/useWishlist";
 import { useCart } from "@/hooks/useCart";
 import { useSession } from "@/hooks/useSession";
+import { getResponsiveLayout } from "@/lib/responsive";
 
 function formatPrice(value: number): string {
   return `₱${value.toLocaleString("en-PH")}`;
@@ -16,6 +17,8 @@ function formatPrice(value: number): string {
 
 export default function WishlistScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const layout = getResponsiveLayout(width);
   const { items: wishlistIds, toggleWishlist, isLoading: isWishlistLoading } = useWishlist();
   const { addItem, items: cartItems } = useCart();
   const [removedProduct, setRemovedProduct] = useState<Product | null>(null);
@@ -103,7 +106,7 @@ export default function WishlistScreen() {
           </Pressable>
         </View>
       ) : (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 28 }}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: layout.horizontalPadding, paddingBottom: 28, width: "100%", maxWidth: 860, alignSelf: "center" }}>
           {removedProduct && (
             <View className="flex-row items-center justify-between rounded-xl border border-primary/30 bg-primary/10 px-3 py-3 mb-3">
               <Text className="flex-1 text-foreground text-xs">{removedProduct.name} removed</Text>
@@ -155,14 +158,15 @@ export default function WishlistScreen() {
                     Ready to ship
                   </Text>
                   <Pressable
-                    accessibilityLabel={`${cartItems.some((item) => item.product.id === product.id) ? "Added" : "Add"} ${product.name} to cart`}
+                    accessibilityLabel={`${cartItems.some((item) => item.product.id === product.id) ? "Add another" : "Add"} ${product.name} to cart`}
+                    accessibilityHint="Adds one unit to your cart"
                     onPress={() => {
                       addItem(product, 1, getProductVariants(product)[0] ?? null);
                     }}
                     className="bg-primary rounded-lg px-3 py-2"
                     style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
                   >
-                    <Text className="text-primary-foreground text-[11px] font-bold">{cartItems.some((item) => item.product.id === product.id) ? "Added" : "Add to cart"}</Text>
+                    <Text className="text-primary-foreground text-[11px] font-bold">{cartItems.some((item) => item.product.id === product.id) ? "Add another" : "Add to cart"}</Text>
                   </Pressable>
                 </View>
               </View>

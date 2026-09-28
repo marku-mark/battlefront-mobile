@@ -150,7 +150,8 @@ export function ProductCard({ product, width = 150, onPress }: ProductCardProps)
             />
           </Pressable>
           <Pressable
-            accessibilityLabel={justAdded ? `Added ${product.name} to cart` : `Add ${product.name} to cart`}
+            accessibilityLabel={`${justAdded ? "Add another" : "Add"} ${product.name} to cart`}
+            accessibilityHint="Adds one unit to your cart"
             accessibilityRole="button"
             accessibilityState={{ disabled: false }}
             onPress={handleQuickAdd}
