@@ -49,9 +49,19 @@ type SavedBuild = {
   savedAt: string;
   selections: Partial<Record<BuilderSlotId, string>>;
 };
+type BuilderNotice = { type: "success" | "warning" | "error"; message: string };
 
 function formatPrice(value: number): string {
   return `₱${value.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function haveSameComponents(
+  first: SavedBuild["selections"],
+  second: SavedBuild["selections"]
+): boolean {
+  const firstIds = Object.values(first).filter((id): id is string => Boolean(id)).sort();
+  const secondIds = Object.values(second).filter((id): id is string => Boolean(id)).sort();
+  return firstIds.length > 0 && firstIds.length === secondIds.length && firstIds.every((id, index) => id === secondIds[index]);
 }
 
 export default function BuilderScreen() {
@@ -66,6 +76,10 @@ export default function BuilderScreen() {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [selection, setSelection] = useState<BuildSelection>({});
   const [savedBuilds, setSavedBuilds] = useState<SavedBuild[]>([]);
+  const [buildToDelete, setBuildToDelete] = useState<SavedBuild | null>(null);
+  const [builderNotice, setBuilderNotice] = useState<BuilderNotice | null>(null);
+  const isSavingBuildRef = useRef(false);
+  const builderNoticeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [activeSlot, setActiveSlot] = useState<BuilderSlot | null>(null);
   const [isSavedBuildsOpen, setIsSavedBuildsOpen] = useState(false);
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
@@ -127,6 +141,28 @@ export default function BuilderScreen() {
     if (loadMorePartsTimerRef.current) clearTimeout(loadMorePartsTimerRef.current);
   }, []);
 
+  useEffect(() => () => {
+    if (builderNoticeTimeoutRef.current) clearTimeout(builderNoticeTimeoutRef.current);
+  }, []);
+
+  function showBuilderNotice(type: BuilderNotice["type"], message: string) {
+    if (builderNoticeTimeoutRef.current) clearTimeout(builderNoticeTimeoutRef.current);
+    setBuilderNotice({ type, message });
+    builderNoticeTimeoutRef.current = null;
+    if (type === "success") {
+      builderNoticeTimeoutRef.current = setTimeout(() => {
+        setBuilderNotice(null);
+        builderNoticeTimeoutRef.current = null;
+      }, 3000);
+    }
+  }
+
+  function clearBuilderNotice() {
+    if (builderNoticeTimeoutRef.current) clearTimeout(builderNoticeTimeoutRef.current);
+    builderNoticeTimeoutRef.current = null;
+    setBuilderNotice(null);
+  }
+
   function loadMoreParts() {
     if (isLoadingMorePartsRef.current || visiblePartCount >= visibleProducts.length) return;
     isLoadingMorePartsRef.current = true;
@@ -149,6 +185,7 @@ export default function BuilderScreen() {
 
   function selectProduct(slot: BuilderSlot, product: Product) {
     setSelection((current) => ({ ...current, [slot.id]: product }));
+    clearBuilderNotice();
     setActiveSlot(null);
     setQuery("");
   }
@@ -159,15 +196,31 @@ export default function BuilderScreen() {
       delete next[slotId];
       return next;
     });
+    clearBuilderNotice();
   }
 
   async function saveBuilds(nextBuilds: SavedBuild[]) {
+    if (isSavingBuildRef.current) return;
+    isSavingBuildRef.current = true;
     try {
       await AsyncStorage.setItem(BUILD_STORAGE_KEY, JSON.stringify(nextBuilds));
       setSavedBuilds(nextBuilds);
-      Alert.alert("Build saved", "This build is saved on this device.");
+      showBuilderNotice("success", "Build saved on this device.");
     } catch {
-      Alert.alert("Could not save build", "Try again after checking device storage.");
+      showBuilderNotice("error", "Could not save build. Check device storage and try again.");
+    } finally {
+      isSavingBuildRef.current = false;
+    }
+  }
+
+  async function deleteSavedBuild(build: SavedBuild) {
+    const nextBuilds = savedBuilds.filter((savedBuild) => savedBuild.id !== build.id);
+    try {
+      await AsyncStorage.setItem(BUILD_STORAGE_KEY, JSON.stringify(nextBuilds));
+      setSavedBuilds(nextBuilds);
+      setBuildToDelete(null);
+    } catch {
+      Alert.alert("Could not delete build", "Try again after checking device storage.");
     }
   }
 
@@ -177,6 +230,12 @@ export default function BuilderScreen() {
     const savedSelection = Object.fromEntries(
       BUILDER_SLOTS.flatMap((slot) => selection[slot.id] ? [[slot.id, selection[slot.id]!.id]] : [])
     ) as SavedBuild["selections"];
+    const duplicateBuild = savedBuilds.find((build) => haveSameComponents(build.selections, savedSelection));
+    if (duplicateBuild) {
+      showBuilderNotice("warning", `These components are already saved as ${duplicateBuild.name}. Change a component before saving another build.`);
+      return;
+    }
+
     const build: SavedBuild = {
       id: `${Date.now()}`,
       name: `Build ${new Date(savedAt).toLocaleDateString("en-PH")}`,
@@ -265,6 +324,27 @@ export default function BuilderScreen() {
                 <ActionButton icon="save-outline" label="Save" onPress={saveCurrentBuild} disabled={selectedProducts.length === 0} />
               </View>
             </View>
+
+            {builderNotice && (
+              <View className={`mb-4 flex-row items-start gap-2 rounded-lg border px-3 py-2.5 ${builderNotice.type === "success" ? "border-success/40 bg-success/10" : builderNotice.type === "warning" ? "border-primary/40 bg-primary/10" : "border-danger/40 bg-danger/10"}`}>
+                <Ionicons
+                  name={builderNotice.type === "success" ? "checkmark-circle-outline" : "alert-circle-outline"}
+                  size={17}
+                  color={builderNotice.type === "success" ? "#16a34a" : builderNotice.type === "warning" ? "#ef1b1b" : "#ef4444"}
+                />
+                <Text accessibilityRole="alert" className="flex-1 text-foreground text-xs leading-5">
+                  {builderNotice.message}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Dismiss build message"
+                  onPress={clearBuilderNotice}
+                  hitSlop={8}
+                >
+                  <Ionicons name="close" size={17} color={isDark ? "#cbd5e1" : "#59616d"} />
+                </Pressable>
+              </View>
+            )}
 
             <View className="gap-2">
               {BUILDER_SLOTS.map((slot) => (
@@ -360,19 +440,75 @@ export default function BuilderScreen() {
             <Pressable accessibilityLabel="Close saved builds" onPress={() => setIsSavedBuildsOpen(false)} className="h-10 w-10 items-center justify-center rounded-lg bg-secondary">
               <Ionicons name="close" size={22} color={isDark ? "#f8fafc" : "#30343b"} />
             </Pressable>
-            <Text className="text-foreground text-base font-bold">Saved builds</Text>
+            <View className="flex-1">
+              <Text className="text-foreground text-base font-bold">Saved builds</Text>
+              <Text className="text-muted-foreground text-xs mt-0.5">
+                {savedBuilds.length} saved {savedBuilds.length === 1 ? "configuration" : "configurations"}
+              </Text>
+            </View>
           </View>
-          <ScrollView contentContainerStyle={{ padding: 16, gap: 8, width: "100%", maxWidth: 760, alignSelf: "center" }}>
+          <ScrollView contentContainerStyle={{ padding: 16, gap: 12, width: "100%", maxWidth: 760, alignSelf: "center" }}>
             {savedBuilds.length === 0 ? (
-              <Text className="py-10 text-center text-muted-foreground text-sm">No saved builds on this device.</Text>
+              <View className="items-center py-16 px-6">
+                <View className="h-14 w-14 items-center justify-center rounded-xl border border-border bg-secondary">
+                  <Ionicons name="desktop-outline" size={26} color={isDark ? "#9ca3af" : "#68717e"} />
+                </View>
+                <Text className="mt-4 text-foreground text-base font-semibold">No saved builds yet</Text>
+                <Text className="mt-1 text-center text-muted-foreground text-sm">
+                  Save your current parts selection to find it here later.
+                </Text>
+              </View>
             ) : savedBuilds.map((build) => {
+              const buildProducts = BUILDER_SLOTS.flatMap((slot) => {
+                const productId = build.selections[slot.id];
+                const product = products.find((item) => item.id === productId);
+                return product ? [product] : [];
+              });
               const partCount = Object.keys(build.selections).length;
+              const buildSubtotal = buildProducts.reduce((total, product) => total + product.price, 0);
+              const previewNames = buildProducts.slice(0, 2).map((product) => product.name).join(" · ");
               return (
-                <Pressable key={build.id} onPress={() => loadBuild(build)} className="flex-row items-center gap-3 rounded-xl border border-border bg-card p-4">
-                  <View className="h-10 w-10 items-center justify-center rounded-lg bg-secondary"><Ionicons name="desktop-outline" size={20} color={isDark ? "#cbd5e1" : "#59616d"} /></View>
-                  <View className="flex-1"><Text className="text-foreground text-sm font-semibold">{build.name}</Text><Text className="mt-1 text-muted-foreground text-xs">{partCount} selected {partCount === 1 ? "part" : "parts"}</Text></View>
-                  <Ionicons name="chevron-forward" size={18} color={isDark ? "#9ca3af" : "#68717e"} />
-                </Pressable>
+                <View key={build.id} className="rounded-xl border border-border bg-card p-4">
+                  <View className="flex-row items-start gap-3">
+                    <View className="h-10 w-10 items-center justify-center rounded-lg bg-secondary">
+                      <Ionicons name="desktop-outline" size={20} color={isDark ? "#cbd5e1" : "#59616d"} />
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-foreground text-sm font-semibold">{build.name}</Text>
+                      <Text className="mt-1 text-muted-foreground text-xs">
+                        Saved {new Date(build.savedAt).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}
+                      </Text>
+                    </View>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Delete saved build ${build.name}`}
+                      onPress={() => setBuildToDelete(build)}
+                      className="h-9 w-9 items-center justify-center rounded-lg border border-border"
+                      style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
+                    >
+                      <Ionicons name="trash-outline" size={17} color="#ef1b1b" />
+                    </Pressable>
+                  </View>
+                  <Text numberOfLines={2} className="mt-3 text-muted-foreground text-xs leading-5">
+                    {previewNames || "Some saved parts are no longer in the catalog"}
+                    {buildProducts.length > 2 ? ` · +${buildProducts.length - 2} more` : ""}
+                  </Text>
+                  <View className="mt-3 flex-row items-center justify-between border-t border-border pt-3">
+                    <Text className="text-muted-foreground text-xs">
+                      {partCount} {partCount === 1 ? "part" : "parts"}
+                    </Text>
+                    <Text className="text-foreground text-sm font-bold">{formatPrice(buildSubtotal)}</Text>
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Load saved build ${build.name}`}
+                    onPress={() => loadBuild(build)}
+                    className="mt-3 h-10 flex-row items-center justify-center gap-2 rounded-lg bg-primary"
+                  >
+                    <Ionicons name="folder-open-outline" size={16} color="#fff" />
+                    <Text className="text-primary-foreground text-xs font-bold">Load build</Text>
+                  </Pressable>
+                </View>
               );
             })}
           </ScrollView>
@@ -398,6 +534,17 @@ export default function BuilderScreen() {
         onConfirm={() => {
           setSelection({});
           setIsClearConfirmOpen(false);
+        }}
+      />
+      <ConfirmClearModal
+        visible={buildToDelete !== null}
+        title="Delete saved build?"
+        description={buildToDelete ? `Delete ${buildToDelete.name} from your saved builds?` : "Delete this saved build?"}
+        detail="This only removes the saved build from this device."
+        confirmLabel="Delete build"
+        onCancel={() => setBuildToDelete(null)}
+        onConfirm={() => {
+          if (buildToDelete) void deleteSavedBuild(buildToDelete);
         }}
       />
     </SafeAreaView>

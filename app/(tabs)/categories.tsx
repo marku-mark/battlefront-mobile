@@ -31,9 +31,7 @@ export default function CategoriesScreen() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const isLoadingMoreRef = useRef(false);
   const loadMoreTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [query, setQuery] = useState("");
   const [productQuery, setProductQuery] = useState("");
-  const [showAllCategories, setShowAllCategories] = useState(false);
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>(categoryId ? [categoryId] : []);
   const [selectedBrandId, setSelectedBrandId] = useState<string | null>(brandId ?? null);
   const [priceFilter, setPriceFilter] = useState<PriceFilter>("all");
@@ -70,18 +68,7 @@ export default function CategoriesScreen() {
     }
   }
 
-  const filteredCategories = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    return normalizedQuery ? categories.filter((category) => category.name.toLowerCase().includes(normalizedQuery)) : categories;
-  }, [categories, query]);
-
   const selectedCategories = useMemo(() => categories.filter((category) => selectedCategoryIds.includes(category.id)), [categories, selectedCategoryIds]);
-  const visibleCategories = useMemo(() => {
-    if (query.trim() || showAllCategories) return filteredCategories;
-    const selected = filteredCategories.filter((category) => selectedCategoryIds.includes(category.id));
-    const remaining = filteredCategories.filter((category) => !selectedCategoryIds.includes(category.id));
-    return [...selected, ...remaining].slice(0, Math.max(6, selected.length));
-  }, [filteredCategories, query, selectedCategoryIds, showAllCategories]);
 
   const filteredProducts = useMemo(() => {
     const normalizedProductQuery = productQuery.trim().toLowerCase();
@@ -127,9 +114,8 @@ export default function CategoriesScreen() {
   }, []);
 
   const cardWidth = getGridCardWidth(width, layout.productColumns);
-  const categoryGap = 10;
-  const categoryCardWidth = (layout.contentWidth - layout.horizontalPadding * 2 - categoryGap * (layout.productColumns - 1)) / layout.productColumns;
   const hasActiveFilters = selectedCategoryIds.length > 0 || Boolean(selectedBrandId) || priceFilter !== "all" || sortOrder !== "featured";
+  const activeFilterCount = selectedCategoryIds.length + Number(Boolean(selectedBrandId)) + Number(priceFilter !== "all") + Number(sortOrder !== "featured");
 
   function openFilterSheet() {
     setDraftBrandId(selectedBrandId);
@@ -157,7 +143,6 @@ export default function CategoriesScreen() {
     setPriceFilter("all");
     setSortOrder("featured");
     setProductQuery("");
-    setQuery("");
   }
 
   function loadMoreProducts() {
@@ -175,15 +160,6 @@ export default function CategoriesScreen() {
   return (
     <SafeAreaView edges={["left", "right", "bottom"]} className="flex-1 bg-background">
       <ScreenHeader title="Categories" subtitle="Find the right parts for your next build." />
-      <View className="self-center w-full pt-4" style={{ maxWidth: MAX_CONTENT_WIDTH, paddingHorizontal: layout.horizontalPadding }}>
-        {selectedCategoryIds.length > 0 && <Text className="text-primary text-xs font-semibold mt-2">{selectedCategoryIds.length} categor{selectedCategoryIds.length === 1 ? "y" : "ies"} selected</Text>}
-        <View className="flex-row items-center gap-2 bg-secondary border border-border rounded-xl px-3 mt-4 h-11">
-          <Ionicons name="search-outline" size={18} color={isDark ? "#cbd5e1" : "#68717e"} />
-          <TextInput value={query} onChangeText={setQuery} placeholder="Search categories" placeholderTextColor="#94a3b8" autoCapitalize="none" returnKeyType="search" className="flex-1 text-foreground text-sm" />
-          {query.length > 0 && <Pressable accessibilityLabel="Clear category search" onPress={() => setQuery("")} hitSlop={8}><Ionicons name="close-circle" size={18} color={isDark ? "#9ca3af" : "#68717e"} /></Pressable>}
-        </View>
-      </View>
-
       <FlashList
         data={isLoading || hasLoadError ? [] : visibleProducts}
         keyExtractor={(item) => item.id}
@@ -192,69 +168,12 @@ export default function CategoriesScreen() {
         ListFooterComponent={isLoadingMore ? <LoadingMoreFooter /> : null}
         key={`category-products-${layout.productColumns}`}
         numColumns={layout.productColumns}
-        masonry
-        optimizeItemArrangement={false}
         contentContainerStyle={{ paddingBottom: 32, paddingTop: 16, paddingHorizontal: 10, width: "100%", maxWidth: MAX_CONTENT_WIDTH, alignSelf: "center" }}
         ListHeaderComponentStyle={{ marginHorizontal: -10 }}
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
-          <View>
-            <View style={{ paddingHorizontal: layout.horizontalPadding }}>
-              <Text className="text-muted-foreground text-xs uppercase tracking-[0.14em] mb-3">
-                {query.trim() ? `${filteredCategories.length} categories` : "Shop by needs"}
-              </Text>
-              {visibleCategories.length > 0 ? (
-                <View className="flex-row flex-wrap" style={{ gap: categoryGap }}>
-                  {visibleCategories.map((category) => {
-                    const selected = selectedCategoryIds.includes(category.id);
-                    return (
-                      <Pressable
-                        key={category.id}
-                        accessibilityLabel={`Browse ${category.name}`}
-                        accessibilityState={{ selected }}
-                        onPress={() => setSelectedCategoryIds((current) => selected ? current.filter((id) => id !== category.id) : [...current, category.id])}
-                        className={`min-h-[88px] flex-row items-center gap-2.5 rounded-xl border px-3 py-2.5 ${selected ? "bg-primary/10 border-primary" : "bg-card border-border"}`}
-                        style={({ pressed }) => ({ width: categoryCardWidth, opacity: pressed ? 0.72 : 1 })}
-                      >
-                        <View className="w-9 h-9 rounded-lg bg-secondary items-center justify-center">
-                          <Ionicons name={category.icon as any} size={20} color={isDark ? "#f8fafc" : "#30343b"} />
-                        </View>
-                        <Text numberOfLines={2} className="flex-1 text-foreground text-xs font-semibold">
-                          {category.name}
-                        </Text>
-                        <Ionicons name={selected ? "checkmark-circle" : "arrow-forward"} size={15} color="#ef1b1b" />
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              ) : (
-                <EmptyCategories />
-              )}
-              {!query.trim() && filteredCategories.length > 6 && (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ expanded: showAllCategories }}
-                  onPress={() => setShowAllCategories((current) => !current)}
-                  className="self-start py-2"
-                >
-                  <Text className="text-primary text-xs font-semibold">
-                    {showAllCategories ? "Show fewer categories" : `Show all ${filteredCategories.length} categories`}
-                  </Text>
-                </Pressable>
-              )}
-            </View>
-            <View className="mt-4 px-4">
-              <View className="flex-row items-end justify-between mb-3">
-                <View className="flex-1">
-                  <Text className="text-foreground text-base font-bold" numberOfLines={1}>
-                    {selectedCategories.length > 0 ? selectedCategories.map((category) => category.name).join(", ") : "All products"}
-                  </Text>
-                  <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.14em] mt-1">
-                    {filteredProducts.length} products
-                  </Text>
-                </View>
-                <FilterButton label={hasActiveFilters ? "Filters applied" : "Filter and sort"} active={hasActiveFilters} onPress={openFilterSheet} />
-              </View>
+          <View className="pb-2">
+            <View className="self-center w-full px-4" style={{ maxWidth: MAX_CONTENT_WIDTH }}>
               <View className="h-10 flex-row items-center gap-2 rounded-lg border border-border bg-secondary px-3">
                 <Ionicons name="search-outline" size={16} color={isDark ? "#cbd5e1" : "#68717e"} />
                 <TextInput
@@ -273,36 +192,41 @@ export default function CategoriesScreen() {
                   </Pressable>
                 )}
               </View>
-              {(selectedCategories.length > 0 || selectedBrandId || priceFilter !== "all" || sortOrder !== "featured" || productQuery.trim()) && (
+            </View>
+            {categories.length > 0 && !hasLoadError && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: layout.horizontalPadding, paddingTop: 14 }}>
+                <CategoryChip label="All" selected={selectedCategoryIds.length === 0} onPress={() => setSelectedCategoryIds([])} />
+                {categories.map((category) => (
+                  <CategoryChip
+                    key={category.id}
+                    label={category.name}
+                    selected={selectedCategoryIds.includes(category.id)}
+                    onPress={() => setSelectedCategoryIds((current) => current.includes(category.id) ? current.filter((id) => id !== category.id) : [...current, category.id])}
+                  />
+                ))}
+              </ScrollView>
+            )}
+            <View className="self-center w-full px-4 pt-4" style={{ maxWidth: MAX_CONTENT_WIDTH }}>
+              <View className="flex-row items-center justify-between gap-3">
+                <View className="flex-1">
+                  <Text className="text-foreground text-base font-bold" numberOfLines={1}>
+                    {selectedCategories.length > 0 ? selectedCategories.map((category) => category.name).join(", ") : "All products"}
+                  </Text>
+                  <Text className="text-muted-foreground text-xs mt-1">{filteredProducts.length} products</Text>
+                </View>
+                <FilterButton
+                  label={activeFilterCount > 0 ? `Filter (${activeFilterCount})` : "Filter and sort"}
+                  active={hasActiveFilters}
+                  onPress={openFilterSheet}
+                />
+              </View>
+              {(selectedBrandId || priceFilter !== "all" || sortOrder !== "featured") && (
                 <View className="flex-row flex-wrap items-center gap-2 mt-3">
-                  {selectedCategories.map((category) => (
-                    <FilterChip
-                      key={category.id}
-                      label={category.name}
-                      onRemove={() => setSelectedCategoryIds((current) => current.filter((id) => id !== category.id))}
-                    />
-                  ))}
                   {selectedBrandId && (
-                    <FilterChip
-                      label={brands.find((brand) => brand.id === selectedBrandId)?.name ?? selectedBrandId}
-                      onRemove={() => setSelectedBrandId(null)}
-                    />
+                    <FilterChip label={brands.find((brand) => brand.id === selectedBrandId)?.name ?? selectedBrandId} onRemove={() => setSelectedBrandId(null)} />
                   )}
-                  {priceFilter !== "all" && (
-                    <FilterChip
-                      label={getPriceFilterLabel(priceFilter)}
-                      onRemove={() => setPriceFilter("all")}
-                    />
-                  )}
-                  {sortOrder !== "featured" && (
-                    <FilterChip
-                      label={sortOrder === "price-low" ? "Price: low to high" : "Price: high to low"}
-                      onRemove={() => setSortOrder("featured")}
-                    />
-                  )}
-                  {productQuery.trim().length > 0 && (
-                    <FilterChip label={`Search: ${productQuery.trim()}`} onRemove={() => setProductQuery("")} />
-                  )}
+                  {priceFilter !== "all" && <FilterChip label={getPriceFilterLabel(priceFilter)} onRemove={() => setPriceFilter("all")} />}
+                  {sortOrder !== "featured" && <FilterChip label={sortOrder === "price-low" ? "Price: low to high" : "Price: high to low"} onRemove={() => setSortOrder("featured")} />}
                   <Pressable accessibilityRole="button" onPress={resetFilters} className="h-8 justify-center px-1">
                     <Text className="text-primary text-xs font-semibold">Clear all</Text>
                   </Pressable>
@@ -327,7 +251,7 @@ export default function CategoriesScreen() {
           )
         }
         renderItem={({ item }) => (
-          <View style={{ paddingHorizontal: 6 }}>
+          <View style={{ flex: 1, paddingHorizontal: 6, paddingBottom: 12 }}>
             <ProductCard
               product={item}
               width={cardWidth}
@@ -415,6 +339,19 @@ function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }
   );
 }
 
+function CategoryChip({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      className={`h-9 justify-center rounded-full border px-3 ${selected ? "border-primary bg-primary/10" : "border-border bg-secondary"}`}
+    >
+      <Text className={`text-xs font-semibold ${selected ? "text-primary" : "text-muted-foreground"}`}>{label}</Text>
+    </Pressable>
+  );
+}
+
 function FilterSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <View className="mt-4">
@@ -429,10 +366,6 @@ function getPriceFilterLabel(filter: PriceFilter): string {
   if (filter === "under-15k") return "Under ₱15k";
   if (filter === "over-15k") return "₱15k+";
   return "Any price";
-}
-
-function EmptyCategories() {
-  return <View className="items-center py-12 px-4"><Ionicons name="search-outline" size={28} color="#9ca3af" /><Text className="text-foreground text-sm font-semibold mt-3">No categories found</Text><Text className="text-muted-foreground text-xs mt-1">Try a different search term.</Text></View>;
 }
 
 function CatalogState({ icon, title, message, actionLabel, onAction, showSpinner = false }: { icon: "refresh-outline" | "cloud-offline-outline" | "search-outline"; title: string; message: string; actionLabel?: string; onAction?: () => void; showSpinner?: boolean }) {

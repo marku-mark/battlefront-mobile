@@ -153,10 +153,11 @@ export function ProductCard({ product, width = 150, onPress }: ProductCardProps)
             accessibilityLabel={`${justAdded ? "Add another" : "Add"} ${product.name} to cart`}
             accessibilityHint="Adds one unit to your cart"
             accessibilityRole="button"
-            accessibilityState={{ disabled: false }}
+            accessibilityState={{ disabled: stockQuantity <= 0 }}
+            disabled={stockQuantity <= 0}
             onPress={handleQuickAdd}
             className="flex-1 h-9 rounded-lg bg-primary flex-row items-center justify-center gap-1.5"
-            style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+            style={({ pressed }) => ({ opacity: stockQuantity <= 0 ? 0.45 : pressed ? 0.8 : 1 })}
           >
             <Animated.View
               key={justAdded ? "added" : "add"}

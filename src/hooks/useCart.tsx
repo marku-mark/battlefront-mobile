@@ -49,6 +49,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
         const parsedCart = storedCart ? JSON.parse(storedCart) as CartItem[] : [];
         const validCart = Array.isArray(parsedCart)
           ? parsedCart.filter((item) => item?.product?.id && typeof item.product.price === "number" && typeof item.quantity === "number" && item.quantity > 0)
+            .map((item) => ({ ...item, quantity: clampQuantity(item.product, item.quantity) }))
+            .filter((item) => item.quantity > 0)
           : [];
         const hydratedCart = pendingMockMutations.current.reduce((items, mutation) => mutation(items), validCart);
         pendingMockMutations.current = [];
@@ -82,24 +84,31 @@ export function CartProvider({ children }: { children: ReactNode }) {
     return {
       addItem: (product, quantity = 1, variant = null) => {
         applyMutation((current) => {
+          const stockLimit = getStockLimit(product);
+          const requestedQuantity = Math.max(0, Math.floor(quantity));
+          if (stockLimit === 0 || requestedQuantity === 0) return current;
           const existing = current.find((item) => item.product.id === product.id && item.variant === variant);
           if (existing) {
             return current.map((item) =>
               item.product.id === product.id && item.variant === variant
-                ? { ...item, quantity: item.quantity + quantity }
+                ? { ...item, quantity: clampQuantity(product, item.quantity + requestedQuantity) }
                 : item
             );
           }
-          return [...current, { product, quantity, variant }];
+          return [...current, { product, quantity: clampQuantity(product, requestedQuantity), variant }];
         });
       },
-      updateQuantity: (productId, quantity, variant = null) => applyMutation((current) =>
-        quantity > 0
-          ? current.map((item) =>
-              item.product.id === productId && item.variant === variant ? { ...item, quantity } : item
-            )
-          : current.filter((item) => !(item.product.id === productId && item.variant === variant))
-      ),
+      updateQuantity: (productId, quantity, variant = null) => applyMutation((current) => {
+        if (quantity <= 0) {
+          return current.filter((item) => !(item.product.id === productId && item.variant === variant));
+        }
+
+        return current.flatMap((item) => {
+          if (item.product.id !== productId || item.variant !== variant) return [item];
+          const safeQuantity = clampQuantity(item.product, quantity);
+          return safeQuantity > 0 ? [{ ...item, quantity: safeQuantity }] : [];
+        });
+      }),
       removeItem: (productId, variant = null) => applyMutation((current) => current.filter((item) => !(item.product.id === productId && item.variant === variant))),
       clearCart: () => applyMutation(() => []),
       promoteGuestCartToMock: () => {
@@ -159,13 +168,28 @@ export function useCartActions(): CartActions {
 
 function mergeCartItems(existingItems: CartItem[], incomingItems: CartItem[]): CartItem[] {
   return incomingItems.reduce((mergedItems, incomingItem) => {
+    const stockLimit = getStockLimit(incomingItem.product);
+    const incomingQuantity = clampQuantity(incomingItem.product, incomingItem.quantity);
+    if (stockLimit === 0 || incomingQuantity === 0) return mergedItems;
     const existingIndex = mergedItems.findIndex(
       (item) => item.product.id === incomingItem.product.id && item.variant === incomingItem.variant
     );
-    if (existingIndex === -1) return [...mergedItems, incomingItem];
+    if (existingIndex === -1) {
+      return [...mergedItems, { ...incomingItem, quantity: incomingQuantity }];
+    }
 
     return mergedItems.map((item, index) =>
-      index === existingIndex ? { ...item, quantity: item.quantity + incomingItem.quantity } : item
+      index === existingIndex
+        ? { ...item, quantity: clampQuantity(incomingItem.product, item.quantity + incomingQuantity) }
+        : item
     );
   }, existingItems);
+}
+
+function getStockLimit(product: Product): number {
+  return Math.max(0, Math.floor(product.stockQuantity ?? 12));
+}
+
+function clampQuantity(product: Product, quantity: number): number {
+  return Math.min(getStockLimit(product), Math.max(0, Math.floor(quantity)));
 }

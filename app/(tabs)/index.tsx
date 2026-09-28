@@ -172,8 +172,6 @@ export default function HomeScreen() {
         data={visibleCatalogProducts}
         key={`home-products-${layout.productColumns}`}
         numColumns={layout.productColumns}
-        masonry
-        optimizeItemArrangement={false}
         keyExtractor={(item) => item.id}
         onEndReached={loadMoreProducts}
         onEndReachedThreshold={0.4}
@@ -211,7 +209,7 @@ export default function HomeScreen() {
         }
         ListEmptyComponent={!isLoading ? <View className="items-center px-6 py-12"><Text className="text-foreground text-sm font-semibold">No products available</Text><Text className="text-muted-foreground text-xs mt-1">Try refreshing the catalog.</Text></View> : null}
         renderItem={({ item }) => (
-          <View style={{ paddingHorizontal: 6 }}>
+          <View style={{ flex: 1, paddingHorizontal: 6, paddingBottom: 12 }}>
             <ProductCard
               product={item}
               width={getGridCardWidth(width, layout.productColumns)}

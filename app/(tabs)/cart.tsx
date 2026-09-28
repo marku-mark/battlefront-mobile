@@ -143,8 +143,11 @@ export default function CartScreen() {
                   <Text className="text-foreground text-xs font-bold min-w-[34px] text-center">{quantity}</Text>
                   <Pressable
                     accessibilityLabel={`Increase ${product.name} quantity`}
+                    accessibilityState={{ disabled: quantity >= (product.stockQuantity ?? 12) }}
+                    disabled={quantity >= (product.stockQuantity ?? 12)}
                     onPress={() => updateQuantity(product.id, quantity + 1, variant)}
                     className="w-8 h-8 items-center justify-center"
+                    style={({ pressed }) => ({ opacity: quantity >= (product.stockQuantity ?? 12) ? 0.4 : pressed ? 0.7 : 1 })}
                   >
                     <Ionicons name="add" size={14} color="#f8fafc" />
                   </Pressable>
