@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MockSignInSheet } from "@/components/account/MockSignInSheet";
+import { LoadingState } from "@/components/layout/LoadingState";
 import { useCart, type CartItem } from "@/hooks/useCart";
 import { useSession } from "@/hooks/useSession";
 import { DEMO_ACCOUNT } from "@/lib/mockAccount";
@@ -45,7 +46,7 @@ const paymentOptions = [
 export default function CheckoutScreen() {
   const router = useRouter();
   const { colors } = useTheme();
-  const { items, subtotal, clearCart, removeItem, updateQuantity } = useCart();
+  const { items, subtotal, clearCart, removeItem, updateQuantity, isLoading: isCartLoading } = useCart();
   const { session, isHydrated } = useSession();
   const [step, setStep] = useState<CheckoutStep>("address");
   const [fullName, setFullName] = useState("");
@@ -92,11 +93,10 @@ export default function CheckoutScreen() {
     }, 600);
   }
 
-  if (!isHydrated) {
+  if (!isHydrated || isCartLoading) {
     return (
-      <SafeAreaView className="flex-1 bg-background items-center justify-center">
-        <ActivityIndicator color={colors.primary} />
-        <Text className="text-muted-foreground text-sm mt-3">Preparing account access</Text>
+      <SafeAreaView className="flex-1 bg-background">
+        <LoadingState label="Preparing your checkout..." />
       </SafeAreaView>
     );
   }

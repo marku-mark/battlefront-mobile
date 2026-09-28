@@ -5,8 +5,10 @@ import { useEffect, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getProductImageSource, getProductVariants, type Product } from "@/lib/data";
 import { getProducts } from "@/lib/api";
+import { LoadingState } from "@/components/layout/LoadingState";
 import { useWishlist } from "@/hooks/useWishlist";
 import { useCart } from "@/hooks/useCart";
+import { useSession } from "@/hooks/useSession";
 
 function formatPrice(value: number): string {
   return `₱${value.toLocaleString("en-PH")}`;
@@ -14,15 +16,28 @@ function formatPrice(value: number): string {
 
 export default function WishlistScreen() {
   const router = useRouter();
-  const { items: wishlistIds, toggleWishlist } = useWishlist();
+  const { items: wishlistIds, toggleWishlist, isLoading: isWishlistLoading } = useWishlist();
   const { addItem, items: cartItems } = useCart();
   const [removedProduct, setRemovedProduct] = useState<Product | null>(null);
   const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
+  const [isCatalogLoading, setIsCatalogLoading] = useState(true);
+  const [hasCatalogError, setHasCatalogError] = useState(false);
+  const { isHydrated } = useSession();
 
   useEffect(() => {
-    getProducts().then(setCatalogProducts).catch(() => setCatalogProducts([]));
+    loadCatalog();
   }, []);
 
+  function loadCatalog() {
+    setIsCatalogLoading(true);
+    setHasCatalogError(false);
+    getProducts()
+      .then(setCatalogProducts)
+      .catch(() => setHasCatalogError(true))
+      .finally(() => setIsCatalogLoading(false));
+  }
+
+  const isLoading = !isHydrated || isWishlistLoading || isCatalogLoading;
   const products = catalogProducts.filter((product) => wishlistIds.includes(product.id));
 
   return (
@@ -39,12 +54,23 @@ export default function WishlistScreen() {
         <View className="ml-2">
           <Text className="text-foreground text-lg font-bold">Wishlist</Text>
           <Text className="text-muted-foreground text-xs mt-0.5">
-            {products.length} saved item{products.length === 1 ? "" : "s"}
+            {isLoading ? "Loading saved items" : `${products.length} saved item${products.length === 1 ? "" : "s"}`}
           </Text>
         </View>
       </View>
 
-      {products.length === 0 ? (
+      {isLoading ? (
+        <LoadingState label="Loading wishlist..." />
+      ) : hasCatalogError ? (
+        <View className="flex-1 items-center justify-center px-6">
+          <Ionicons name="cloud-offline-outline" size={30} color="#94a3b8" />
+          <Text className="mt-3 text-foreground text-sm font-semibold">Could not load saved products</Text>
+          <Text className="mt-1 text-center text-muted-foreground text-xs">Check the local catalog and try again.</Text>
+          <Pressable onPress={loadCatalog} className="mt-4 rounded-lg bg-primary px-4 py-2.5">
+            <Text className="text-primary-foreground text-xs font-semibold">Try again</Text>
+          </Pressable>
+        </View>
+      ) : products.length === 0 ? (
         <View className="flex-1 items-center justify-center px-6">
           <View className="w-20 h-20 rounded-full bg-secondary items-center justify-center border border-border">
             <Ionicons name="heart-outline" size={34} color="#94a3b8" />

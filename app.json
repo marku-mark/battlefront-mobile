@@ -6,7 +6,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/battlefront-app-icon.png",
     "backgroundColor": "#090b10",
     "plugins": [
       "expo-router",
@@ -16,7 +16,8 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/splash-logo.png",
+          "image": "./assets/battlefront-logo.png",
+          "imageWidth": 260,
           "resizeMode": "contain",
           "backgroundColor": "#090b10"
         }
@@ -29,14 +30,15 @@
     "android": {
       "package": "com.battlefront.mobile",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#090b10"
+        "foregroundImage": "./assets/battlefront-adaptive-icon.png",
+        "backgroundColor": "#ffffff"
       }
     },
     "web": {
       "bundler": "metro",
+      "favicon": "./assets/battlefront-app-icon.png",
       "splash": {
-        "image": "./assets/splash-logo.png",
+        "image": "./assets/battlefront-logo.png",
         "resizeMode": "contain",
         "backgroundColor": "#090b10"
       }

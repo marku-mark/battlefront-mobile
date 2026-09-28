@@ -16,6 +16,7 @@ type WishlistMode = "guest" | "mock-account";
 
 type WishlistContextValue = {
   items: string[];
+  isLoading: boolean;
   isWishlisted: (productId: string) => boolean;
   toggleWishlist: (productId: string) => void;
 };
@@ -95,10 +96,11 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
   const value = useMemo<WishlistContextValue>(
     () => ({
       items: productIds,
+      isLoading: session.mode === "mock-account" && !isMockWishlistLoaded,
       isWishlisted: (productId) => store.isWishlisted(session.mode, productId),
       toggleWishlist,
     }),
-    [productIds, session.mode, store, toggleWishlist]
+    [isMockWishlistLoaded, productIds, session.mode, store, toggleWishlist]
   );
   const actions = useMemo<WishlistActions>(
     () => ({ toggleWishlist, promoteGuestWishlistToMock }),

@@ -1,12 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Alert, Image, Pressable, ScrollView, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, Text, View } from "react-native";
 import { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MockSignInSheet } from "@/components/account/MockSignInSheet";
 import { useCart, type CartItem } from "@/hooks/useCart";
 import { useSession } from "@/hooks/useSession";
 import { ScreenHeader } from "@/components/layout/ScreenHeader";
+import { LoadingState } from "@/components/layout/LoadingState";
+import { ConfirmClearModal } from "@/components/layout/ConfirmClearModal";
 import { getProductImageSource } from "@/lib/data";
 
 function formatPrice(value: number): string {
@@ -15,12 +17,22 @@ function formatPrice(value: number): string {
 
 export default function CartScreen() {
   const router = useRouter();
-  const { items, subtotal, addItem, updateQuantity, removeItem, clearCart } = useCart();
-  const { session } = useSession();
+  const { items, subtotal, addItem, updateQuantity, removeItem, clearCart, isLoading: isCartLoading } = useCart();
+  const { session, isHydrated } = useSession();
   const [removedItem, setRemovedItem] = useState<CartItem | null>(null);
   const [isSignInOpen, setIsSignInOpen] = useState(false);
+  const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   const shippingFee = subtotal > 5000 ? 0 : 150;
   const total = subtotal + shippingFee;
+
+  if (!isHydrated || isCartLoading) {
+    return (
+      <SafeAreaView edges={["left", "right", "bottom"]} className="flex-1 bg-background">
+        <ScreenHeader title="Your Cart" />
+        <LoadingState label="Loading your cart..." />
+      </SafeAreaView>
+    );
+  }
 
   if (items.length === 0 && !removedItem) {
     return (
@@ -62,19 +74,7 @@ export default function CartScreen() {
         right={
           <Pressable
             accessibilityLabel="Clear cart"
-            onPress={() =>
-              Alert.alert("Clear cart?", "Remove all items from your cart?", [
-                { text: "Cancel", style: "cancel" },
-                {
-                  text: "Clear cart",
-                  style: "destructive",
-                  onPress: () => {
-                    clearCart();
-                    setRemovedItem(null);
-                  },
-                },
-              ])
-            }
+            onPress={() => setIsClearConfirmOpen(true)}
             hitSlop={8}
           >
             <Text className="text-primary text-xs font-semibold">Clear all</Text>
@@ -199,6 +199,19 @@ export default function CartScreen() {
         message="Sign in to continue. Your guest cart will move into the local demo account."
         onClose={() => setIsSignInOpen(false)}
         onSuccess={() => router.push("/checkout")}
+      />
+      <ConfirmClearModal
+        visible={isClearConfirmOpen}
+        title="Clear cart?"
+        description={`This will remove all ${items.length} ${items.length === 1 ? "item" : "items"} from your cart.`}
+        detail="You can add products to your cart again at any time."
+        confirmLabel="Clear cart"
+        onCancel={() => setIsClearConfirmOpen(false)}
+        onConfirm={() => {
+          clearCart();
+          setRemovedItem(null);
+          setIsClearConfirmOpen(false);
+        }}
       />
     </SafeAreaView>
   );

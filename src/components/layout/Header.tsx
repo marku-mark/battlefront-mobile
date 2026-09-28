@@ -22,7 +22,7 @@ export function Header({ cartCount = 0, onCartPress, onNotificationPress, onSear
     >
       <View className="flex-row items-center gap-3 px-4 py-3.5">
         <View className="flex-1">
-          <LogoMark isDark={isDark} size={48} />
+          <LogoMark size={52} />
         </View>
 
         <Pressable

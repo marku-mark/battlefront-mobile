@@ -4,6 +4,7 @@ import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MockSignInSheet } from "@/components/account/MockSignInSheet";
+import { LoadingState } from "@/components/layout/LoadingState";
 import { useSession } from "@/hooks/useSession";
 import { DEMO_ADDRESSES, DEMO_ORDERS } from "@/lib/mockAccount";
 import { useTheme } from "@/theme/ThemeProvider";
@@ -18,7 +19,7 @@ const accountLinks = [
 export default function AccountScreen() {
   const router = useRouter();
   const { isDark, toggleMode } = useTheme();
-  const { session, signIn, signOut } = useSession();
+  const { session, isHydrated, signIn, signOut } = useSession();
   const isMockAccount = session.mode === "mock-account";
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [selectedUtility, setSelectedUtility] = useState<string | null>(null);
@@ -27,6 +28,14 @@ export default function AccountScreen() {
   function openSignIn(message = "") {
     setAuthMessage(message);
     setIsAuthOpen(true);
+  }
+
+  if (!isHydrated) {
+    return (
+      <SafeAreaView className="flex-1 bg-background">
+        <LoadingState label="Loading account..." />
+      </SafeAreaView>
+    );
   }
 
   return (

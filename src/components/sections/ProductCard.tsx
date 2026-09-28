@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image as ExpoImage } from "expo-image";
 import * as Haptics from "expo-haptics";
+import Animated, { FadeInDown, FadeOutUp } from "react-native-reanimated";
 import { Pressable, Text, View } from "react-native";
 import { useEffect, useRef, useState } from "react";
 import { getProductImageSource, getProductVariants, type Product } from "@/lib/data";
@@ -149,17 +150,24 @@ export function ProductCard({ product, width = 150, onPress }: ProductCardProps)
             />
           </Pressable>
           <Pressable
-            accessibilityLabel={`Add ${product.name} to cart`}
+            accessibilityLabel={justAdded ? `Added ${product.name} to cart` : `Add ${product.name} to cart`}
             accessibilityRole="button"
             accessibilityState={{ disabled: false }}
             onPress={handleQuickAdd}
             className="flex-1 h-9 rounded-lg bg-primary flex-row items-center justify-center gap-1.5"
             style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
           >
-            <Ionicons name={justAdded ? "checkmark" : "cart-outline"} size={15} color={colors.foreground} />
-            <Text className="text-primary-foreground text-[11px] font-bold">
-              {justAdded ? "Added" : "Add"}
-            </Text>
+            <Animated.View
+              key={justAdded ? "added" : "add"}
+              entering={FadeInDown.duration(180)}
+              exiting={FadeOutUp.duration(120)}
+              className="flex-row items-center justify-center gap-1.5"
+            >
+              <Ionicons name={justAdded ? "checkmark" : "cart-outline"} size={15} color={colors.foreground} />
+              <Text className="text-primary-foreground text-[11px] font-bold">
+                {justAdded ? "Added" : "Add"}
+              </Text>
+            </Animated.View>
           </Pressable>
         </View>
       </View>

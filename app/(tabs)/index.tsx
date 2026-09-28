@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { FlashList } from "@shopify/flash-list";
 import { useRouter } from "expo-router";
@@ -24,6 +24,10 @@ import { ProductSearch } from "@/components/search/ProductSearch";
 import { useCart } from "@/hooks/useCart";
 import { ProductCard } from "@/components/sections/ProductCard";
 import { BuilderEntryCard } from "@/components/builder/BuilderEntryCard";
+import { LoadingMoreFooter } from "@/components/layout/LoadingMoreFooter";
+
+const PRODUCTS_PER_PAGE = 24;
+const PAGE_LOAD_DELAY_MS = 250;
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -35,6 +39,10 @@ export default function HomeScreen() {
   const [sulitPicks, setSulitPicks] = useState<Product[]>([]);
   const [newArrivals, setNewArrivals] = useState<Product[]>([]);
   const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
+  const [visibleProductCount, setVisibleProductCount] = useState(PRODUCTS_PER_PAGE);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const isLoadingMoreRef = useRef(false);
+  const loadMoreTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { addItem, itemCount } = useCart();
@@ -45,6 +53,26 @@ export default function HomeScreen() {
     () => catalogProducts.length > 0 ? catalogProducts : [...flashDeals, ...sulitPicks, ...newArrivals],
     [catalogProducts, flashDeals, newArrivals, sulitPicks]
   );
+  const visibleCatalogProducts = useMemo(
+    () => catalogProducts.slice(0, visibleProductCount),
+    [catalogProducts, visibleProductCount]
+  );
+
+  function loadMoreProducts() {
+    if (isLoadingMoreRef.current || visibleProductCount >= catalogProducts.length) return;
+    isLoadingMoreRef.current = true;
+    setIsLoadingMore(true);
+    loadMoreTimerRef.current = setTimeout(() => {
+      setVisibleProductCount((current) => Math.min(current + PRODUCTS_PER_PAGE, catalogProducts.length));
+      setIsLoadingMore(false);
+      isLoadingMoreRef.current = false;
+      loadMoreTimerRef.current = null;
+    }, PAGE_LOAD_DELAY_MS);
+  }
+
+  useEffect(() => () => {
+    if (loadMoreTimerRef.current) clearTimeout(loadMoreTimerRef.current);
+  }, []);
 
   function handleProductSelect(product: Product) {
     setIsSearchOpen(false);
@@ -106,11 +134,14 @@ export default function HomeScreen() {
         onSearchPress={() => setIsSearchOpen(true)}
       />
       <FlashList
-        data={catalogProducts}
+        data={visibleCatalogProducts}
         numColumns={2}
         masonry
         optimizeItemArrangement={false}
         keyExtractor={(item) => item.id}
+        onEndReached={loadMoreProducts}
+        onEndReachedThreshold={0.4}
+        ListFooterComponent={isLoadingMore ? <LoadingMoreFooter /> : null}
         contentContainerStyle={{ paddingBottom: 28, paddingTop: 16, paddingHorizontal: 10 }}
         ListHeaderComponentStyle={{ marginHorizontal: -10 }}
         ListHeaderComponent={

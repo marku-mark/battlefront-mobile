@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -16,12 +16,17 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCart } from "@/hooks/useCart";
 import { getBrands, getProducts } from "@/lib/api";
 import { getProductImageSource, type Brand, type Product } from "@/lib/data";
 import { useTheme } from "@/theme/ThemeProvider";
+import { LoadingMoreFooter } from "@/components/layout/LoadingMoreFooter";
+import { ConfirmClearModal } from "@/components/layout/ConfirmClearModal";
 
 const BUILD_STORAGE_KEY = "battlefront-saved-builds";
+const PARTS_PER_PAGE = 20;
+const PAGE_LOAD_DELAY_MS = 250;
 
 const BUILDER_SLOTS = [
   { id: "cpu", label: "Processor", categoryId: "category-processor", required: true },
@@ -53,17 +58,22 @@ export default function BuilderScreen() {
   const { isDark } = useTheme();
   const { addItem } = useCart();
   const [products, setProducts] = useState<Product[]>([]);
+  const [visiblePartCount, setVisiblePartCount] = useState(PARTS_PER_PAGE);
+  const [isLoadingMoreParts, setIsLoadingMoreParts] = useState(false);
+  const isLoadingMorePartsRef = useRef(false);
+  const loadMorePartsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [selection, setSelection] = useState<BuildSelection>({});
   const [savedBuilds, setSavedBuilds] = useState<SavedBuild[]>([]);
   const [activeSlot, setActiveSlot] = useState<BuilderSlot | null>(null);
   const [isSavedBuildsOpen, setIsSavedBuildsOpen] = useState(false);
+  const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
+  const [partsAddedSummary, setPartsAddedSummary] = useState<{ count: number; subtotal: number } | null>(null);
   const [query, setQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [hasLoadError, setHasLoadError] = useState(false);
 
   useEffect(() => {
-    Promise.all([getProducts(), AsyncStorage.getItem(BUILD_STORAGE_KEY)])
     Promise.all([getProducts(), getBrands(), AsyncStorage.getItem(BUILD_STORAGE_KEY)])
       .then(([catalog, catalogBrands, storedBuilds]) => {
         setProducts(catalog);
@@ -85,6 +95,34 @@ export default function BuilderScreen() {
       .filter((product) => !normalizedQuery || `${product.name} ${product.brandId}`.toLowerCase().includes(normalizedQuery))
       .sort((left, right) => left.price - right.price);
   }, [activeSlot, products, query]);
+  const visiblePartProducts = useMemo(
+    () => visibleProducts.slice(0, visiblePartCount),
+    [visiblePartCount, visibleProducts]
+  );
+
+  useEffect(() => {
+    if (loadMorePartsTimerRef.current) clearTimeout(loadMorePartsTimerRef.current);
+    loadMorePartsTimerRef.current = null;
+    isLoadingMorePartsRef.current = false;
+    setIsLoadingMoreParts(false);
+    setVisiblePartCount(PARTS_PER_PAGE);
+  }, [activeSlot, query]);
+
+  useEffect(() => () => {
+    if (loadMorePartsTimerRef.current) clearTimeout(loadMorePartsTimerRef.current);
+  }, []);
+
+  function loadMoreParts() {
+    if (isLoadingMorePartsRef.current || visiblePartCount >= visibleProducts.length) return;
+    isLoadingMorePartsRef.current = true;
+    setIsLoadingMoreParts(true);
+    loadMorePartsTimerRef.current = setTimeout(() => {
+      setVisiblePartCount((current) => Math.min(current + PARTS_PER_PAGE, visibleProducts.length));
+      setIsLoadingMoreParts(false);
+      isLoadingMorePartsRef.current = false;
+      loadMorePartsTimerRef.current = null;
+    }, PAGE_LOAD_DELAY_MS);
+  }
 
   const selectedProducts = useMemo(
     () => BUILDER_SLOTS.flatMap((slot) => selection[slot.id] ? [selection[slot.id]!] : []),
@@ -145,10 +183,7 @@ export default function BuilderScreen() {
   }
 
   function clearBuild() {
-    Alert.alert("Clear this build?", "All selected parts will be removed.", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Clear build", style: "destructive", onPress: () => setSelection({}) },
-    ]);
+    setIsClearConfirmOpen(true);
   }
 
   async function shareBuild() {
@@ -164,8 +199,9 @@ export default function BuilderScreen() {
   }
 
   function addBuildToCart() {
+    if (selectedProducts.length === 0) return;
     selectedProducts.forEach((product) => addItem(product));
-    Alert.alert("Parts added", `${selectedProducts.length} selected ${selectedProducts.length === 1 ? "item was" : "items were"} added to your cart.`);
+    setPartsAddedSummary({ count: selectedProducts.length, subtotal });
   }
 
   return (
@@ -274,8 +310,11 @@ export default function BuilderScreen() {
             {query.length > 0 && <Pressable accessibilityLabel="Clear search" onPress={() => setQuery("")}><Ionicons name="close-circle" size={18} color={isDark ? "#9ca3af" : "#68717e"} /></Pressable>}
           </View>
           <FlatList
-            data={visibleProducts}
+            data={visiblePartProducts}
             keyExtractor={(product) => product.id}
+            onEndReached={loadMoreParts}
+            onEndReachedThreshold={0.4}
+            ListFooterComponent={isLoadingMoreParts ? <LoadingMoreFooter /> : null}
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ padding: 16, paddingBottom: 32, flexGrow: 1 }}
             ItemSeparatorComponent={() => <View className="h-2" />}
@@ -317,7 +356,85 @@ export default function BuilderScreen() {
           </ScrollView>
         </SafeAreaView>
       </Modal>
+      <PartsAddedSheet
+        visible={partsAddedSummary !== null}
+        itemCount={partsAddedSummary?.count ?? 0}
+        subtotal={partsAddedSummary?.subtotal ?? 0}
+        onKeepBuilding={() => setPartsAddedSummary(null)}
+        onViewCart={() => {
+          setPartsAddedSummary(null);
+          router.push("/cart");
+        }}
+      />
+      <ConfirmClearModal
+        visible={isClearConfirmOpen}
+        title="Clear this build?"
+        description={`This will remove all ${selectedProducts.length} selected ${selectedProducts.length === 1 ? "part" : "parts"} from your current build.`}
+        detail="Saved builds on this device will not be affected."
+        confirmLabel="Clear build"
+        onCancel={() => setIsClearConfirmOpen(false)}
+        onConfirm={() => {
+          setSelection({});
+          setIsClearConfirmOpen(false);
+        }}
+      />
     </SafeAreaView>
+  );
+}
+
+function PartsAddedSheet({ visible, itemCount, subtotal, onKeepBuilding, onViewCart }: { visible: boolean; itemCount: number; subtotal: number; onKeepBuilding: () => void; onViewCart: () => void }) {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onKeepBuilding}>
+      <View className="flex-1 justify-end bg-black/55">
+        <Pressable accessibilityLabel="Dismiss parts added confirmation" onPress={onKeepBuilding} className="absolute inset-0" />
+        <View
+          accessibilityViewIsModal
+          className="w-full max-w-[560px] self-center rounded-t-2xl border-t border-border bg-background px-5 pt-3"
+          style={{ paddingBottom: Math.max(insets.bottom, 16) }}
+        >
+          <View className="mb-5 h-1 w-10 self-center rounded-full bg-muted-foreground/40" />
+          <View className="mb-4 h-12 w-12 items-center justify-center rounded-full bg-success/10">
+            <Ionicons name="checkmark-circle" size={27} color="#16a34a" />
+          </View>
+          <Text className="text-foreground text-lg font-bold">Parts added to cart</Text>
+          <Text className="mt-2 text-muted-foreground text-sm leading-5">
+            {itemCount} selected {itemCount === 1 ? "part is" : "parts are"} now in your cart. Your build is still here if you want to keep editing.
+          </Text>
+          <View className="mt-4 flex-row items-center justify-between rounded-lg border border-border bg-card px-3 py-3">
+            <View className="flex-row items-center gap-2">
+              <Ionicons name="hardware-chip-outline" size={17} color="#16a34a" />
+              <Text className="text-muted-foreground text-xs">Parts added</Text>
+            </View>
+            <Text className="text-foreground text-xs font-semibold">{itemCount}</Text>
+          </View>
+          <View className="mt-2 flex-row items-center justify-between rounded-lg border border-border bg-card px-3 py-3">
+            <Text className="text-muted-foreground text-xs">Parts subtotal</Text>
+            <Text className="text-foreground text-sm font-bold">{formatPrice(subtotal)}</Text>
+          </View>
+          <View className="mt-5 flex-row gap-3">
+            <Pressable
+              accessibilityRole="button"
+              onPress={onKeepBuilding}
+              className="h-12 flex-1 items-center justify-center rounded-lg border border-border bg-secondary"
+              style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
+            >
+              <Text className="text-foreground text-sm font-semibold">Keep building</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={onViewCart}
+              className="h-12 flex-1 flex-row items-center justify-center gap-2 rounded-lg bg-primary"
+              style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+            >
+              <Ionicons name="cart-outline" size={17} color="#fff" />
+              <Text className="text-primary-foreground text-sm font-bold">View cart</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 }
 

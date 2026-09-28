@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { FlashList } from "@shopify/flash-list";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ProductCard } from "@/components/sections/ProductCard";
@@ -9,6 +9,10 @@ import { ScreenHeader } from "@/components/layout/ScreenHeader";
 import { getBrands, getCategories, getProducts } from "@/lib/api";
 import type { Brand, Category, Product } from "@/lib/data";
 import { useTheme } from "@/theme/ThemeProvider";
+import { LoadingMoreFooter } from "@/components/layout/LoadingMoreFooter";
+
+const PRODUCTS_PER_PAGE = 24;
+const PAGE_LOAD_DELAY_MS = 250;
 
 type PriceFilter = "all" | "under-5k" | "under-15k" | "over-15k";
 type SortOrder = "featured" | "price-low" | "price-high";
@@ -21,6 +25,10 @@ export default function CategoriesScreen() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [visibleProductCount, setVisibleProductCount] = useState(PRODUCTS_PER_PAGE);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const isLoadingMoreRef = useRef(false);
+  const loadMoreTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [query, setQuery] = useState("");
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>(categoryId ? [categoryId] : []);
   const [selectedBrandId, setSelectedBrandId] = useState<string | null>(brandId ?? null);
@@ -76,6 +84,22 @@ export default function CategoriesScreen() {
       return 0;
     });
   }, [priceFilter, products, selectedBrandId, selectedCategoryIds, sortOrder]);
+  const visibleProducts = useMemo(
+    () => filteredProducts.slice(0, visibleProductCount),
+    [filteredProducts, visibleProductCount]
+  );
+
+  useEffect(() => {
+    if (loadMoreTimerRef.current) clearTimeout(loadMoreTimerRef.current);
+    loadMoreTimerRef.current = null;
+    isLoadingMoreRef.current = false;
+    setIsLoadingMore(false);
+    setVisibleProductCount(PRODUCTS_PER_PAGE);
+  }, [priceFilter, selectedBrandId, selectedCategoryIds, sortOrder]);
+
+  useEffect(() => () => {
+    if (loadMoreTimerRef.current) clearTimeout(loadMoreTimerRef.current);
+  }, []);
 
   const cardWidth = Math.max(136, (width - 44) / 2);
   const hasActiveFilters = Boolean(selectedBrandId) || priceFilter !== "all" || sortOrder !== "featured";
@@ -85,6 +109,18 @@ export default function CategoriesScreen() {
     setSelectedBrandId(null);
     setPriceFilter("all");
     setSortOrder("featured");
+  }
+
+  function loadMoreProducts() {
+    if (isLoadingMoreRef.current || visibleProductCount >= filteredProducts.length) return;
+    isLoadingMoreRef.current = true;
+    setIsLoadingMore(true);
+    loadMoreTimerRef.current = setTimeout(() => {
+      setVisibleProductCount((current) => Math.min(current + PRODUCTS_PER_PAGE, filteredProducts.length));
+      setIsLoadingMore(false);
+      isLoadingMoreRef.current = false;
+      loadMoreTimerRef.current = null;
+    }, PAGE_LOAD_DELAY_MS);
   }
 
   return (
@@ -100,8 +136,11 @@ export default function CategoriesScreen() {
       </View>
 
       <FlashList
-        data={isLoading || hasLoadError ? [] : filteredProducts}
+        data={isLoading || hasLoadError ? [] : visibleProducts}
         keyExtractor={(item) => item.id}
+        onEndReached={loadMoreProducts}
+        onEndReachedThreshold={0.4}
+        ListFooterComponent={isLoadingMore ? <LoadingMoreFooter /> : null}
         numColumns={2}
         masonry
         optimizeItemArrangement={false}

@@ -14,6 +14,7 @@ type CartContextValue = {
   items: CartItem[];
   itemCount: number;
   subtotal: number;
+  isLoading: boolean;
 } & CartActions;
 
 type CartActions = {
@@ -129,8 +130,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
       items,
       itemCount,
       subtotal,
+      isLoading: session.mode === "mock-account" && !isMockCartLoaded,
     };
-  }, [actions, items]);
+  }, [actions, isMockCartLoaded, items, session.mode]);
 
   return (
     <CartActionsContext.Provider value={actions}>
