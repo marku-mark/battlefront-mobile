@@ -86,16 +86,6 @@ export default function CategoriesScreen() {
       return 0;
     });
   }, [priceFilter, productQuery, products, selectedBrandId, selectedCategoryIds, sortOrder]);
-  const draftProductCount = useMemo(() => {
-    return products.filter((product) => {
-      const categoryMatch = selectedCategoryIds.length === 0 || selectedCategoryIds.includes(product.categoryId);
-      const brandMatch = !draftBrandId || product.brandId === draftBrandId;
-      const priceMatch = draftPriceFilter === "all" || (draftPriceFilter === "under-5k" && product.price < 5000) || (draftPriceFilter === "under-15k" && product.price < 15000) || (draftPriceFilter === "over-15k" && product.price >= 15000);
-      const normalizedProductQuery = productQuery.trim().toLowerCase();
-      const productMatch = !normalizedProductQuery || `${product.name} ${product.brandId}`.toLowerCase().includes(normalizedProductQuery);
-      return categoryMatch && brandMatch && priceMatch && productMatch;
-    }).length;
-  }, [draftBrandId, draftPriceFilter, productQuery, products, selectedCategoryIds]);
   const visibleProducts = useMemo(
     () => filteredProducts.slice(0, visibleProductCount),
     [filteredProducts, visibleProductCount]
@@ -195,7 +185,6 @@ export default function CategoriesScreen() {
             </View>
             {categories.length > 0 && !hasLoadError && (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: layout.horizontalPadding, paddingTop: 14 }}>
-                <CategoryChip label="All" selected={selectedCategoryIds.length === 0} onPress={() => setSelectedCategoryIds([])} />
                 {categories.map((category) => (
                   <CategoryChip
                     key={category.id}
@@ -212,7 +201,6 @@ export default function CategoriesScreen() {
                   <Text className="text-foreground text-base font-bold" numberOfLines={1}>
                     {selectedCategories.length > 0 ? selectedCategories.map((category) => category.name).join(", ") : "All products"}
                   </Text>
-                  <Text className="text-muted-foreground text-xs mt-1">{filteredProducts.length} products</Text>
                 </View>
                 <FilterButton
                   label={activeFilterCount > 0 ? `Filter (${activeFilterCount})` : "Filter and sort"}
@@ -311,7 +299,7 @@ export default function CategoriesScreen() {
                 onPress={applyFilterDraft}
                 className="h-12 flex-[2] items-center justify-center rounded-xl bg-primary"
               >
-                <Text className="text-primary-foreground text-sm font-bold">Show {draftProductCount} products</Text>
+                <Text className="text-primary-foreground text-sm font-bold">Apply filters</Text>
               </Pressable>
             </View>
           </View>
