@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { MockSignInSheet } from "@/components/account/MockSignInSheet";
 import { useCart, type CartItem } from "@/hooks/useCart";
 import { useSession } from "@/hooks/useSession";
 import { DEMO_ACCOUNT } from "@/lib/mockAccount";
@@ -54,6 +55,7 @@ export default function CheckoutScreen() {
   const [paymentId, setPaymentId] = useState<(typeof paymentOptions)[number]["id"]>("cod");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
+  const [isSignInOpen, setIsSignInOpen] = useState(false);
   const [removedItem, setRemovedItem] = useState<CartItem | null>(null);
   const shippingFee = deliveryId === "pickup" || subtotal > 5000 ? 0 : 150;
   const total = subtotal + shippingFee;
@@ -88,6 +90,45 @@ export default function CheckoutScreen() {
       setIsComplete(true);
       clearCart();
     }, 600);
+  }
+
+  if (!isHydrated) {
+    return (
+      <SafeAreaView className="flex-1 bg-background items-center justify-center">
+        <ActivityIndicator color={colors.primary} />
+        <Text className="text-muted-foreground text-sm mt-3">Preparing account access</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (session.mode === "guest") {
+    return (
+      <SafeAreaView className="flex-1 bg-background">
+        <View className="flex-row items-center px-4 py-3 border-b border-border">
+          <Pressable accessibilityLabel="Go back from checkout" accessibilityRole="button" onPress={() => router.back()} hitSlop={10} className="w-9 h-9 items-center justify-center">
+            <Ionicons name="arrow-back" size={22} color={colors.foreground} />
+          </Pressable>
+          <Text className="text-foreground text-lg font-semibold ml-2">Checkout</Text>
+        </View>
+        <View className="flex-1 items-center justify-center px-6">
+          <View className="w-16 h-16 rounded-full bg-secondary border border-border items-center justify-center">
+            <Ionicons name="person-outline" size={28} color={colors.muted} />
+          </View>
+          <Text className="text-foreground text-lg font-semibold text-center mt-5">Sign in to continue</Text>
+          <Text className="text-muted-foreground text-sm text-center mt-2 leading-5">
+            Your guest cart will move into the mock account after sign-in. Checkout is a preview and won&apos;t submit a real order or payment.
+          </Text>
+          <Pressable onPress={() => setIsSignInOpen(true)} className="bg-primary rounded-xl px-5 py-3 mt-6">
+            <Text className="text-primary-foreground text-sm font-semibold">Sign in to demo account</Text>
+          </Pressable>
+        </View>
+        <MockSignInSheet
+          visible={isSignInOpen}
+          message="Sign in to continue. Your guest cart will move into the local demo account."
+          onClose={() => setIsSignInOpen(false)}
+        />
+      </SafeAreaView>
+    );
   }
 
   if (items.length === 0) {

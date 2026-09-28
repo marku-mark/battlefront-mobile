@@ -45,6 +45,15 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="builder"
+        options={{
+          title: "Builder",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="construct-outline" size={size} color={String(color)} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="cart"
         options={{
           title: "Cart",

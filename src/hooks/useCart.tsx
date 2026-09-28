@@ -21,6 +21,7 @@ type CartActions = {
   updateQuantity: (productId: string, quantity: number, variant?: string | null) => void;
   removeItem: (productId: string, variant?: string | null) => void;
   clearCart: () => void;
+  promoteGuestCartToMock: () => void;
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
@@ -35,6 +36,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
     guest: [],
     "mock-account": [],
   });
+  const itemsByModeRef = useRef(itemsByMode);
+  itemsByModeRef.current = itemsByMode;
   const [isMockCartLoaded, setIsMockCartLoaded] = useState(false);
   const isMockCartLoadedRef = useRef(false);
   const pendingMockMutations = useRef<CartMutation[]>([]);
@@ -42,15 +45,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     AsyncStorage.getItem(MOCK_CART_STORAGE_KEY)
       .then((storedCart) => {
-        if (!storedCart) return;
-        const parsedCart = JSON.parse(storedCart) as CartItem[];
-        if (Array.isArray(parsedCart)) {
-          const validCart = parsedCart.filter((item) => item?.product?.id && typeof item.product.price === "number" && typeof item.quantity === "number" && item.quantity > 0);
-          setItemsByMode((current) => ({
-            ...current,
-            "mock-account": pendingMockMutations.current.reduce((items, mutation) => mutation(items), validCart),
-          }));
-        }
+        const parsedCart = storedCart ? JSON.parse(storedCart) as CartItem[] : [];
+        const validCart = Array.isArray(parsedCart)
+          ? parsedCart.filter((item) => item?.product?.id && typeof item.product.price === "number" && typeof item.quantity === "number" && item.quantity > 0)
+          : [];
+        const hydratedCart = pendingMockMutations.current.reduce((items, mutation) => mutation(items), validCart);
+        pendingMockMutations.current = [];
+        setItemsByMode((current) => ({ ...current, "mock-account": hydratedCart }));
       })
       .catch(() => undefined)
       .finally(() => {
@@ -100,6 +101,19 @@ export function CartProvider({ children }: { children: ReactNode }) {
       ),
       removeItem: (productId, variant = null) => applyMutation((current) => current.filter((item) => !(item.product.id === productId && item.variant === variant))),
       clearCart: () => applyMutation(() => []),
+      promoteGuestCartToMock: () => {
+        const guestItems = itemsByModeRef.current.guest;
+        if (guestItems.length === 0) return;
+
+        if (!isMockCartLoadedRef.current) {
+          pendingMockMutations.current.push((mockItems) => mergeCartItems(mockItems, guestItems));
+        }
+        setItemsByMode((current) => ({
+          ...current,
+          guest: [],
+          "mock-account": mergeCartItems(current["mock-account"], guestItems),
+        }));
+      },
     };
   }, [session.mode]);
 
@@ -139,4 +153,17 @@ export function useCartActions(): CartActions {
     throw new Error("useCartActions must be used inside CartProvider");
   }
   return context;
+}
+
+function mergeCartItems(existingItems: CartItem[], incomingItems: CartItem[]): CartItem[] {
+  return incomingItems.reduce((mergedItems, incomingItem) => {
+    const existingIndex = mergedItems.findIndex(
+      (item) => item.product.id === incomingItem.product.id && item.variant === incomingItem.variant
+    );
+    if (existingIndex === -1) return [...mergedItems, incomingItem];
+
+    return mergedItems.map((item, index) =>
+      index === existingIndex ? { ...item, quantity: item.quantity + incomingItem.quantity } : item
+    );
+  }, existingItems);
 }

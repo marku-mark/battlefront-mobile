@@ -3,7 +3,9 @@ import { useRouter } from "expo-router";
 import { Alert, Image, Pressable, ScrollView, Text, View } from "react-native";
 import { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { MockSignInSheet } from "@/components/account/MockSignInSheet";
 import { useCart, type CartItem } from "@/hooks/useCart";
+import { useSession } from "@/hooks/useSession";
 import { ScreenHeader } from "@/components/layout/ScreenHeader";
 import { getProductImageSource } from "@/lib/data";
 
@@ -14,7 +16,9 @@ function formatPrice(value: number): string {
 export default function CartScreen() {
   const router = useRouter();
   const { items, subtotal, addItem, updateQuantity, removeItem, clearCart } = useCart();
+  const { session } = useSession();
   const [removedItem, setRemovedItem] = useState<CartItem | null>(null);
+  const [isSignInOpen, setIsSignInOpen] = useState(false);
   const shippingFee = subtotal > 5000 ? 0 : 150;
   const total = subtotal + shippingFee;
 
@@ -177,17 +181,25 @@ export default function CartScreen() {
             <Text className="text-foreground text-base font-bold">Total</Text>
             <Text className="text-primary text-base font-bold">{formatPrice(total)}</Text>
           </View>
-          <Text className="text-muted-foreground text-xs mt-3">Guest checkout is available. The current checkout is a preview and will not submit a real order.</Text>
+          <Text className="text-muted-foreground text-xs mt-3">Guests can review their cart. Sign in to continue to the checkout preview; no real order or payment is submitted.</Text>
           <Pressable
-            onPress={() => router.push("/checkout")}
+            onPress={() => session.mode === "mock-account" ? router.push("/checkout") : setIsSignInOpen(true)}
             disabled={items.length === 0}
             className="bg-primary rounded-xl items-center py-3.5 mt-5"
             style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
           >
-            <Text className="text-primary-foreground text-sm font-bold">Continue to checkout</Text>
+            <Text className="text-primary-foreground text-sm font-bold">
+              {session.mode === "mock-account" ? "Continue to checkout" : "Sign in to continue"}
+            </Text>
           </Pressable>
         </View>
       </ScrollView>
+      <MockSignInSheet
+        visible={isSignInOpen}
+        message="Sign in to continue. Your guest cart will move into the local demo account."
+        onClose={() => setIsSignInOpen(false)}
+        onSuccess={() => router.push("/checkout")}
+      />
     </SafeAreaView>
   );
 }

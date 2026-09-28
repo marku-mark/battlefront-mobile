@@ -23,6 +23,7 @@ import { Chatbot } from "@/components/support/Chatbot";
 import { ProductSearch } from "@/components/search/ProductSearch";
 import { useCart } from "@/hooks/useCart";
 import { ProductCard } from "@/components/sections/ProductCard";
+import { BuilderEntryCard } from "@/components/builder/BuilderEntryCard";
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -115,6 +116,7 @@ export default function HomeScreen() {
         ListHeaderComponent={
           <View>
             <PromoBanners banners={banners} onSelect={() => router.push("/categories")} />
+        <BuilderEntryCard onPress={() => router.push("/builder")} />
         <Categories
           categories={categories}
           onBrowseAll={() => router.push("/categories")}

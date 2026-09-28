@@ -1,10 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { MockSignInSheet } from "@/components/account/MockSignInSheet";
 import { useSession } from "@/hooks/useSession";
-import { DEMO_ACCOUNT, DEMO_ADDRESSES, DEMO_ORDERS } from "@/lib/mockAccount";
+import { DEMO_ADDRESSES, DEMO_ORDERS } from "@/lib/mockAccount";
 import { useTheme } from "@/theme/ThemeProvider";
 
 const accountLinks = [
@@ -21,23 +22,11 @@ export default function AccountScreen() {
   const isMockAccount = session.mode === "mock-account";
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [selectedUtility, setSelectedUtility] = useState<string | null>(null);
-  const [email, setEmail] = useState<string>(DEMO_ACCOUNT.email);
-  const [password, setPassword] = useState<string>(DEMO_ACCOUNT.password);
-  const [authError, setAuthError] = useState("");
+  const [authMessage, setAuthMessage] = useState("");
 
   function openSignIn(message = "") {
-    setAuthError(message);
+    setAuthMessage(message);
     setIsAuthOpen(true);
-  }
-
-  function handleSignIn() {
-    if (!signIn(email, password)) {
-      setAuthError("Those details don't match the local demo account.");
-      return;
-    }
-
-    setAuthError("");
-    setIsAuthOpen(false);
   }
 
   return (
@@ -192,58 +181,11 @@ export default function AccountScreen() {
         </View>
       </ScrollView>
 
-      <Modal visible={isAuthOpen} animationType="slide" transparent onRequestClose={() => setIsAuthOpen(false)}>
-        <View className="flex-1 justify-end bg-black/50">
-          <View className="bg-background rounded-t-3xl border-t border-border px-4 pt-4 pb-8">
-            <View className="flex-row items-center justify-between">
-              <View>
-                <Text className="text-foreground text-xl font-bold">Sign in to demo account</Text>
-                <Text className="text-muted-foreground text-xs mt-1">Local preview only. These details are not sent anywhere.</Text>
-              </View>
-              <Pressable accessibilityLabel="Close demo sign in" onPress={() => setIsAuthOpen(false)} hitSlop={8} className="w-9 h-9 items-center justify-center">
-                <Ionicons name="close" size={22} color={isDark ? "#f8fafc" : "#30343b"} />
-              </Pressable>
-            </View>
-            <TextInput
-              value={email}
-              onChangeText={setEmail}
-              accessibilityLabel="Demo account email"
-              placeholder="Email address"
-              placeholderTextColor="#94a3b8"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              className="bg-secondary border border-border rounded-xl px-3 h-12 text-foreground text-sm mt-6"
-            />
-            <TextInput
-              value={password}
-              onChangeText={setPassword}
-              accessibilityLabel="Demo account password"
-              placeholder="Password"
-              placeholderTextColor="#94a3b8"
-              secureTextEntry
-              className="bg-secondary border border-border rounded-xl px-3 h-12 text-foreground text-sm mt-3"
-            />
-            {authError.length > 0 && <Text accessibilityRole="alert" className="text-danger text-xs mt-3">{authError}</Text>}
-            <Pressable
-              accessibilityLabel="Sign in to the local demo account"
-              onPress={handleSignIn}
-              className="bg-primary rounded-xl items-center py-3.5 mt-5"
-            >
-              <Text className="text-primary-foreground text-sm font-bold">Sign in</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                signOut();
-                setAuthError("");
-                setIsAuthOpen(false);
-              }}
-              className="items-center py-3"
-            >
-              <Text className="text-muted-foreground text-xs font-semibold">Continue as guest</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+      <MockSignInSheet
+        visible={isAuthOpen}
+        message={authMessage || undefined}
+        onClose={() => setIsAuthOpen(false)}
+      />
 
       <Modal visible={selectedUtility !== null} animationType="fade" transparent onRequestClose={() => setSelectedUtility(null)}>
         <View className="flex-1 items-center justify-center px-6 bg-black/50">

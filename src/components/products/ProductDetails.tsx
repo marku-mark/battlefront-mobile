@@ -1,12 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Image, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
+import { Alert, Image, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { useState, type ReactNode } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getProductImageSource, getProductVariants, type Product } from "@/lib/data";
 import { useTheme } from "@/theme/ThemeProvider";
 import { useWishlist } from "@/hooks/useWishlist";
 import { useSession } from "@/hooks/useSession";
-import { Alert } from "react-native";
+import { MockSignInSheet } from "@/components/account/MockSignInSheet";
 
 type ProductDetailsProps = {
   product: Product;
@@ -32,6 +32,7 @@ export function ProductDetails({ product, quantity, onQuantityChange, onAddToCar
   const [selectedVariant, setSelectedVariant] = useState(variants[0] ?? null);
   const [specificationsOpen, setSpecificationsOpen] = useState(false);
   const [compatibilityOpen, setCompatibilityOpen] = useState(false);
+  const [isSignInOpen, setIsSignInOpen] = useState(false);
   const wishlisted = isWishlisted(product.id);
   const hasDiscount = product.originalPrice !== undefined && product.originalPrice > product.price;
   const discount = hasDiscount ? Math.round(((product.originalPrice! - product.price) / product.originalPrice!) * 100) : 0;
@@ -81,7 +82,13 @@ export function ProductDetails({ product, quantity, onQuantityChange, onAddToCar
           <View className="mt-5 rounded-2xl bg-secondary border border-border p-3 shadow-soft"><View className="flex-row items-center justify-between"><Text className="text-foreground text-sm font-semibold">Delivery</Text><Text className="text-primary text-xs font-bold uppercase tracking-[0.12em]">Free over ₱5,000</Text></View><Text className="text-muted-foreground text-xs mt-1.5">Ships in 24 hours • Cash on delivery supported</Text></View>
 
           <View className="mt-6 pt-5 border-t border-border"><Text className="text-foreground text-base font-semibold">About this product</Text><Text className="text-muted-foreground text-sm leading-5 mt-2">{facts.description}</Text><View className="mt-3 gap-2">{facts.highlights.map((highlight) => <BulletPoint key={highlight} text={highlight} />)}</View></View>
-          <ReviewSection rating={rating} reviewCount={reviewCount} reviews={sampleReviews} isMockAccount={session.mode === "mock-account"} />
+          <ReviewSection
+            rating={rating}
+            reviewCount={reviewCount}
+            reviews={sampleReviews}
+            isMockAccount={session.mode === "mock-account"}
+            onSignIn={() => setIsSignInOpen(true)}
+          />
           <DetailDisclosure title="Specifications" open={specificationsOpen} color={colors.muted} onPress={() => setSpecificationsOpen((current) => !current)}>{facts.specifications.map(([label, value]) => <View key={label} className="flex-row justify-between gap-4 py-2 border-b border-border"><Text className="text-muted-foreground text-sm">{label}</Text><Text className="text-foreground text-sm font-medium flex-1 text-right">{value}</Text></View>)}</DetailDisclosure>
           <DetailDisclosure title="Compatibility and support" open={compatibilityOpen} color={colors.muted} onPress={() => setCompatibilityOpen((current) => !current)}><Text className="text-muted-foreground text-sm leading-5">{facts.compatibility}</Text></DetailDisclosure>
 
@@ -90,6 +97,7 @@ export function ProductDetails({ product, quantity, onQuantityChange, onAddToCar
       </ScrollView>
 
       <View className="px-4 pt-3 border-t border-border bg-background" style={{ paddingBottom: Math.max(insets.bottom, 12) }}><View className="flex-row items-center justify-between mb-3"><Text className="text-muted-foreground text-xs uppercase tracking-[0.12em]">Total</Text><Text className="text-foreground text-lg font-bold">{formatPrice(subtotal)}</Text></View><Pressable accessibilityLabel={`Add ${product.name} to cart`} accessibilityRole="button" disabled={stockQuantity === 0 || (variants.length > 0 && !selectedVariant)} onPress={() => onAddToCart(product, quantity, selectedVariant)} className="h-12 rounded-xl bg-primary items-center justify-center" style={({ pressed }) => ({ opacity: stockQuantity === 0 || (variants.length > 0 && !selectedVariant) ? 0.45 : pressed ? 0.8 : 1 })}><Text className="text-primary-foreground text-sm font-bold">{stockQuantity === 0 ? "Out of stock" : variants.length > 0 && !selectedVariant ? "Choose an option" : "Add to cart"}</Text></Pressable></View>
+      <MockSignInSheet visible={isSignInOpen} onClose={() => setIsSignInOpen(false)} />
     </View>
   );
 }
@@ -109,8 +117,8 @@ function getProductReviews(product: Product): ProductReview[] {
   ];
 }
 
-function ReviewSection({ rating, reviewCount, reviews, isMockAccount }: { rating: number; reviewCount: number; reviews: ProductReview[]; isMockAccount: boolean }) {
-  return <View className="mt-6 pt-5 border-t border-border"><View className="flex-row items-center justify-between mb-4"><View><Text className="text-foreground text-base font-semibold">Reviews</Text><Text className="text-muted-foreground text-xs mt-1">{reviewCount} sample reviews</Text></View><Pressable accessibilityLabel={isMockAccount ? "Preview writing a review" : "Sign in to preview writing a review"} accessibilityRole="button" onPress={() => Alert.alert(isMockAccount ? "Review preview" : "Sign in required", isMockAccount ? "Review submission is not connected in this demo." : "Sign in to the mock account to preview review submission.")}><Text className="text-primary text-xs font-semibold">{isMockAccount ? "Write a review" : "Sign in to review"}</Text></Pressable></View><View className="flex-row items-center bg-card border border-border rounded-2xl p-4"><View className="items-center pr-5 border-r border-border"><Text className="text-foreground text-3xl font-bold">{rating.toFixed(1)}</Text><View className="flex-row mt-1">{Array.from({ length: 5 }).map((_, index) => <Ionicons key={index} name={index < Math.round(rating) ? "star" : "star-outline"} size={13} color="#f59e0b" />)}</View></View><View className="flex-1 ml-4 gap-1.5">{[5, 4, 3, 2, 1].map((score) => <View key={score} className="flex-row items-center gap-2"><Text className="text-muted-foreground text-[10px] w-3">{score}</Text><View className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden"><View className={`h-full rounded-full ${score >= 4 ? "bg-primary" : "bg-muted-foreground"}`} style={{ width: `${score >= 4 ? 76 : 18}%` }} /></View></View>)}</View></View><View className="mt-3 gap-3">{reviews.map((review) => <View key={review.id} className="border-b border-border pb-3"><View className="flex-row items-center justify-between"><Text className="text-foreground text-sm font-semibold">{review.title}</Text><View className="flex-row">{Array.from({ length: review.rating }).map((_, index) => <Ionicons key={index} name="star" size={12} color="#f59e0b" />)}</View></View><Text className="text-muted-foreground text-xs mt-1 leading-5">{review.body}</Text><Text className="text-muted-foreground text-[10px] uppercase tracking-[0.1em] mt-2">{review.author} · Sample review · not verified</Text></View>)}</View></View>;
+function ReviewSection({ rating, reviewCount, reviews, isMockAccount, onSignIn }: { rating: number; reviewCount: number; reviews: ProductReview[]; isMockAccount: boolean; onSignIn: () => void }) {
+  return <View className="mt-6 pt-5 border-t border-border"><View className="flex-row items-center justify-between mb-4"><View><Text className="text-foreground text-base font-semibold">Reviews</Text><Text className="text-muted-foreground text-xs mt-1">{reviewCount} sample reviews</Text></View><Pressable accessibilityLabel={isMockAccount ? "Preview writing a review" : "Sign in to preview writing a review"} accessibilityRole="button" onPress={() => isMockAccount ? Alert.alert("Review preview", "Review submission is not connected in this demo.") : onSignIn()}><Text className="text-primary text-xs font-semibold">{isMockAccount ? "Write a review" : "Sign in to review"}</Text></Pressable></View><View className="flex-row items-center bg-card border border-border rounded-2xl p-4"><View className="items-center pr-5 border-r border-border"><Text className="text-foreground text-3xl font-bold">{rating.toFixed(1)}</Text><View className="flex-row mt-1">{Array.from({ length: 5 }).map((_, index) => <Ionicons key={index} name={index < Math.round(rating) ? "star" : "star-outline"} size={13} color="#f59e0b" />)}</View></View><View className="flex-1 ml-4 gap-1.5">{[5, 4, 3, 2, 1].map((score) => <View key={score} className="flex-row items-center gap-2"><Text className="text-muted-foreground text-[10px] w-3">{score}</Text><View className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden"><View className={`h-full rounded-full ${score >= 4 ? "bg-primary" : "bg-muted-foreground"}`} style={{ width: `${score >= 4 ? 76 : 18}%` }} /></View></View>)}</View></View><View className="mt-3 gap-3">{reviews.map((review) => <View key={review.id} className="border-b border-border pb-3"><View className="flex-row items-center justify-between"><Text className="text-foreground text-sm font-semibold">{review.title}</Text><View className="flex-row">{Array.from({ length: review.rating }).map((_, index) => <Ionicons key={index} name="star" size={12} color="#f59e0b" />)}</View></View><Text className="text-muted-foreground text-xs mt-1 leading-5">{review.body}</Text><Text className="text-muted-foreground text-[10px] uppercase tracking-[0.1em] mt-2">{review.author} · Sample review · not verified</Text></View>)}</View></View>;
 }
 
 function DetailDisclosure({ title, open, color, onPress, children }: { title: string; open: boolean; color: string; onPress: () => void; children: ReactNode }) {

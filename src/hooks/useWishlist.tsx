@@ -33,6 +33,11 @@ type WishlistStore = {
 };
 
 const WishlistStoreContext = createContext<WishlistStore | null>(null);
+type WishlistActions = {
+  toggleWishlist: (productId: string) => void;
+  promoteGuestWishlistToMock: () => void;
+};
+const WishlistActionsContext = createContext<WishlistActions | null>(null);
 const MOCK_WISHLIST_STORAGE_KEY = "battlefront-mock-account-wishlist";
 
 export function WishlistProvider({ children }: { children: ReactNode }) {
@@ -41,6 +46,7 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
   const [isMockWishlistLoaded, setIsMockWishlistLoaded] = useState(false);
   const isMockWishlistLoadedRef = useRef(false);
   const pendingMockToggles = useRef<string[]>([]);
+  const pendingGuestItems = useRef<string[]>([]);
   const subscribe = useCallback(
     (listener: Listener) => store.subscribe(session.mode, listener),
     [session.mode, store]
@@ -53,6 +59,14 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
       pendingMockToggles.current.push(productId);
     }
   }, [session.mode, store]);
+  const promoteGuestWishlistToMock = useCallback(() => {
+    const guestItems = store.getItems("guest");
+    if (guestItems.length === 0) return;
+
+    if (!isMockWishlistLoadedRef.current) pendingGuestItems.current.push(...guestItems);
+    store.setItems("mock-account", Array.from(new Set([...store.getItems("mock-account"), ...guestItems])));
+    store.setItems("guest", []);
+  }, [store]);
 
   useEffect(() => {
     AsyncStorage.getItem(MOCK_WISHLIST_STORAGE_KEY)
@@ -60,10 +74,10 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
         const parsedWishlist: unknown = storedWishlist ? JSON.parse(storedWishlist) : [];
         if (!Array.isArray(parsedWishlist) || !parsedWishlist.every((id) => typeof id === "string")) return;
         const storedIds = parsedWishlist as string[];
-        const hydratedWishlist = pendingMockToggles.current.reduce(
-          (items, productId) => toggleId(items, productId),
-          storedIds
-        );
+        const withGuestItems = Array.from(new Set([...storedIds, ...pendingGuestItems.current]));
+        const hydratedWishlist = pendingMockToggles.current.reduce((items, productId) => toggleId(items, productId), withGuestItems);
+        pendingGuestItems.current = [];
+        pendingMockToggles.current = [];
         store.setItems("mock-account", hydratedWishlist);
       })
       .catch(() => undefined)
@@ -86,10 +100,16 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
     }),
     [productIds, session.mode, store, toggleWishlist]
   );
+  const actions = useMemo<WishlistActions>(
+    () => ({ toggleWishlist, promoteGuestWishlistToMock }),
+    [promoteGuestWishlistToMock, toggleWishlist]
+  );
 
   return (
     <WishlistStoreContext.Provider value={store}>
-      <WishlistContext.Provider value={value}>{children}</WishlistContext.Provider>
+      <WishlistActionsContext.Provider value={actions}>
+        <WishlistContext.Provider value={value}>{children}</WishlistContext.Provider>
+      </WishlistActionsContext.Provider>
     </WishlistStoreContext.Provider>
   );
 }
@@ -101,9 +121,11 @@ export function useWishlist(): WishlistContextValue {
 }
 
 export function useWishlistActions(): (productId: string) => void {
-  const store = useWishlistStore();
-  const { session } = useSession();
-  return useCallback((productId: string) => store.toggleWishlist(session.mode, productId), [session.mode, store]);
+  return useWishlistActionsContext().toggleWishlist;
+}
+
+export function usePromoteGuestWishlistToMock(): () => void {
+  return useWishlistActionsContext().promoteGuestWishlistToMock;
 }
 
 export function useIsWishlisted(productId: string): boolean {
@@ -180,4 +202,10 @@ function toggleId(items: string[], productId: string): string[] {
   return items.includes(productId)
     ? items.filter((id) => id !== productId)
     : [...items, productId];
+}
+
+function useWishlistActionsContext(): WishlistActions {
+  const actions = useContext(WishlistActionsContext);
+  if (!actions) throw new Error("Wishlist actions must be used inside WishlistProvider");
+  return actions;
 }
