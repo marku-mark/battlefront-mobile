@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   Alert,
@@ -14,11 +14,13 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MockSignInSheet } from "@/components/account/MockSignInSheet";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { useCart, type CartItem } from "@/hooks/useCart";
 import { useSession } from "@/hooks/useSession";
 import { DEMO_ACCOUNT } from "@/lib/mockAccount";
+import { calculateCheckoutPricing } from "@/lib/checkoutPricing";
+import { savePlacedOrder } from "@/lib/orders";
+import { DEFAULT_SAVED_ADDRESSES, loadSavedAddresses, persistSavedAddresses, type SavedAddress } from "@/lib/savedAddresses";
 import { useTheme } from "@/theme/ThemeProvider";
 import { getResponsiveLayout } from "@/lib/responsive";
 
@@ -50,20 +52,26 @@ export default function CheckoutScreen() {
   const { width } = useWindowDimensions();
   const layout = getResponsiveLayout(width);
   const { colors } = useTheme();
+  const { couponCode } = useLocalSearchParams<{ couponCode?: string }>();
   const { items, subtotal, clearCart, removeItem, updateQuantity, isLoading: isCartLoading } = useCart();
   const { session, isHydrated } = useSession();
   const [step, setStep] = useState<CheckoutStep>("address");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
+  const [addressLabel, setAddressLabel] = useState("Home");
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>(DEFAULT_SAVED_ADDRESSES);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [deliveryId, setDeliveryId] = useState<(typeof deliveryOptions)[number]["id"]>("standard");
   const [paymentId, setPaymentId] = useState<(typeof paymentOptions)[number]["id"]>("cod");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
-  const [isSignInOpen, setIsSignInOpen] = useState(false);
+  const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
   const [removedItem, setRemovedItem] = useState<CartItem | null>(null);
-  const shippingFee = deliveryId === "pickup" || subtotal > 5000 ? 0 : 150;
-  const total = subtotal + shippingFee;
+  const pricing = calculateCheckoutPricing(subtotal, couponCode ?? "", deliveryId);
+  const discountAmount = pricing.discountAmount;
+  const shippingFee = pricing.shippingFee;
+  const total = pricing.total;
 
   useEffect(() => {
     if (!isHydrated || session.mode !== "mock-account") return;
@@ -71,6 +79,73 @@ export default function CheckoutScreen() {
     setPhone((current) => current || DEMO_ACCOUNT.phone);
     setAddress((current) => current || DEMO_ACCOUNT.address);
   }, [isHydrated, session]);
+
+  useEffect(() => {
+    let isActive = true;
+    loadSavedAddresses()
+      .then((addresses) => {
+        if (!isActive) return;
+        setSavedAddresses(addresses);
+        const preferredAddress = addresses[0];
+        if (preferredAddress) {
+          setFullName(preferredAddress.recipient);
+          setPhone(preferredAddress.phone);
+          setAddress(preferredAddress.address);
+          setSelectedAddressId(preferredAddress.id);
+          setAddressLabel(preferredAddress.label);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  function selectSavedAddress(savedAddress: SavedAddress) {
+    setFullName(savedAddress.recipient);
+    setPhone(savedAddress.phone);
+    setAddress(savedAddress.address);
+    setAddressLabel(savedAddress.label);
+    setSelectedAddressId(savedAddress.id);
+  }
+
+  async function saveCurrentAddress() {
+    const label = addressLabel.trim();
+    if (!hasValidAddress() || !label) {
+      Alert.alert("Address details needed", "Enter a label, recipient, phone number, and delivery address before saving.");
+      return;
+    }
+
+    const existing = savedAddresses.find((savedAddress) => savedAddress.label.toLowerCase() === label.toLowerCase());
+    const nextAddress: SavedAddress = {
+      id: existing?.id ?? `address-${Date.now()}`,
+      label,
+      recipient: fullName.trim(),
+      phone: phone.trim(),
+      address: address.trim(),
+    };
+    const nextAddresses = [nextAddress, ...savedAddresses.filter((savedAddress) => savedAddress.id !== nextAddress.id)];
+
+    try {
+      await persistSavedAddresses(nextAddresses);
+      setSavedAddresses(nextAddresses);
+      setSelectedAddressId(nextAddress.id);
+      setAddressLabel(label);
+    } catch {
+      Alert.alert("Couldn't save address", "Please try again when device storage is available.");
+    }
+  }
+
+  async function removeSavedAddress(addressId: string) {
+    const nextAddresses = savedAddresses.filter((savedAddress) => savedAddress.id !== addressId);
+    try {
+      await persistSavedAddresses(nextAddresses);
+      setSavedAddresses(nextAddresses);
+      if (selectedAddressId === addressId) setSelectedAddressId(null);
+    } catch {
+      Alert.alert("Couldn't remove address", "Please try again when device storage is available.");
+    }
+  }
 
   function hasValidAddress() {
     return Boolean(fullName.trim() && phone.trim() && address.trim());
@@ -83,54 +158,46 @@ export default function CheckoutScreen() {
     if (nextStep) setStep(nextStep.key);
   }
 
-  function handlePlaceOrder() {
+  async function handlePlaceOrder() {
     if (!fullName.trim() || !phone.trim() || !address.trim()) {
       Alert.alert("Missing details", "Please complete your name, phone number, and delivery address.");
       return;
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      await new Promise<void>((resolve) => setTimeout(resolve, 600));
+      const orderId = `BF-${Date.now()}`;
+      await savePlacedOrder({
+        id: orderId,
+        date: new Date().toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" }),
+        status: "Ordered",
+        items: items.map((item) => `${item.quantity} × ${item.product.name}${item.variant ? ` (${item.variant})` : ""}`).join(", "),
+        total: formatPrice(total),
+        address: address.trim(),
+        phone: phone.trim(),
+        deliveryMethod: deliveryOptions.find((option) => option.id === deliveryId)?.title ?? "Standard delivery",
+        paymentMethod: paymentOptions.find((option) => option.id === paymentId)?.title ?? "Cash on delivery",
+        productLines: items.map((item) => ({
+          productId: item.product.id,
+          quantity: item.quantity,
+          variant: item.variant ?? null,
+        })),
+      });
+      setCreatedOrderId(orderId);
       setIsComplete(true);
       clearCart();
-    }, 600);
+    } catch {
+      Alert.alert("Couldn't place demo order", "Your cart is still saved. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   if (!isHydrated || isCartLoading) {
     return (
       <SafeAreaView className="flex-1 bg-background">
         <LoadingState label="Preparing your checkout..." />
-      </SafeAreaView>
-    );
-  }
-
-  if (session.mode === "guest") {
-    return (
-      <SafeAreaView className="flex-1 bg-background">
-        <View className="flex-row items-center px-4 py-3 border-b border-border">
-          <Pressable accessibilityLabel="Go back from checkout" accessibilityRole="button" onPress={() => router.back()} hitSlop={10} className="w-9 h-9 items-center justify-center">
-            <Ionicons name="arrow-back" size={22} color={colors.foreground} />
-          </Pressable>
-          <Text className="text-foreground text-lg font-semibold ml-2">Checkout</Text>
-        </View>
-        <View className="flex-1 items-center justify-center px-6">
-          <View className="w-16 h-16 rounded-full bg-secondary border border-border items-center justify-center">
-            <Ionicons name="person-outline" size={28} color={colors.muted} />
-          </View>
-          <Text className="text-foreground text-lg font-semibold text-center mt-5">Sign in to continue</Text>
-          <Text className="text-muted-foreground text-sm text-center mt-2 leading-5">
-            Your guest cart will move into the mock account after sign-in. Checkout is a preview and won&apos;t submit a real order or payment.
-          </Text>
-          <Pressable onPress={() => setIsSignInOpen(true)} className="bg-primary rounded-xl px-5 py-3 mt-6">
-            <Text className="text-primary-foreground text-sm font-semibold">Sign in to demo account</Text>
-          </Pressable>
-        </View>
-        <MockSignInSheet
-          visible={isSignInOpen}
-          message="Sign in to continue. Your guest cart will move into the local demo account."
-          onClose={() => setIsSignInOpen(false)}
-        />
       </SafeAreaView>
     );
   }
@@ -181,12 +248,21 @@ export default function CheckoutScreen() {
             This preview did not submit a real order or payment. Your cart has been cleared from this device.
           </Text>
           <View className="w-full bg-card border border-border rounded-2xl p-4 mt-7">
+            <SummaryRow label="Subtotal" value={formatPrice(subtotal)} />
+            {discountAmount > 0 && <SummaryRow label="Promo" value={`-${formatPrice(discountAmount)}`} />}
             <SummaryRow label="Total" value={formatPrice(total)} />
             <SummaryRow label="Delivery" value={deliveryOptions.find((option) => option.id === deliveryId)?.title ?? "Standard delivery"} />
             <SummaryRow label="Payment" value={paymentOptions.find((option) => option.id === paymentId)?.title ?? "Cash on delivery"} />
           </View>
-          <Pressable accessibilityRole="button" onPress={() => router.replace("/")} className="w-full bg-primary rounded-xl items-center py-3.5 mt-6">
-            <Text className="text-primary-foreground text-sm font-bold">Continue shopping</Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => createdOrderId && router.replace({ pathname: "/orders/[id]", params: { id: createdOrderId } })}
+            className="w-full bg-primary rounded-xl items-center py-3.5 mt-6"
+          >
+            <Text className="text-primary-foreground text-sm font-bold">Track this order</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" onPress={() => router.replace("/")} className="w-full items-center py-3.5 mt-1">
+            <Text className="text-muted-foreground text-sm font-semibold">Continue shopping</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -236,9 +312,43 @@ export default function CheckoutScreen() {
             <View>
               <Text className="text-foreground text-base font-bold">Delivery details</Text>
               <Text className="text-muted-foreground text-xs mt-1">Where should we send your order?</Text>
-              <Field label="Full name" value={fullName} onChangeText={setFullName} placeholder="Juan Dela Cruz" />
-              <Field label="Phone number" value={phone} onChangeText={setPhone} placeholder="09XX XXX XXXX" keyboardType="phone-pad" />
-              <Field label="Delivery address" value={address} onChangeText={setAddress} placeholder="House number, street, city" multiline />
+              {savedAddresses.length > 0 && (
+                <View className="mt-4 gap-2">
+                  <Text className="text-foreground text-sm font-semibold">Saved addresses</Text>
+                  {savedAddresses.map((savedAddress) => (
+                    <View key={savedAddress.id} className={`flex-row items-center rounded-xl border ${selectedAddressId === savedAddress.id ? "border-primary bg-primary/10" : "border-border bg-card"}`}>
+                      <Pressable
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: selectedAddressId === savedAddress.id }}
+                        accessibilityLabel={`${savedAddress.label}, ${savedAddress.address}`}
+                        onPress={() => selectSavedAddress(savedAddress)}
+                        className="flex-1 p-3"
+                      >
+                        <Text className="text-foreground text-sm font-semibold">{savedAddress.label}</Text>
+                        <Text className="text-muted-foreground text-xs mt-1">{savedAddress.recipient} · {savedAddress.phone}</Text>
+                        <Text className="text-muted-foreground text-xs mt-1 leading-4">{savedAddress.address}</Text>
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Remove ${savedAddress.label} address`}
+                        onPress={() => void removeSavedAddress(savedAddress.id)}
+                        hitSlop={8}
+                        className="h-11 w-11 items-center justify-center"
+                      >
+                        <Ionicons name="trash-outline" size={17} color={colors.muted} />
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              )}
+              <Field label="Full name" value={fullName} onChangeText={(value) => { setFullName(value); setSelectedAddressId(null); }} placeholder="Juan Dela Cruz" />
+              <Field label="Phone number" value={phone} onChangeText={(value) => { setPhone(value); setSelectedAddressId(null); }} placeholder="09XX XXX XXXX" keyboardType="phone-pad" />
+              <Field label="Delivery address" value={address} onChangeText={(value) => { setAddress(value); setSelectedAddressId(null); }} placeholder="House number, street, city" multiline />
+              <Field label="Save address as" value={addressLabel} onChangeText={setAddressLabel} placeholder="Home, Work, or Other" />
+              <Pressable accessibilityRole="button" onPress={() => void saveCurrentAddress()} className="mt-3 h-11 flex-row items-center justify-center gap-2 rounded-xl border border-border bg-secondary">
+                <Ionicons name="bookmark-outline" size={16} color={colors.foreground} />
+                <Text className="text-foreground text-sm font-semibold">Save address</Text>
+              </Pressable>
               {!hasValidAddress() && (fullName.length > 0 || phone.length > 0 || address.length > 0) && (
                 <Text className="text-primary text-xs mt-3">Complete all fields to continue.</Text>
               )}
@@ -319,6 +429,7 @@ export default function CheckoutScreen() {
             )}
             <View className="border-t border-border pt-3 mt-1">
               <SummaryRow label="Subtotal" value={formatPrice(subtotal)} />
+              {discountAmount > 0 && <SummaryRow label="Promo" value={`-${formatPrice(discountAmount)}`} />}
               <SummaryRow label="Shipping" value={shippingFee === 0 ? "FREE" : formatPrice(shippingFee)} />
               <View className="flex-row justify-between mt-3">
                 <Text className="text-foreground text-base font-bold">Total</Text>
@@ -328,7 +439,7 @@ export default function CheckoutScreen() {
           </View>
 
           <Pressable
-            onPress={step === "review" ? handlePlaceOrder : handleNext}
+            onPress={step === "review" ? () => void handlePlaceOrder() : handleNext}
             disabled={isSubmitting}
             className="bg-primary rounded-xl items-center py-3.5 mt-5"
             style={({ pressed }) => ({ opacity: isSubmitting ? 0.55 : pressed ? 0.8 : 1 })}

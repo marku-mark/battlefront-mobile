@@ -1,18 +1,19 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MockSignInSheet } from "@/components/account/MockSignInSheet";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { useSession } from "@/hooks/useSession";
-import { DEMO_ADDRESSES, DEMO_ORDERS } from "@/lib/mockAccount";
+import { DEMO_ORDERS } from "@/lib/mockAccount";
+import { loadSavedAddresses, persistSavedAddresses, type SavedAddress } from "@/lib/savedAddresses";
 import { useTheme } from "@/theme/ThemeProvider";
 
 const accountLinks = [
   { icon: "receipt-outline", label: "My orders", detail: "View sample order history", badge: "Demo" },
+  { icon: "location-outline", label: "Delivery addresses", detail: "Saved locally on this device", badge: "Local" },
   { icon: "heart-outline", label: "Wishlist", detail: "Saved on this device", badge: "Local" },
-  { icon: "location-outline", label: "Delivery addresses", detail: "Use the sample saved address", badge: "Demo" },
   { icon: "help-circle-outline", label: "Help center", detail: "Preview support information", badge: "Preview" },
 ] as const;
 
@@ -25,6 +26,28 @@ export default function AccountScreen() {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [selectedUtility, setSelectedUtility] = useState<string | null>(null);
   const [authMessage, setAuthMessage] = useState("");
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  const [isAddressesLoading, setIsAddressesLoading] = useState(false);
+  const [addressError, setAddressError] = useState("");
+
+  async function openSavedAddresses() {
+    setSelectedUtility("Delivery addresses");
+    setIsAddressesLoading(true);
+    setAddressError("");
+    setSavedAddresses(await loadSavedAddresses());
+    setIsAddressesLoading(false);
+  }
+
+  async function removeSavedAddress(addressId: string) {
+    const nextAddresses = savedAddresses.filter((address) => address.id !== addressId);
+    try {
+      await persistSavedAddresses(nextAddresses);
+      setSavedAddresses(nextAddresses);
+      setAddressError("");
+    } catch {
+      setAddressError("Couldn't remove this address. Please try again.");
+    }
+  }
 
   function openSignIn(message = "") {
     setAuthMessage(message);
@@ -133,8 +156,12 @@ export default function AccountScreen() {
                   router.push("/wishlist");
                   return;
                 }
-                if ((link.label === "My orders" || link.label === "Delivery addresses") && !isMockAccount) {
-                  openSignIn(`Sign in to the demo account to view ${link.label.toLowerCase()}.`);
+                if (link.label === "My orders") {
+                  router.push("/orders");
+                  return;
+                }
+                if (link.label === "Delivery addresses") {
+                  void openSavedAddresses();
                   return;
                 }
                 setSelectedUtility(link.label);
@@ -215,16 +242,34 @@ export default function AccountScreen() {
                   </View>
                 ))}
               </View>
-            ) : selectedUtility === "Delivery addresses" && isMockAccount ? (
+            ) : selectedUtility === "Delivery addresses" ? (
               <View className="mt-3 gap-3">
-                <Text className="text-muted-foreground text-xs">Sample address · stored in this demo only</Text>
-                {DEMO_ADDRESSES.map((address) => (
-                  <View key={address.label} className="rounded-xl border border-border bg-card p-3">
-                    <Text className="text-foreground text-sm font-semibold">{address.label} · {address.recipient}</Text>
-                    <Text className="text-muted-foreground text-xs leading-5 mt-1">{address.address}</Text>
-                    <Text className="text-muted-foreground text-xs mt-1">{address.phone}</Text>
-                  </View>
-                ))}
+                <Text className="text-muted-foreground text-xs">Saved in this demo on your device</Text>
+                {isAddressesLoading ? (
+                  <ActivityIndicator color={isDark ? "#f8fafc" : "#30343b"} />
+                ) : savedAddresses.length > 0 ? (
+                  savedAddresses.map((address) => (
+                    <View key={address.id} className="flex-row items-center rounded-xl border border-border bg-card p-3">
+                      <View className="flex-1">
+                        <Text className="text-foreground text-sm font-semibold">{address.label} · {address.recipient}</Text>
+                        <Text className="text-muted-foreground text-xs leading-5 mt-1">{address.address}</Text>
+                        <Text className="text-muted-foreground text-xs mt-1">{address.phone}</Text>
+                      </View>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Remove ${address.label} address`}
+                        onPress={() => void removeSavedAddress(address.id)}
+                        hitSlop={8}
+                        className="h-10 w-10 items-center justify-center"
+                      >
+                        <Ionicons name="trash-outline" size={17} color={isDark ? "#9ca3af" : "#68717e"} />
+                      </Pressable>
+                    </View>
+                  ))
+                ) : (
+                  <Text className="text-muted-foreground text-xs">No saved addresses. You can add one during checkout.</Text>
+                )}
+                {addressError ? <Text className="text-danger text-xs">{addressError}</Text> : null}
               </View>
             ) : selectedUtility === "Account settings" && isMockAccount ? (
               <View className="mt-3 rounded-xl border border-border bg-card p-3">

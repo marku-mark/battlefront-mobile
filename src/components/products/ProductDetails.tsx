@@ -7,6 +7,7 @@ import { useTheme } from "@/theme/ThemeProvider";
 import { useWishlist } from "@/hooks/useWishlist";
 import { useSession } from "@/hooks/useSession";
 import { MockSignInSheet } from "@/components/account/MockSignInSheet";
+import { ProductReviewPanel } from "@/components/products/ProductReviewPanel";
 import { getResponsiveLayout, MAX_CONTENT_WIDTH } from "@/lib/responsive";
 
 type ProductDetailsProps = {
@@ -14,6 +15,7 @@ type ProductDetailsProps = {
   quantity: number;
   onQuantityChange: (quantity: number) => void;
   onAddToCart: (product: Product, quantity: number, variant?: string | null) => void;
+  onCompare?: (productId: string) => void;
   onClose?: () => void;
 };
 
@@ -23,7 +25,7 @@ function formatPrice(value: number): string {
   return `₱${value.toLocaleString("en-PH")}`;
 }
 
-export function ProductDetails({ product, quantity, onQuantityChange, onAddToCart, onClose }: ProductDetailsProps) {
+export function ProductDetails({ product, quantity, onQuantityChange, onAddToCart, onCompare, onClose }: ProductDetailsProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -42,9 +44,9 @@ export function ProductDetails({ product, quantity, onQuantityChange, onAddToCar
   const wishlisted = isWishlisted(product.id);
   const hasDiscount = product.originalPrice !== undefined && product.originalPrice > product.price;
   const discount = hasDiscount ? Math.round(((product.originalPrice! - product.price) / product.originalPrice!) * 100) : 0;
-  const sampleReviews = getProductReviews(product);
-  const rating = product.rating && product.rating > 0 ? product.rating : 4.5;
-  const reviewCount = product.reviewCount && product.reviewCount > 0 ? product.reviewCount : sampleReviews.length;
+  const rating = product.rating ?? 0;
+  const reviewCount = product.reviewCount ?? 0;
+  const hasRating = rating > 0 && reviewCount > 0;
   const stockQuantity = product.stockQuantity ?? 12;
   const facts = getProductFacts(product);
   const subtotal = product.price * quantity;
@@ -81,9 +83,13 @@ export function ProductDetails({ product, quantity, onQuantityChange, onAddToCar
           <View className="flex-row items-baseline gap-2 mt-3"><Text className="text-primary text-2xl font-bold">{formatPrice(product.price)}</Text>{hasDiscount && <Text className="text-muted-foreground text-sm line-through">{formatPrice(product.originalPrice!)}</Text>}</View>
 
           <View className="flex-row items-center gap-2 mt-3">
-            <Ionicons name="star" size={16} color="#f59e0b" />
-            <Text className="text-foreground text-sm font-semibold">{rating.toFixed(1)}</Text>
-            <Text className="text-muted-foreground text-xs">({reviewCount} reviews)</Text>
+            {hasRating ? (
+              <>
+                <Ionicons name="star" size={16} color="#f59e0b" />
+                <Text className="text-foreground text-sm font-semibold">{rating.toFixed(1)}</Text>
+                <Text className="text-muted-foreground text-xs">({reviewCount} reviews)</Text>
+              </>
+            ) : <Text className="text-muted-foreground text-xs">No reviews yet</Text>}
             <View className={`ml-2 h-1.5 w-1.5 rounded-full ${stockQuantity > 0 ? "bg-success" : "bg-danger"}`} />
             <Text className={`text-xs ${stockQuantity > 0 ? "text-muted-foreground" : "text-danger"}`}>{stockQuantity > 0 ? `${stockQuantity} available` : "Out of stock"}</Text>
           </View>
@@ -91,13 +97,24 @@ export function ProductDetails({ product, quantity, onQuantityChange, onAddToCar
           {variants.length > 0 && <View className="mt-5"><View className="flex-row items-center justify-between mb-2"><Text className="text-foreground text-sm font-semibold">Choose an option</Text><Text className="text-muted-foreground text-xs">{selectedVariant ?? "Select"}</Text></View><View className="flex-row flex-wrap gap-2">{variants.map((variant) => <Pressable key={variant} accessibilityRole="radio" accessibilityLabel={`${variant} option`} accessibilityState={{ selected: selectedVariant === variant }} onPress={() => setSelectedVariant(variant)} className={`rounded-lg border px-3 py-2 ${selectedVariant === variant ? "border-primary bg-primary/10" : "border-border bg-secondary"}`}><Text className={`text-xs font-semibold ${selectedVariant === variant ? "text-primary" : "text-foreground"}`}>{variant}</Text></Pressable>)}</View></View>}
 
           <View className="flex-row flex-wrap gap-2 mt-4"><InfoChip icon="shield-checkmark-outline" label="Warranty included" color={colors.icon} /><InfoChip icon="cube-outline" label="Ready to ship" color={colors.icon} />{product.sold !== undefined && <InfoChip icon="trending-up-outline" label={`${product.sold} sold`} color={colors.icon} />}</View>
+          {onCompare && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Compare ${product.name} with other products`}
+              onPress={() => onCompare(product.id)}
+              className="mt-4 h-10 flex-row items-center justify-center gap-2 rounded-xl border border-border bg-secondary"
+            >
+              <Ionicons name="git-compare-outline" size={16} color={colors.foreground} />
+              <Text className="text-foreground text-xs font-semibold">Compare products</Text>
+            </Pressable>
+          )}
           <View className="mt-5 rounded-2xl bg-secondary border border-border p-3 shadow-soft"><View className="flex-row items-center justify-between"><Text className="text-foreground text-sm font-semibold">Delivery</Text><Text className="text-primary text-xs font-bold uppercase tracking-[0.12em]">Free over ₱5,000</Text></View><Text className="text-muted-foreground text-xs mt-1.5">Ships in 24 hours • Cash on delivery supported</Text></View>
 
           <View className="mt-6 pt-5 border-t border-border"><Text className="text-foreground text-base font-semibold">About this product</Text><Text className="text-muted-foreground text-sm leading-5 mt-2">{facts.description}</Text><View className="mt-3 gap-2">{facts.highlights.map((highlight) => <BulletPoint key={highlight} text={highlight} />)}</View></View>
-          <ReviewSection
+          <ProductReviewPanel
+            productId={product.id}
             rating={rating}
             reviewCount={reviewCount}
-            reviews={sampleReviews}
             isMockAccount={session.mode === "mock-account"}
             onSignIn={() => setIsSignInOpen(true)}
           />

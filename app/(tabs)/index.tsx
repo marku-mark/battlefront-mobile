@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { FlashList } from "@shopify/flash-list";
-import { useRouter } from "expo-router";
-import { Alert, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
+import { useRouter, useFocusEffect } from "expo-router";
+import { Alert, Image as RNImage, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import {
   getBanners,
   getBrands,
@@ -22,10 +22,12 @@ import { Brands } from "@/components/sections/Brands";
 import { Chatbot } from "@/components/support/Chatbot";
 import { ProductSearch } from "@/components/search/ProductSearch";
 import { useCart } from "@/hooks/useCart";
+import { useRecentlyViewedProducts } from "@/hooks/useRecentlyViewed";
 import { ProductCard } from "@/components/sections/ProductCard";
 import { BuilderEntryCard } from "@/components/builder/BuilderEntryCard";
 import { LoadingMoreFooter } from "@/components/layout/LoadingMoreFooter";
 import { getGridCardWidth, getResponsiveLayout, MAX_CONTENT_WIDTH } from "@/lib/responsive";
+import { getProductImageSource } from "@/lib/data";
 
 const PRODUCTS_PER_PAGE = 24;
 const PAGE_LOAD_DELAY_MS = 250;
@@ -48,7 +50,8 @@ export default function HomeScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [hasLoadError, setHasLoadError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
-  const { addItem, itemCount } = useCart();
+  const { addItem, itemCount, items: cartItems, subtotal: cartSubtotal } = useCart();
+  const { products: recentlyViewedProducts, refresh: refreshRecentlyViewed } = useRecentlyViewedProducts();
   const { width } = useWindowDimensions();
   const layout = getResponsiveLayout(width);
 
@@ -61,6 +64,72 @@ export default function HomeScreen() {
     () => catalogProducts.slice(0, visibleProductCount),
     [catalogProducts, visibleProductCount]
   );
+  const recentProductIds = useMemo(
+    () => new Set(recentlyViewedProducts.map((product) => product.id)),
+    [recentlyViewedProducts]
+  );
+  const recommendedProducts = useMemo(() => {
+    if (!catalogProducts.length) return [];
+
+    return [...catalogProducts]
+      .filter((product) => !recentProductIds.has(product.id))
+      .sort((left, right) => {
+        const leftScore = (left.rating ?? 4.8) * (left.reviewCount ?? 1) + (left.stockQuantity ?? 0) * 0.1;
+        const rightScore = (right.rating ?? 4.8) * (right.reviewCount ?? 1) + (right.stockQuantity ?? 0) * 0.1;
+        return rightScore - leftScore;
+      })
+      .slice(0, 6);
+  }, [catalogProducts, recentProductIds]);
+  const setupBundles = useMemo(() => {
+    if (!catalogProducts.length) return [];
+
+    const categoryLookup = new Map<string, Product[]>();
+    catalogProducts.forEach((product) => {
+      const existing = categoryLookup.get(product.categoryId) ?? [];
+      categoryLookup.set(product.categoryId, [...existing, product]);
+    });
+
+    const pickProducts = (...categoryIds: string[]) =>
+      categoryIds
+        .map((categoryId) => categoryLookup.get(categoryId)?.[0])
+        .filter((product): product is Product => Boolean(product))
+        .slice(0, 3);
+
+    const bundles = [
+      {
+        title: "Gaming setup",
+        subtitle: "Pair the essentials for smooth play",
+        products: pickProducts(
+          "category-graphics-card",
+          "category-processor",
+          "category-monitor",
+          "category-ram"
+        ),
+      },
+      {
+        title: "Workstation",
+        subtitle: "Built for focused productivity",
+        products: pickProducts(
+          "category-laptops-desktops",
+          "category-monitor",
+          "category-peripherals",
+          "category-power-accessories"
+        ),
+      },
+      {
+        title: "Upgrade bundle",
+        subtitle: "Fast performance additions",
+        products: pickProducts(
+          "category-storage",
+          "category-cooling-components",
+          "category-power-supply",
+          "category-motherboard"
+        ),
+      },
+    ].filter((bundle) => bundle.products.length >= 2);
+
+    return bundles;
+  }, [catalogProducts]);
 
   function loadMoreProducts() {
     if (isLoadingMoreRef.current || visibleProductCount >= catalogProducts.length) return;
@@ -77,6 +146,12 @@ export default function HomeScreen() {
   useEffect(() => () => {
     if (loadMoreTimerRef.current) clearTimeout(loadMoreTimerRef.current);
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshRecentlyViewed();
+    }, [refreshRecentlyViewed])
+  );
 
   function handleProductSelect(product: Product) {
     setIsSearchOpen(false);
@@ -182,6 +257,31 @@ export default function HomeScreen() {
           <View>
             <PromoBanners banners={banners} onSelect={() => router.push("/categories")} />
         <BuilderEntryCard onPress={() => router.push("/builder")} />
+        {cartItems.length > 0 && (
+          <ContinueCartBanner
+            itemCount={itemCount}
+            subtotal={cartSubtotal}
+            onPress={() => router.navigate("/cart")}
+          />
+        )}
+        {recentlyViewedProducts.length > 0 && (
+          <RecentlyViewedSection
+            products={recentlyViewedProducts}
+            onSelectProduct={handleProductSelect}
+          />
+        )}
+        {recommendedProducts.length > 0 && (
+          <RecommendedProductsSection
+            products={recommendedProducts}
+            onSelectProduct={handleProductSelect}
+          />
+        )}
+        {setupBundles.length > 0 && (
+          <SetupBundleSection
+            bundles={setupBundles}
+            onSelectProduct={handleProductSelect}
+          />
+        )}
         <Categories
           categories={categories}
           onBrowseAll={() => router.push("/categories")}
@@ -233,6 +333,159 @@ export default function HomeScreen() {
         onClose={() => setIsSearchOpen(false)}
         onSelectProduct={handleProductSelect}
       />
+    </View>
+  );
+}
+
+function ContinueCartBanner({
+  itemCount,
+  subtotal,
+  onPress,
+}: {
+  itemCount: number;
+  subtotal: number;
+  onPress: () => void;
+}) {
+  return (
+    <View className="px-4 mt-6">
+      <Pressable
+        accessibilityRole="button"
+        onPress={onPress}
+        className="flex-row items-center justify-between rounded-2xl border border-primary/30 bg-primary/10 px-4 py-3"
+      >
+        <View className="flex-1">
+          <Text className="text-foreground text-sm font-bold">Continue your cart</Text>
+          <Text className="text-muted-foreground text-[11px] mt-0.5">
+            {itemCount} item{itemCount === 1 ? "" : "s"} · ₱{subtotal.toLocaleString("en-PH")}
+          </Text>
+        </View>
+        <View className="flex-row items-center gap-2">
+          <Text className="text-primary text-xs font-bold uppercase tracking-[0.12em]">Review</Text>
+          <Ionicons name="chevron-forward" size={16} color="#ef1b1b" />
+        </View>
+      </Pressable>
+    </View>
+  );
+}
+
+function RecentlyViewedSection({
+  products,
+  onSelectProduct,
+}: {
+  products: Product[];
+  onSelectProduct: (product: Product) => void;
+}) {
+  return (
+    <View className="mt-7">
+      <View className="mb-3 px-4 flex-row items-center justify-between">
+        <Text className="text-foreground text-base font-bold">Recently viewed</Text>
+        <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.14em]">Your history</Text>
+      </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 6, gap: 10 }}>
+        {products.map((product) => (
+          <Pressable
+            key={product.id}
+            accessibilityRole="button"
+            onPress={() => onSelectProduct(product)}
+            className="w-[150px] overflow-hidden rounded-2xl border border-border bg-card"
+          >
+            <RNImage source={getProductImageSource(product.image)} className="w-[150px] h-[120px] bg-secondary" resizeMode="cover" />
+            <View className="px-2.5 py-2.5">
+              <Text className="text-foreground text-[12px] font-semibold" numberOfLines={2}>
+                {product.name}
+              </Text>
+              <Text className="text-primary text-[12px] font-bold mt-1">
+                ₱{product.price.toLocaleString("en-PH")}
+              </Text>
+            </View>
+          </Pressable>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+function RecommendedProductsSection({
+  products,
+  onSelectProduct,
+}: {
+  products: Product[];
+  onSelectProduct: (product: Product) => void;
+}) {
+  return (
+    <View className="mt-7">
+      <View className="mb-3 px-4 flex-row items-center justify-between">
+        <Text className="text-foreground text-base font-bold">Recommended for you</Text>
+        <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.14em]">Top picks</Text>
+      </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 6, gap: 10 }}>
+        {products.map((product) => (
+          <Pressable
+            key={product.id}
+            accessibilityRole="button"
+            onPress={() => onSelectProduct(product)}
+            className="w-[150px] overflow-hidden rounded-2xl border border-border bg-card"
+          >
+            <RNImage source={getProductImageSource(product.image)} className="w-[150px] h-[120px] bg-secondary" resizeMode="cover" />
+            <View className="px-2.5 py-2.5">
+              <Text className="text-foreground text-[12px] font-semibold" numberOfLines={2}>
+                {product.name}
+              </Text>
+              <Text className="text-primary text-[12px] font-bold mt-1">
+                ₱{product.price.toLocaleString("en-PH")}
+              </Text>
+            </View>
+          </Pressable>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+function SetupBundleSection({
+  bundles,
+  onSelectProduct,
+}: {
+  bundles: Array<{
+    title: string;
+    subtitle: string;
+    products: Product[];
+  }>;
+  onSelectProduct: (product: Product) => void;
+}) {
+  return (
+    <View className="mt-7">
+      <View className="mb-3 px-4 flex-row items-center justify-between">
+        <Text className="text-foreground text-base font-bold">Complete your setup</Text>
+        <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.14em]">Bundle picks</Text>
+      </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 6, gap: 10 }}>
+        {bundles.map((bundle) => (
+          <View key={bundle.title} className="w-[210px] rounded-2xl border border-border bg-card p-3">
+            <Text className="text-foreground text-sm font-bold">{bundle.title}</Text>
+            <Text className="text-muted-foreground text-[10px] mt-0.5">{bundle.subtitle}</Text>
+            <View className="mt-3 gap-2">
+              {bundle.products.map((product) => (
+                <Pressable
+                  key={product.id}
+                  accessibilityRole="button"
+                  onPress={() => onSelectProduct(product)}
+                  className="flex-row items-center gap-2 rounded-xl bg-secondary px-2 py-1.5"
+                >
+                  <RNImage source={getProductImageSource(product.image)} className="w-10 h-10 rounded-lg bg-background" resizeMode="cover" />
+                  <View className="flex-1">
+                    <Text className="text-foreground text-[11px] font-semibold" numberOfLines={1}>{product.name}</Text>
+                    <Text className="text-primary text-[10px] font-bold mt-0.5">₱{product.price.toLocaleString("en-PH")}</Text>
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        ))}
+      </ScrollView>
     </View>
   );
 }

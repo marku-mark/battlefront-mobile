@@ -27,6 +27,7 @@ type CartActions = {
 
 const CartContext = createContext<CartContextValue | null>(null);
 const CartActionsContext = createContext<CartActions | null>(null);
+const GUEST_CART_STORAGE_KEY = "battlefront-guest-cart";
 const MOCK_CART_STORAGE_KEY = "battlefront-mock-account-cart";
 type CartMode = "guest" | "mock-account";
 type CartMutation = (items: CartItem[]) => CartItem[];
@@ -39,19 +40,43 @@ export function CartProvider({ children }: { children: ReactNode }) {
   });
   const itemsByModeRef = useRef(itemsByMode);
   itemsByModeRef.current = itemsByMode;
+  const [isGuestCartLoaded, setIsGuestCartLoaded] = useState(false);
   const [isMockCartLoaded, setIsMockCartLoaded] = useState(false);
+  const isGuestCartLoadedRef = useRef(false);
   const isMockCartLoadedRef = useRef(false);
+  const pendingGuestMutations = useRef<CartMutation[]>([]);
   const pendingMockMutations = useRef<CartMutation[]>([]);
+  const pendingGuestPromotion = useRef(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem(GUEST_CART_STORAGE_KEY)
+      .then((storedCart) => {
+        const validCart = parseStoredCart(storedCart);
+        const hydratedCart = pendingGuestMutations.current.reduce((items, mutation) => mutation(items), validCart);
+        pendingGuestMutations.current = [];
+        const shouldPromote = pendingGuestPromotion.current;
+        pendingGuestPromotion.current = false;
+        if (shouldPromote && hydratedCart.length > 0 && !isMockCartLoadedRef.current) {
+          pendingMockMutations.current.push((mockItems) => mergeCartItems(mockItems, hydratedCart));
+        }
+        setItemsByMode((current) => shouldPromote
+          ? {
+              guest: [],
+              "mock-account": mergeCartItems(current["mock-account"], hydratedCart),
+            }
+          : { ...current, guest: hydratedCart });
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        isGuestCartLoadedRef.current = true;
+        setIsGuestCartLoaded(true);
+      });
+  }, []);
 
   useEffect(() => {
     AsyncStorage.getItem(MOCK_CART_STORAGE_KEY)
       .then((storedCart) => {
-        const parsedCart = storedCart ? JSON.parse(storedCart) as CartItem[] : [];
-        const validCart = Array.isArray(parsedCart)
-          ? parsedCart.filter((item) => item?.product?.id && typeof item.product.price === "number" && typeof item.quantity === "number" && item.quantity > 0)
-            .map((item) => ({ ...item, quantity: clampQuantity(item.product, item.quantity) }))
-            .filter((item) => item.quantity > 0)
-          : [];
+        const validCart = parseStoredCart(storedCart);
         const hydratedCart = pendingMockMutations.current.reduce((items, mutation) => mutation(items), validCart);
         pendingMockMutations.current = [];
         setItemsByMode((current) => ({ ...current, "mock-account": hydratedCart }));
@@ -62,6 +87,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
         setIsMockCartLoaded(true);
       });
   }, []);
+
+  useEffect(() => {
+    if (!isGuestCartLoaded) return;
+    AsyncStorage.setItem(GUEST_CART_STORAGE_KEY, JSON.stringify(itemsByMode.guest)).catch(() => undefined);
+  }, [isGuestCartLoaded, itemsByMode.guest]);
 
   useEffect(() => {
     if (!isMockCartLoaded) return;
@@ -76,6 +106,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
         ...current,
         [session.mode]: mutation(current[session.mode]),
       }));
+      if (session.mode === "guest" && !isGuestCartLoadedRef.current) {
+        pendingGuestMutations.current.push(mutation);
+      }
       if (session.mode === "mock-account" && !isMockCartLoadedRef.current) {
         pendingMockMutations.current.push(mutation);
       }
@@ -112,6 +145,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
       removeItem: (productId, variant = null) => applyMutation((current) => current.filter((item) => !(item.product.id === productId && item.variant === variant))),
       clearCart: () => applyMutation(() => []),
       promoteGuestCartToMock: () => {
+        if (!isGuestCartLoadedRef.current) {
+          pendingGuestPromotion.current = true;
+          return;
+        }
+
         const guestItems = itemsByModeRef.current.guest;
         if (guestItems.length === 0) return;
 
@@ -139,9 +177,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
       items,
       itemCount,
       subtotal,
-      isLoading: session.mode === "mock-account" && !isMockCartLoaded,
+      isLoading: session.mode === "guest" ? !isGuestCartLoaded : !isMockCartLoaded,
     };
-  }, [actions, isMockCartLoaded, items, session.mode]);
+  }, [actions, isGuestCartLoaded, isMockCartLoaded, items, session.mode]);
 
   return (
     <CartActionsContext.Provider value={actions}>
@@ -164,6 +202,31 @@ export function useCartActions(): CartActions {
     throw new Error("useCartActions must be used inside CartProvider");
   }
   return context;
+}
+
+function parseStoredCart(storedCart: string | null): CartItem[] {
+  if (!storedCart) return [];
+  try {
+    const parsed: unknown = JSON.parse(storedCart);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item): item is CartItem => {
+        if (!item || typeof item !== "object") return false;
+        const cartItem = item as Partial<CartItem>;
+        return Boolean(cartItem.product?.id)
+          && typeof cartItem.product?.price === "number"
+          && typeof cartItem.quantity === "number"
+          && cartItem.quantity > 0;
+      })
+      .map((item) => ({
+        ...item,
+        variant: item.variant ?? null,
+        quantity: clampQuantity(item.product, item.quantity),
+      }))
+      .filter((item) => item.quantity > 0);
+  } catch {
+    return [];
+  }
 }
 
 function mergeCartItems(existingItems: CartItem[], incomingItems: CartItem[]): CartItem[] {

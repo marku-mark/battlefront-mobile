@@ -1,14 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Image, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
-import { useState } from "react";
+import { Image, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { useMemo, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MockSignInSheet } from "@/components/account/MockSignInSheet";
 import { useCart, type CartItem } from "@/hooks/useCart";
 import { useSession } from "@/hooks/useSession";
+import { useWishlist } from "@/hooks/useWishlist";
 import { ScreenHeader } from "@/components/layout/ScreenHeader";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { ConfirmClearModal } from "@/components/layout/ConfirmClearModal";
+import { calculateCheckoutPricing, FREE_SHIPPING_THRESHOLD, PROMO_CODES } from "@/lib/checkoutPricing";
 import { getProductImageSource } from "@/lib/data";
 import { getResponsiveLayout } from "@/lib/responsive";
 
@@ -21,12 +22,17 @@ export default function CartScreen() {
   const { width } = useWindowDimensions();
   const layout = getResponsiveLayout(width);
   const { items, subtotal, addItem, updateQuantity, removeItem, clearCart, isLoading: isCartLoading } = useCart();
-  const { session, isHydrated } = useSession();
+  const { isHydrated } = useSession();
+  const { isWishlisted, toggleWishlist } = useWishlist();
   const [removedItem, setRemovedItem] = useState<CartItem | null>(null);
-  const [isSignInOpen, setIsSignInOpen] = useState(false);
+  const [removedItemAction, setRemovedItemAction] = useState<"removed" | "saved">("removed");
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
-  const shippingFee = subtotal > 5000 ? 0 : 150;
-  const total = subtotal + shippingFee;
+  const [promoInput, setPromoInput] = useState("");
+  const [appliedPromo, setAppliedPromo] = useState<string>("");
+  const [promoError, setPromoError] = useState("");
+  const pricing = useMemo(() => calculateCheckoutPricing(subtotal, appliedPromo), [subtotal, appliedPromo]);
+  const shippingFee = pricing.shippingFee;
+  const total = pricing.total;
 
   if (!isHydrated || isCartLoading) {
     return (
@@ -96,7 +102,7 @@ export default function CartScreen() {
           <View className="mt-2 flex-row items-center gap-2">
             <Ionicons name="checkmark-circle-outline" size={15} color="#ef4444" />
             <Text className="text-muted-foreground text-xs">
-              {subtotal >= 5000 ? "Free shipping unlocked" : `Add ${formatPrice(5000 - subtotal)} more for free shipping`}
+              {subtotal >= FREE_SHIPPING_THRESHOLD ? "Free shipping unlocked" : `Add ${formatPrice(FREE_SHIPPING_THRESHOLD - subtotal)} more for free shipping`}
             </Text>
           </View>
         </View>
@@ -121,6 +127,7 @@ export default function CartScreen() {
                 <Pressable
                   accessibilityLabel={`Remove ${product.name}`}
                   onPress={() => {
+                    setRemovedItemAction("removed");
                     setRemovedItem({ product, quantity, variant });
                     removeItem(product.id, variant);
                   }}
@@ -154,13 +161,32 @@ export default function CartScreen() {
                 </View>
                 <Text className="text-foreground text-sm font-semibold">{formatPrice(product.price * quantity)}</Text>
               </View>
+              <View className="mt-2 flex-row justify-end">
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Save ${product.name} for later`}
+                  onPress={() => {
+                    if (!isWishlisted(product.id)) toggleWishlist(product.id);
+                    setRemovedItemAction("saved");
+                    setRemovedItem({ product, quantity, variant });
+                    removeItem(product.id, variant);
+                  }}
+                  className="flex-row items-center gap-1.5 px-1 py-1"
+                  hitSlop={6}
+                >
+                  <Ionicons name="heart-outline" size={15} color="#ef1b1b" />
+                  <Text className="text-primary text-xs font-semibold">Save for later</Text>
+                </Pressable>
+              </View>
             </View>
           </View>
         ))}
 
         {removedItem && (
           <View className="flex-row items-center justify-between rounded-xl border border-primary/30 bg-primary/10 px-3 py-3 mb-3">
-            <Text className="flex-1 text-foreground text-xs">{removedItem.product.name} removed</Text>
+            <Text className="flex-1 text-foreground text-xs">
+              {removedItem.product.name} {removedItemAction === "saved" ? "saved for later" : "removed"}
+            </Text>
             <Pressable
               accessibilityLabel="Undo remove item"
               onPress={() => {
@@ -174,11 +200,75 @@ export default function CartScreen() {
           </View>
         )}
 
-        <View className="bg-card border border-border rounded-2xl p-4 mt-2 shadow-soft">
+        <View className="rounded-2xl border border-border bg-card p-4 mt-2 shadow-soft">
+          <Text className="text-foreground text-sm font-semibold mb-2">Promo code</Text>
+          <View className="flex-row gap-2">
+            <TextInput
+              value={promoInput}
+              onChangeText={(value) => {
+                setPromoInput(value);
+                if (promoError) setPromoError("");
+              }}
+              placeholder="Enter code"
+              autoCapitalize="characters"
+              className="flex-1 rounded-xl border border-border bg-secondary px-3 py-2.5 text-foreground text-sm"
+            />
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                const normalized = promoInput.trim().toUpperCase();
+                const validCode = PROMO_CODES.some((promo) => promo.code === normalized);
+                if (!validCode) {
+                  setPromoError("Code not valid. Try BATTLEFRONT10, SAVE150, or FREESHIP");
+                  return;
+                }
+                setAppliedPromo(normalized);
+                setPromoError("");
+                setPromoInput("");
+              }}
+              className="rounded-xl bg-primary px-3 py-2.5"
+            >
+              <Text className="text-primary-foreground text-xs font-bold">Apply</Text>
+            </Pressable>
+          </View>
+          {promoError ? <Text className="text-primary text-[11px] mt-2">{promoError}</Text> : null}
+          <View className="flex-row flex-wrap gap-2 mt-3">
+            {PROMO_CODES.map((promo) => (
+              <Pressable
+                key={promo.code}
+                accessibilityRole="button"
+                onPress={() => {
+                  setPromoInput(promo.code);
+                  setAppliedPromo(promo.code);
+                  setPromoError("");
+                }}
+                className={`rounded-full border px-2.5 py-1.5 ${appliedPromo === promo.code ? "border-primary bg-primary/10" : "border-border bg-secondary"}`}
+              >
+                <Text className={`text-[10px] font-semibold ${appliedPromo === promo.code ? "text-primary" : "text-muted-foreground"}`}>
+                  {promo.code}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          {appliedPromo ? (
+            <View className="mt-3 flex-row items-center justify-between rounded-xl border border-primary/30 bg-primary/10 px-3 py-2">
+              <Text className="text-foreground text-xs">{pricing.promoLabel} applied</Text>
+              <Text className="text-primary text-xs font-bold">-{formatPrice(pricing.discountAmount)}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        <View className="bg-card border border-border rounded-2xl p-4 mt-4 shadow-soft">
           <View className="flex-row justify-between mb-2">
             <Text className="text-muted-foreground text-sm">Subtotal</Text>
             <Text className="text-foreground text-base font-bold">{formatPrice(subtotal)}</Text>
           </View>
+          {pricing.discountAmount > 0 && (
+            <View className="flex-row justify-between mb-2">
+              <Text className="text-muted-foreground text-sm">Discount</Text>
+              <Text className="text-primary text-sm font-bold">-{formatPrice(pricing.discountAmount)}</Text>
+            </View>
+          )}
           <View className="flex-row justify-between mb-2">
             <Text className="text-muted-foreground text-sm">Shipping</Text>
             <Text className="text-foreground text-sm">{shippingFee === 0 ? "FREE" : formatPrice(shippingFee)}</Text>
@@ -187,25 +277,19 @@ export default function CartScreen() {
             <Text className="text-foreground text-base font-bold">Total</Text>
             <Text className="text-primary text-base font-bold">{formatPrice(total)}</Text>
           </View>
-          <Text className="text-muted-foreground text-xs mt-3">Guests can review their cart. Sign in to continue to the checkout preview; no real order or payment is submitted.</Text>
+          <Text className="text-muted-foreground text-xs mt-3">Checkout is available without signing in. This demo stores orders on this device and does not process real payments.</Text>
           <Pressable
-            onPress={() => session.mode === "mock-account" ? router.push("/checkout") : setIsSignInOpen(true)}
+            onPress={() => router.push({ pathname: "/checkout", params: { couponCode: appliedPromo }})}
             disabled={items.length === 0}
             className="bg-primary rounded-xl items-center py-3.5 mt-5"
             style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
           >
             <Text className="text-primary-foreground text-sm font-bold">
-              {session.mode === "mock-account" ? "Continue to checkout" : "Sign in to continue"}
+              Continue to checkout
             </Text>
           </Pressable>
         </View>
       </ScrollView>
-      <MockSignInSheet
-        visible={isSignInOpen}
-        message="Sign in to continue. Your guest cart will move into the local demo account."
-        onClose={() => setIsSignInOpen(false)}
-        onSuccess={() => router.push("/checkout")}
-      />
       <ConfirmClearModal
         visible={isClearConfirmOpen}
         title="Clear cart?"

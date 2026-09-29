@@ -44,8 +44,9 @@ export function ProductCard({ product, width = 150, onPress }: ProductCardProps)
   }
   const hasDiscount =
     product.originalPrice !== undefined && product.originalPrice > product.price;
-  const rating = product.rating ?? 4.8;
-  const reviewCount = product.reviewCount ?? 24;
+  const rating = product.rating ?? 0;
+  const reviewCount = product.reviewCount ?? 0;
+  const hasRating = rating > 0 && reviewCount > 0;
   const stockQuantity = product.stockQuantity ?? 12;
   const variants = getProductVariants(product);
   const discountPct = hasDiscount
@@ -112,9 +113,15 @@ export function ProductCard({ product, width = 150, onPress }: ProductCardProps)
 
             <View className="flex-row items-center justify-between mt-1.5 gap-2">
               <View className="flex-row items-center gap-1">
-                <Ionicons name="star" size={12} color="#f59e0b" />
-                <Text className="text-foreground text-[10px] font-semibold">{rating.toFixed(1)}</Text>
-                <Text className="text-muted-foreground text-[10px]">({reviewCount})</Text>
+                {hasRating ? (
+                  <>
+                    <Ionicons name="star" size={12} color="#f59e0b" />
+                    <Text className="text-foreground text-[10px] font-semibold">{rating.toFixed(1)}</Text>
+                    <Text className="text-muted-foreground text-[10px]">({reviewCount})</Text>
+                  </>
+                ) : (
+                  <Text className="text-muted-foreground text-[10px]">No reviews</Text>
+                )}
               </View>
               <View className="flex-row items-center gap-1">
                 <View className={`h-1.5 w-1.5 rounded-full ${stockQuantity > 0 ? "bg-success" : "bg-danger"}`} />

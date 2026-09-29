@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ScreenHeader } from "@/components/layout/ScreenHeader";
@@ -39,18 +40,56 @@ const demoNotifications: Notification[] = [
   },
 ];
 
+const READ_NOTIFICATIONS_STORAGE_KEY = "battlefront-read-notifications";
+
 export default function NotificationsScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const layout = getResponsiveLayout(width);
   const { isDark } = useTheme();
   const [readIds, setReadIds] = useState<string[]>([]);
+  const [isReadStateLoaded, setIsReadStateLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const pendingReadIds = useRef<string[]>([]);
+  const markAllDuringLoad = useRef(false);
   const unreadCount = demoNotifications.filter((item) => !readIds.includes(item.id)).length;
 
+  useEffect(() => {
+    let isActive = true;
+    AsyncStorage.getItem(READ_NOTIFICATIONS_STORAGE_KEY)
+      .then((storedIds) => {
+        const parsed: unknown = storedIds ? JSON.parse(storedIds) : [];
+        const validIds = Array.isArray(parsed)
+          ? parsed.filter((id): id is string => typeof id === "string" && demoNotifications.some((item) => item.id === id))
+          : [];
+        const nextIds = markAllDuringLoad.current
+          ? demoNotifications.map((item) => item.id)
+          : Array.from(new Set([...validIds, ...pendingReadIds.current]));
+        if (isActive) setReadIds(nextIds);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (isActive) setIsReadStateLoaded(true);
+      });
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isReadStateLoaded) return;
+    AsyncStorage.setItem(READ_NOTIFICATIONS_STORAGE_KEY, JSON.stringify(readIds)).catch(() => undefined);
+  }, [isReadStateLoaded, readIds]);
+
   function markAsRead(id: string) {
+    if (!isReadStateLoaded) pendingReadIds.current.push(id);
     setReadIds((current) => (current.includes(id) ? current : [...current, id]));
+  }
+
+  function markAllAsRead() {
+    if (!isReadStateLoaded) markAllDuringLoad.current = true;
+    setReadIds(demoNotifications.map((item) => item.id));
   }
 
   function retry() {
@@ -66,7 +105,7 @@ export default function NotificationsScreen() {
         subtitle={unreadCount > 0 ? `${unreadCount} unread update${unreadCount === 1 ? "" : "s"}` : "You are all caught up"}
         onBack={() => router.back()}
         right={unreadCount > 0 ? (
-          <Pressable accessibilityLabel="Mark all notifications as read" onPress={() => setReadIds(demoNotifications.map((item) => item.id))} hitSlop={8}>
+          <Pressable accessibilityLabel="Mark all notifications as read" accessibilityRole="button" onPress={markAllAsRead} hitSlop={8}>
             <Text className="text-primary text-xs font-semibold">Mark all</Text>
           </Pressable>
         ) : undefined}

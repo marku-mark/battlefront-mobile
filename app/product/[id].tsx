@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ProductDetails } from "@/components/products/ProductDetails";
 import { useCart } from "@/hooks/useCart";
+import { addRecentlyViewedProduct } from "@/hooks/useRecentlyViewed";
 import { getProductById } from "@/lib/api";
 import type { Product } from "@/lib/data";
 
@@ -33,7 +34,12 @@ export default function ProductRoute() {
 
     getProductById(id)
       .then((loadedProduct) => {
-        if (isActive) setProduct(loadedProduct);
+        if (isActive) {
+          setProduct(loadedProduct);
+          if (loadedProduct) {
+            void addRecentlyViewedProduct(loadedProduct.id);
+          }
+        }
       })
       .catch(() => {
         if (isActive) {
@@ -87,6 +93,7 @@ export default function ProductRoute() {
         addItem(selectedProduct, itemQuantity, variant);
         router.back();
       }}
+      onCompare={(productId) => router.push({ pathname: "/compare", params: { productId } })}
       onClose={() => router.back()}
     />
   );
