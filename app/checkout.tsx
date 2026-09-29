@@ -14,6 +14,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { MockSignInSheet } from "@/components/account/MockSignInSheet";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { useCart, type CartItem } from "@/hooks/useCart";
 import { useSession } from "@/hooks/useSession";
@@ -66,6 +67,7 @@ export default function CheckoutScreen() {
   const [paymentId, setPaymentId] = useState<(typeof paymentOptions)[number]["id"]>("cod");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
+  const [isSignInOpen, setIsSignInOpen] = useState(false);
   const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
   const [removedItem, setRemovedItem] = useState<CartItem | null>(null);
   const pricing = calculateCheckoutPricing(subtotal, couponCode ?? "", deliveryId);
@@ -198,6 +200,36 @@ export default function CheckoutScreen() {
     return (
       <SafeAreaView className="flex-1 bg-background">
         <LoadingState label="Preparing your checkout..." />
+      </SafeAreaView>
+    );
+  }
+
+  if (session.mode === "guest") {
+    return (
+      <SafeAreaView className="flex-1 bg-background">
+        <View className="flex-row items-center border-b border-border px-4 py-3">
+          <Pressable accessibilityLabel="Go back from checkout" accessibilityRole="button" onPress={() => router.back()} hitSlop={10} className="h-9 w-9 items-center justify-center">
+            <Ionicons name="arrow-back" size={22} color={colors.foreground} />
+          </Pressable>
+          <Text className="ml-2 text-foreground text-lg font-semibold">Checkout</Text>
+        </View>
+        <View className="flex-1 items-center justify-center px-6">
+          <View className="h-16 w-16 items-center justify-center rounded-full border border-border bg-secondary">
+            <Ionicons name="person-outline" size={28} color={colors.muted} />
+          </View>
+          <Text className="mt-5 text-center text-foreground text-lg font-semibold">Sign in to continue</Text>
+          <Text className="mt-2 text-center text-muted-foreground text-sm leading-5">
+            Your cart is saved on this device. Sign in to the demo account to continue to checkout.
+          </Text>
+          <Pressable onPress={() => setIsSignInOpen(true)} className="mt-6 rounded-xl bg-primary px-5 py-3">
+            <Text className="text-primary-foreground text-sm font-semibold">Sign in to demo account</Text>
+          </Pressable>
+        </View>
+        <MockSignInSheet
+          visible={isSignInOpen}
+          message="Sign in to continue. Your guest cart will move into the local demo account."
+          onClose={() => setIsSignInOpen(false)}
+        />
       </SafeAreaView>
     );
   }

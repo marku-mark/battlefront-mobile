@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import { Image, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { useMemo, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { MockSignInSheet } from "@/components/account/MockSignInSheet";
 import { useCart, type CartItem } from "@/hooks/useCart";
 import { useSession } from "@/hooks/useSession";
 import { useWishlist } from "@/hooks/useWishlist";
@@ -22,10 +23,11 @@ export default function CartScreen() {
   const { width } = useWindowDimensions();
   const layout = getResponsiveLayout(width);
   const { items, subtotal, addItem, updateQuantity, removeItem, clearCart, isLoading: isCartLoading } = useCart();
-  const { isHydrated } = useSession();
+  const { session, isHydrated } = useSession();
   const { isWishlisted, toggleWishlist } = useWishlist();
   const [removedItem, setRemovedItem] = useState<CartItem | null>(null);
   const [removedItemAction, setRemovedItemAction] = useState<"removed" | "saved">("removed");
+  const [isSignInOpen, setIsSignInOpen] = useState(false);
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   const [promoInput, setPromoInput] = useState("");
   const [appliedPromo, setAppliedPromo] = useState<string>("");
@@ -277,15 +279,17 @@ export default function CartScreen() {
             <Text className="text-foreground text-base font-bold">Total</Text>
             <Text className="text-primary text-base font-bold">{formatPrice(total)}</Text>
           </View>
-          <Text className="text-muted-foreground text-xs mt-3">Checkout is available without signing in. This demo stores orders on this device and does not process real payments.</Text>
+          <Text className="text-muted-foreground text-xs mt-3">Guests can review their cart. Sign in to continue to the checkout preview; no real order or payment is submitted.</Text>
           <Pressable
-            onPress={() => router.push({ pathname: "/checkout", params: { couponCode: appliedPromo }})}
+            onPress={() => session.mode === "mock-account"
+              ? router.push({ pathname: "/checkout", params: { couponCode: appliedPromo }})
+              : setIsSignInOpen(true)}
             disabled={items.length === 0}
             className="bg-primary rounded-xl items-center py-3.5 mt-5"
             style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
           >
             <Text className="text-primary-foreground text-sm font-bold">
-              Continue to checkout
+              {session.mode === "mock-account" ? "Continue to checkout" : "Sign in to continue"}
             </Text>
           </Pressable>
         </View>
@@ -302,6 +306,12 @@ export default function CartScreen() {
           setRemovedItem(null);
           setIsClearConfirmOpen(false);
         }}
+      />
+      <MockSignInSheet
+        visible={isSignInOpen}
+        message="Sign in to continue. Your guest cart and promo code will be kept."
+        onClose={() => setIsSignInOpen(false)}
+        onSuccess={() => router.push({ pathname: "/checkout", params: { couponCode: appliedPromo }})}
       />
     </SafeAreaView>
   );
