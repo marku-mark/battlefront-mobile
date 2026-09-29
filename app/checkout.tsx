@@ -15,11 +15,13 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MockSignInSheet } from "@/components/account/MockSignInSheet";
+import { PhilippineAddressFields } from "@/components/addresses/PhilippineAddressFields";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { useCart, type CartItem } from "@/hooks/useCart";
 import { useSession } from "@/hooks/useSession";
 import { DEMO_ACCOUNT } from "@/lib/mockAccount";
 import { calculateCheckoutPricing } from "@/lib/checkoutPricing";
+import { formatPhilippineAddress, isCompletePhilippineAddress, toPhilippineAddressFields, type PhilippineAddressFields as PhilippineAddressValue } from "@/lib/philippineAddress";
 import { savePlacedOrder } from "@/lib/orders";
 import { DEFAULT_SAVED_ADDRESSES, loadSavedAddresses, persistSavedAddresses, type SavedAddress } from "@/lib/savedAddresses";
 import { useTheme } from "@/theme/ThemeProvider";
@@ -59,7 +61,7 @@ export default function CheckoutScreen() {
   const [step, setStep] = useState<CheckoutStep>("address");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
-  const [address, setAddress] = useState("");
+  const [addressFields, setAddressFields] = useState<PhilippineAddressValue>(toPhilippineAddressFields({}));
   const [addressLabel, setAddressLabel] = useState("Home");
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>(DEFAULT_SAVED_ADDRESSES);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
@@ -79,7 +81,6 @@ export default function CheckoutScreen() {
     if (!isHydrated || session.mode !== "mock-account") return;
     setFullName((current) => current || DEMO_ACCOUNT.displayName);
     setPhone((current) => current || DEMO_ACCOUNT.phone);
-    setAddress((current) => current || DEMO_ACCOUNT.address);
   }, [isHydrated, session]);
 
   useEffect(() => {
@@ -92,7 +93,7 @@ export default function CheckoutScreen() {
         if (preferredAddress) {
           setFullName(preferredAddress.recipient);
           setPhone(preferredAddress.phone);
-          setAddress(preferredAddress.address);
+          setAddressFields(toPhilippineAddressFields(preferredAddress));
           setSelectedAddressId(preferredAddress.id);
           setAddressLabel(preferredAddress.label);
         }
@@ -106,7 +107,7 @@ export default function CheckoutScreen() {
   function selectSavedAddress(savedAddress: SavedAddress) {
     setFullName(savedAddress.recipient);
     setPhone(savedAddress.phone);
-    setAddress(savedAddress.address);
+    setAddressFields(toPhilippineAddressFields(savedAddress));
     setAddressLabel(savedAddress.label);
     setSelectedAddressId(savedAddress.id);
   }
@@ -114,7 +115,7 @@ export default function CheckoutScreen() {
   async function saveCurrentAddress() {
     const label = addressLabel.trim();
     if (!hasValidAddress() || !label) {
-      Alert.alert("Address details needed", "Enter a label, recipient, phone number, and delivery address before saving.");
+      Alert.alert("Address details needed", "Complete the recipient, label, and all required Philippine address fields before saving.");
       return;
     }
 
@@ -124,7 +125,8 @@ export default function CheckoutScreen() {
       label,
       recipient: fullName.trim(),
       phone: phone.trim(),
-      address: address.trim(),
+      address: formatPhilippineAddress(addressFields),
+      ...addressFields,
     };
     const nextAddresses = [nextAddress, ...savedAddresses.filter((savedAddress) => savedAddress.id !== nextAddress.id)];
 
@@ -150,7 +152,7 @@ export default function CheckoutScreen() {
   }
 
   function hasValidAddress() {
-    return Boolean(fullName.trim() && phone.trim() && address.trim());
+    return Boolean(fullName.trim() && phone.trim() && isCompletePhilippineAddress(addressFields));
   }
 
   function handleNext() {
@@ -161,8 +163,8 @@ export default function CheckoutScreen() {
   }
 
   async function handlePlaceOrder() {
-    if (!fullName.trim() || !phone.trim() || !address.trim()) {
-      Alert.alert("Missing details", "Please complete your name, phone number, and delivery address.");
+    if (!fullName.trim() || !phone.trim() || !isCompletePhilippineAddress(addressFields)) {
+      Alert.alert("Missing details", "Please complete your name, phone number, and full Philippine delivery address.");
       return;
     }
 
@@ -176,7 +178,7 @@ export default function CheckoutScreen() {
         status: "Ordered",
         items: items.map((item) => `${item.quantity} × ${item.product.name}${item.variant ? ` (${item.variant})` : ""}`).join(", "),
         total: formatPrice(total),
-        address: address.trim(),
+        address: formatPhilippineAddress(addressFields),
         phone: phone.trim(),
         deliveryMethod: deliveryOptions.find((option) => option.id === deliveryId)?.title ?? "Standard delivery",
         paymentMethod: paymentOptions.find((option) => option.id === paymentId)?.title ?? "Cash on delivery",
@@ -375,13 +377,19 @@ export default function CheckoutScreen() {
               )}
               <Field label="Full name" value={fullName} onChangeText={(value) => { setFullName(value); setSelectedAddressId(null); }} placeholder="Juan Dela Cruz" />
               <Field label="Phone number" value={phone} onChangeText={(value) => { setPhone(value); setSelectedAddressId(null); }} placeholder="09XX XXX XXXX" keyboardType="phone-pad" />
-              <Field label="Delivery address" value={address} onChangeText={(value) => { setAddress(value); setSelectedAddressId(null); }} placeholder="House number, street, city" multiline />
+              <PhilippineAddressFields
+                value={addressFields}
+                onChange={(patch) => {
+                  setAddressFields((current) => ({ ...current, ...patch }));
+                  setSelectedAddressId(null);
+                }}
+              />
               <Field label="Save address as" value={addressLabel} onChangeText={setAddressLabel} placeholder="Home, Work, or Other" />
               <Pressable accessibilityRole="button" onPress={() => void saveCurrentAddress()} className="mt-3 h-11 flex-row items-center justify-center gap-2 rounded-xl border border-border bg-secondary">
                 <Ionicons name="bookmark-outline" size={16} color={colors.foreground} />
                 <Text className="text-foreground text-sm font-semibold">Save address</Text>
               </Pressable>
-              {!hasValidAddress() && (fullName.length > 0 || phone.length > 0 || address.length > 0) && (
+              {!hasValidAddress() && (fullName.length > 0 || phone.length > 0 || Object.values(addressFields).some(Boolean)) && (
                 <Text className="text-primary text-xs mt-3">Complete all fields to continue.</Text>
               )}
             </View>
@@ -418,7 +426,7 @@ export default function CheckoutScreen() {
           {step === "review" && (
             <View>
               <Text className="text-foreground text-base font-bold">Review your order</Text>
-              <ReviewRow label="Deliver to" value={`${fullName}\n${address}\n${phone}`} onPress={() => setStep("address")} />
+              <ReviewRow label="Deliver to" value={`${fullName}\n${formatPhilippineAddress(addressFields)}\n${phone}`} onPress={() => setStep("address")} />
               <ReviewRow label="Delivery" value={deliveryOptions.find((option) => option.id === deliveryId)?.title ?? "Standard delivery"} onPress={() => setStep("delivery")} />
               <ReviewRow label="Payment" value={paymentOptions.find((option) => option.id === paymentId)?.title ?? "Cash on delivery"} onPress={() => setStep("payment")} />
             </View>

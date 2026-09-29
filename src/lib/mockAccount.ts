@@ -3,7 +3,7 @@ export const DEMO_ACCOUNT = {
   password: "battlefront-demo",
   displayName: "Demo Shopper",
   phone: "0917 000 0000",
-  address: "12 Demo Street, Brgy. Poblacion, Bacolod City, Negros Occidental",
+  address: "12 Demo Street, Barangay 1, City of Bacolod, Negros Island Region (NIR), 6100",
 } as const;
 
 export const DEMO_ORDERS = [
@@ -29,5 +29,16 @@ export const DEMO_ADDRESSES = [
     recipient: DEMO_ACCOUNT.displayName,
     phone: DEMO_ACCOUNT.phone,
     address: DEMO_ACCOUNT.address,
+    region: "Negros Island Region (NIR)",
+    regionCode: "1800000000",
+    province: "",
+    provinceCode: "",
+    localityParentCode: "1800000000",
+    city: "City of Bacolod",
+    cityCode: "1830200000",
+    barangay: "Barangay 1",
+    barangayCode: "1830200004",
+    street: "12 Demo Street",
+    zipCode: "6100",
   },
 ] as const;

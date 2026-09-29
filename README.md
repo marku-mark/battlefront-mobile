@@ -91,3 +91,11 @@ global.css                     ← NativeWind entry point
   restart with a clean cache: `npx expo start -c`
 - If icons don't render, confirm `@expo/vector-icons` installed correctly
   (`npm ls @expo/vector-icons`).
+
+## Philippine Address Data
+
+The address selectors use the Philippine Standard Geographic Code (PSGC) data
+from 30 June 2026, distributed by `@ianlabicani/geoph-lite`. PSGC data is
+published by the Philippine Statistics Authority and licensed under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Source:
+[Philippine Statistics Authority PSGC](https://psa.gov.ph/classification/psgc/index).

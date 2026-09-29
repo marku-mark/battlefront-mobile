@@ -1,12 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MockSignInSheet } from "@/components/account/MockSignInSheet";
+import { PhilippineAddressFields } from "@/components/addresses/PhilippineAddressFields";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { useSession } from "@/hooks/useSession";
 import { DEMO_ORDERS } from "@/lib/mockAccount";
+import { EMPTY_PHILIPPINE_ADDRESS, formatPhilippineAddress, isCompletePhilippineAddress, type PhilippineAddressFields as PhilippineAddressValue } from "@/lib/philippineAddress";
 import { loadSavedAddresses, persistSavedAddresses, type SavedAddress } from "@/lib/savedAddresses";
 import { useTheme } from "@/theme/ThemeProvider";
 
@@ -20,15 +22,22 @@ const accountLinks = [
 export default function AccountScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const { isDark, toggleMode } = useTheme();
+  const { isDark, toggleMode, colors } = useTheme();
   const { session, isHydrated, signIn, signOut } = useSession();
   const isMockAccount = session.mode === "mock-account";
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [selectedUtility, setSelectedUtility] = useState<string | null>(null);
   const [authMessage, setAuthMessage] = useState("");
+  const [pendingSignInAction, setPendingSignInAction] = useState<"orders" | "addresses" | null>(null);
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [isAddressesLoading, setIsAddressesLoading] = useState(false);
   const [addressError, setAddressError] = useState("");
+  const [isAddingAddress, setIsAddingAddress] = useState(false);
+  const [newAddressLabel, setNewAddressLabel] = useState("");
+  const [newAddressRecipient, setNewAddressRecipient] = useState("");
+  const [newAddressPhone, setNewAddressPhone] = useState("");
+  const [newAddressLocation, setNewAddressLocation] = useState<PhilippineAddressValue>(EMPTY_PHILIPPINE_ADDRESS);
+  const [isSavingAddress, setIsSavingAddress] = useState(false);
 
   async function openSavedAddresses() {
     setSelectedUtility("Delivery addresses");
@@ -49,9 +58,53 @@ export default function AccountScreen() {
     }
   }
 
-  function openSignIn(message = "") {
+  async function addSavedAddress() {
+    const label = newAddressLabel.trim();
+    const recipient = newAddressRecipient.trim();
+    const phone = newAddressPhone.trim();
+    if (!label || !recipient || !phone || !isCompletePhilippineAddress(newAddressLocation)) {
+      setAddressError("Complete the recipient, phone, and every required Philippine address field.");
+      return;
+    }
+
+    const existingAddress = savedAddresses.find((address) => address.label.toLowerCase() === label.toLowerCase());
+    const newAddress: SavedAddress = {
+      id: existingAddress?.id ?? `address-${Date.now()}`,
+      label,
+      recipient,
+      phone,
+      address: formatPhilippineAddress(newAddressLocation),
+      ...newAddressLocation,
+    };
+    const nextAddresses = [newAddress, ...savedAddresses.filter((address) => address.id !== newAddress.id)];
+    setIsSavingAddress(true);
+    try {
+      await persistSavedAddresses(nextAddresses);
+      setSavedAddresses(nextAddresses);
+      setNewAddressLabel("");
+      setNewAddressRecipient("");
+      setNewAddressPhone("");
+      setNewAddressLocation(EMPTY_PHILIPPINE_ADDRESS);
+      setIsAddingAddress(false);
+      setAddressError("");
+    } catch {
+      setAddressError("Couldn't save this address. Please try again.");
+    } finally {
+      setIsSavingAddress(false);
+    }
+  }
+
+  function openSignIn(message = "", action: "orders" | "addresses" | null = null) {
     setAuthMessage(message);
+    setPendingSignInAction(action);
     setIsAuthOpen(true);
+  }
+
+  function handleSignInSuccess() {
+    const action = pendingSignInAction;
+    setPendingSignInAction(null);
+    if (action === "orders") router.push("/orders");
+    if (action === "addresses") void openSavedAddresses();
   }
 
   if (!isHydrated) {
@@ -157,10 +210,18 @@ export default function AccountScreen() {
                   return;
                 }
                 if (link.label === "My orders") {
+                  if (!isMockAccount) {
+                    openSignIn("Sign in to view your order history.", "orders");
+                    return;
+                  }
                   router.push("/orders");
                   return;
                 }
                 if (link.label === "Delivery addresses") {
+                  if (!isMockAccount) {
+                    openSignIn("Sign in to view your saved delivery addresses.", "addresses");
+                    return;
+                  }
                   void openSavedAddresses();
                   return;
                 }
@@ -221,13 +282,18 @@ export default function AccountScreen() {
       <MockSignInSheet
         visible={isAuthOpen}
         message={authMessage || undefined}
-        onClose={() => setIsAuthOpen(false)}
+        onClose={() => {
+          setIsAuthOpen(false);
+          setPendingSignInAction(null);
+        }}
+        onSuccess={handleSignInSuccess}
       />
 
       <Modal visible={selectedUtility !== null} animationType="fade" transparent onRequestClose={() => setSelectedUtility(null)}>
         <View className="flex-1 items-center justify-center px-6 bg-black/50">
-          <View className="w-full self-center bg-background border border-border rounded-2xl p-5" style={{ maxWidth: 560 }}>
+          <View className="w-full self-center bg-background border border-border rounded-2xl p-5" style={{ maxWidth: 560, maxHeight: "90%" }}>
             <Text className="text-foreground text-lg font-bold">{selectedUtility}</Text>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} className="mt-3" contentContainerStyle={{ paddingBottom: 4 }}>
             {selectedUtility === "My orders" && isMockAccount ? (
               <View className="mt-3 gap-3">
                 <Text className="text-muted-foreground text-xs">Sample order history · not connected to a store</Text>
@@ -269,7 +335,75 @@ export default function AccountScreen() {
                 ) : (
                   <Text className="text-muted-foreground text-xs">No saved addresses. You can add one during checkout.</Text>
                 )}
+                {!isAddressesLoading && isAddingAddress && (
+                  <View className="rounded-xl border border-border bg-secondary p-3">
+                    <Text className="text-foreground text-sm font-semibold">New address</Text>
+                    <TextInput
+                      accessibilityLabel="Address label"
+                      value={newAddressLabel}
+                      onChangeText={setNewAddressLabel}
+                      placeholder="Label (Home, Work)"
+                      placeholderTextColor={colors.muted}
+                      className="mt-3 h-11 rounded-lg border border-border bg-background px-3 text-foreground text-sm"
+                    />
+                    <TextInput
+                      accessibilityLabel="Address recipient"
+                      value={newAddressRecipient}
+                      onChangeText={setNewAddressRecipient}
+                      placeholder="Recipient name"
+                      placeholderTextColor={colors.muted}
+                      className="mt-2 h-11 rounded-lg border border-border bg-background px-3 text-foreground text-sm"
+                    />
+                    <TextInput
+                      accessibilityLabel="Address phone number"
+                      value={newAddressPhone}
+                      onChangeText={setNewAddressPhone}
+                      placeholder="Phone number"
+                      placeholderTextColor={colors.muted}
+                      keyboardType="phone-pad"
+                      className="mt-2 h-11 rounded-lg border border-border bg-background px-3 text-foreground text-sm"
+                    />
+                    <PhilippineAddressFields
+                      value={newAddressLocation}
+                      onChange={(patch) => setNewAddressLocation((current) => ({ ...current, ...patch }))}
+                    />
+                    <View className="mt-3 flex-row gap-2">
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => {
+                          setIsAddingAddress(false);
+                          setAddressError("");
+                        }}
+                        className="h-10 flex-1 items-center justify-center rounded-lg border border-border"
+                      >
+                        <Text className="text-foreground text-xs font-semibold">Cancel</Text>
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
+                        disabled={isSavingAddress}
+                        onPress={() => void addSavedAddress()}
+                        className="h-10 flex-1 items-center justify-center rounded-lg bg-primary"
+                        style={{ opacity: isSavingAddress ? 0.6 : 1 }}
+                      >
+                        <Text className="text-primary-foreground text-xs font-bold">{isSavingAddress ? "Saving..." : "Save address"}</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                )}
                 {addressError ? <Text className="text-danger text-xs">{addressError}</Text> : null}
+                {!isAddressesLoading && !isAddingAddress && (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => {
+                      setAddressError("");
+                      setIsAddingAddress(true);
+                    }}
+                    className="h-11 flex-row items-center justify-center gap-2 rounded-xl bg-primary"
+                  >
+                    <Ionicons name="add" size={18} color="#ffffff" />
+                    <Text className="text-primary-foreground text-sm font-bold">Add address</Text>
+                  </Pressable>
+                )}
               </View>
             ) : selectedUtility === "Account settings" && isMockAccount ? (
               <View className="mt-3 rounded-xl border border-border bg-card p-3">
@@ -285,6 +419,7 @@ export default function AccountScreen() {
             <Pressable onPress={() => setSelectedUtility(null)} className="bg-primary rounded-xl items-center py-3 mt-5">
               <Text className="text-primary-foreground text-sm font-semibold">Close</Text>
             </Pressable>
+            </ScrollView>
           </View>
         </View>
       </Modal>
