@@ -10,6 +10,7 @@ export type Product = {
   id: string;
   name: string;
   categoryId: string;
+  categorySlug?: string;
   brandId: string;
   price: number;
   originalPrice?: number;
@@ -18,6 +19,7 @@ export type Product = {
   rating?: number;
   reviewCount?: number;
   stockQuantity?: number;
+  availability?: string;
   variants?: string[];
   performanceTier?: string;
   useCase?: string;

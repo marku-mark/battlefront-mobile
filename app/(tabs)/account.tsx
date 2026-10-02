@@ -1,19 +1,19 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MockSignInSheet } from "@/components/account/MockSignInSheet";
 import { PhilippineAddressFields } from "@/components/addresses/PhilippineAddressFields";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { useSession } from "@/hooks/useSession";
-import { DEMO_ORDERS } from "@/lib/mockAccount";
+import { getOrders, type OrderRecord } from "@/lib/orders";
 import { EMPTY_PHILIPPINE_ADDRESS, formatPhilippineAddress, isCompletePhilippineAddress, type PhilippineAddressFields as PhilippineAddressValue } from "@/lib/philippineAddress";
 import { loadSavedAddresses, persistSavedAddresses, type SavedAddress } from "@/lib/savedAddresses";
 import { useTheme } from "@/theme/ThemeProvider";
 
 const accountLinks = [
-  { icon: "receipt-outline", label: "My orders", detail: "View sample order history", badge: "Demo" },
+  { icon: "receipt-outline", label: "My orders", detail: "View your order history", badge: "Live" },
   { icon: "location-outline", label: "Delivery addresses", detail: "Saved locally on this device", badge: "Local" },
   { icon: "heart-outline", label: "Wishlist", detail: "Saved on this device", badge: "Local" },
   { icon: "help-circle-outline", label: "Help center", detail: "Preview support information", badge: "Preview" },
@@ -21,10 +21,12 @@ const accountLinks = [
 
 export default function AccountScreen() {
   const router = useRouter();
+  const [orders, setOrders] = useState<OrderRecord[]>([]);
   const { width } = useWindowDimensions();
   const { isDark, toggleMode, colors } = useTheme();
   const { session, isHydrated, signIn, signOut } = useSession();
-  const isMockAccount = session.mode === "mock-account";
+  const isMockAccount = session.mode === "customer";
+  useEffect(() => { setOrders([]); if (session.mode === "customer") getOrders().then(setOrders).catch(() => undefined); }, [session]);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [selectedUtility, setSelectedUtility] = useState<string | null>(null);
   const [authMessage, setAuthMessage] = useState("");
@@ -138,7 +140,7 @@ export default function AccountScreen() {
                 {isMockAccount ? `Welcome, ${session.user.displayName}` : "Shop as a guest"}
               </Text>
               <Text className="text-muted-foreground text-xs mt-1">
-                {isMockAccount ? "Mock account · sample data saved on this device." : "Browse, shop, and save items locally without signing in."}
+                {isMockAccount ? "Signed in to Battlefront." : "Browse, shop, and save items locally without signing in."}
               </Text>
             </View>
           </View>
@@ -147,17 +149,17 @@ export default function AccountScreen() {
             <Pressable
               onPress={() => {
                 if (isMockAccount) {
-                  signOut();
+                  void signOut().catch(() => undefined);
                   return;
                 }
                 openSignIn();
               }}
-              accessibilityLabel={isMockAccount ? "Sign out of demo account" : "Sign in to demo account"}
+              accessibilityLabel={isMockAccount ? "Sign out" : "Sign in"}
               className="flex-1 bg-primary rounded-xl items-center py-3"
               style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
             >
               <Text className="text-primary-foreground text-sm font-semibold">
-                {isMockAccount ? "Sign out" : "Sign in to demo"}
+                {isMockAccount ? "Sign out" : "Sign in"}
               </Text>
             </Pressable>
             <Pressable
@@ -166,9 +168,9 @@ export default function AccountScreen() {
                   setSelectedUtility("Account settings");
                   return;
                 }
-                signOut();
+                return;
               }}
-              accessibilityLabel={isMockAccount ? "Open demo account settings" : "Continue as guest"}
+              accessibilityLabel={isMockAccount ? "Open account settings" : "Continue as guest"}
               className="flex-1 border border-border rounded-xl items-center py-3"
               style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
             >
@@ -182,7 +184,7 @@ export default function AccountScreen() {
         <View className="flex-row items-center justify-between px-4 mt-7 mb-3">
           <Text className="text-foreground text-base font-bold">Account shortcuts</Text>
           <Text className="text-muted-foreground text-[11px] uppercase tracking-[0.14em]">
-            {isMockAccount ? "Mock account" : "Guest mode"}
+            {isMockAccount ? "Customer account" : "Guest mode"}
           </Text>
         </View>
         <View className="mx-4 rounded-2xl bg-card border border-border overflow-hidden">
@@ -238,8 +240,8 @@ export default function AccountScreen() {
                   <Text className="text-foreground text-sm font-medium">
                     {link.label}
                   </Text>
-                  <View className={`rounded-full px-1.5 py-0.5 ${link.badge === "Demo" ? "bg-primary/15" : "bg-secondary"}`}>
-                    <Text className={`text-[9px] font-bold uppercase tracking-[0.08em] ${link.badge === "Demo" ? "text-primary" : "text-muted-foreground"}`}>
+                  <View className={`rounded-full px-1.5 py-0.5 ${link.badge === "Live" ? "bg-primary/15" : "bg-secondary"}`}>
+                    <Text className={`text-[9px] font-bold uppercase tracking-[0.08em] ${link.badge === "Live" ? "text-primary" : "text-muted-foreground"}`}>
                       {link.badge}
                     </Text>
                   </View>
@@ -274,7 +276,7 @@ export default function AccountScreen() {
         <View className="flex-row items-center justify-center gap-1.5 mt-7">
           <Ionicons name="shield-checkmark-outline" size={15} color="#9ca3af" />
           <Text className="text-muted-foreground text-xs">
-            Guest and mock account data stay on this device.
+            Orders and cart sync with your Battlefront account.
           </Text>
         </View>
       </ScrollView>
@@ -297,7 +299,7 @@ export default function AccountScreen() {
             {selectedUtility === "My orders" && isMockAccount ? (
               <View className="mt-3 gap-3">
                 <Text className="text-muted-foreground text-xs">Sample order history · not connected to a store</Text>
-                {DEMO_ORDERS.map((order) => (
+                {orders.map((order) => (
                   <View key={order.id} className="rounded-xl border border-border bg-card p-3">
                     <View className="flex-row items-center justify-between gap-3">
                       <Text className="text-foreground text-sm font-semibold">{order.id}</Text>
@@ -310,7 +312,7 @@ export default function AccountScreen() {
               </View>
             ) : selectedUtility === "Delivery addresses" ? (
               <View className="mt-3 gap-3">
-                <Text className="text-muted-foreground text-xs">Saved in this demo on your device</Text>
+                <Text className="text-muted-foreground text-xs">Saved on this device</Text>
                 {isAddressesLoading ? (
                   <ActivityIndicator color={isDark ? "#f8fafc" : "#30343b"} />
                 ) : savedAddresses.length > 0 ? (
@@ -407,7 +409,7 @@ export default function AccountScreen() {
               </View>
             ) : selectedUtility === "Account settings" && isMockAccount ? (
               <View className="mt-3 rounded-xl border border-border bg-card p-3">
-                <Text className="text-muted-foreground text-xs">Mock profile · saved on this device</Text>
+                <Text className="text-muted-foreground text-xs">Battlefront customer profile</Text>
                 <Text className="text-foreground text-sm mt-2">{session.user.displayName}</Text>
                 <Text className="text-muted-foreground text-xs mt-1">{session.user.email}</Text>
               </View>

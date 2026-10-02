@@ -12,7 +12,7 @@ import {
 } from "react";
 import { useSession } from "@/hooks/useSession";
 
-type WishlistMode = "guest" | "mock-account";
+type WishlistMode = "guest" | "customer";
 
 type WishlistContextValue = {
   items: string[];
@@ -39,13 +39,15 @@ type WishlistActions = {
   promoteGuestWishlistToMock: () => void;
 };
 const WishlistActionsContext = createContext<WishlistActions | null>(null);
-const MOCK_WISHLIST_STORAGE_KEY = "battlefront-mock-account-wishlist";
+const MOCK_WISHLIST_STORAGE_KEY = "battlefront-customer-wishlist";
 
 export function WishlistProvider({ children }: { children: ReactNode }) {
   const { session } = useSession();
+  const userKey = session.mode === "customer" ? session.user.id : "guest";
   const [store] = useState(createWishlistStore);
   const [isMockWishlistLoaded, setIsMockWishlistLoaded] = useState(false);
   const isMockWishlistLoadedRef = useRef(false);
+  const hydratedOwner = useRef<string | number | null>(null);
   const pendingMockToggles = useRef<string[]>([]);
   const pendingGuestItems = useRef<string[]>([]);
   const subscribe = useCallback(
@@ -56,7 +58,7 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
   const productIds = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   const toggleWishlist = useCallback((productId: string) => {
     store.toggleWishlist(session.mode, productId);
-    if (session.mode === "mock-account" && !isMockWishlistLoadedRef.current) {
+    if (session.mode === "customer" && !isMockWishlistLoadedRef.current) {
       pendingMockToggles.current.push(productId);
     }
   }, [session.mode, store]);
@@ -65,13 +67,19 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
     if (guestItems.length === 0) return;
 
     if (!isMockWishlistLoadedRef.current) pendingGuestItems.current.push(...guestItems);
-    store.setItems("mock-account", Array.from(new Set([...store.getItems("mock-account"), ...guestItems])));
+    store.setItems("customer", Array.from(new Set([...store.getItems("customer"), ...guestItems])));
     store.setItems("guest", []);
-  }, [store]);
+  }, [store, userKey]);
 
   useEffect(() => {
-    AsyncStorage.getItem(MOCK_WISHLIST_STORAGE_KEY)
+    let active = true;
+    store.setItems("customer", []);
+    isMockWishlistLoadedRef.current = false;
+    hydratedOwner.current = null;
+    setIsMockWishlistLoaded(false);
+    AsyncStorage.getItem(`${MOCK_WISHLIST_STORAGE_KEY}-api-${userKey}`)
       .then((storedWishlist) => {
+        if (!active) return;
         const parsedWishlist: unknown = storedWishlist ? JSON.parse(storedWishlist) : [];
         if (!Array.isArray(parsedWishlist) || !parsedWishlist.every((id) => typeof id === "string")) return;
         const storedIds = parsedWishlist as string[];
@@ -79,24 +87,27 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
         const hydratedWishlist = pendingMockToggles.current.reduce((items, productId) => toggleId(items, productId), withGuestItems);
         pendingGuestItems.current = [];
         pendingMockToggles.current = [];
-        store.setItems("mock-account", hydratedWishlist);
+        store.setItems("customer", hydratedWishlist);
       })
       .catch(() => undefined)
       .finally(() => {
+        if (!active) return;
         isMockWishlistLoadedRef.current = true;
+        hydratedOwner.current = userKey;
         setIsMockWishlistLoaded(true);
       });
-  }, [store]);
+    return () => { active = false; };
+  }, [store, userKey]);
 
   useEffect(() => {
-    if (!isMockWishlistLoaded || session.mode !== "mock-account") return;
-    AsyncStorage.setItem(MOCK_WISHLIST_STORAGE_KEY, JSON.stringify(store.getItems("mock-account"))).catch(() => undefined);
-  }, [isMockWishlistLoaded, productIds, session.mode, store]);
+    if (!isMockWishlistLoaded || session.mode !== "customer" || hydratedOwner.current !== userKey) return;
+    AsyncStorage.setItem(`${MOCK_WISHLIST_STORAGE_KEY}-api-${userKey}`, JSON.stringify(store.getItems("customer"))).catch(() => undefined);
+  }, [isMockWishlistLoaded, productIds, session.mode, store, userKey]);
 
   const value = useMemo<WishlistContextValue>(
     () => ({
       items: productIds,
-      isLoading: session.mode === "mock-account" && !isMockWishlistLoaded,
+      isLoading: session.mode === "customer" && !isMockWishlistLoaded,
       isWishlisted: (productId) => store.isWishlisted(session.mode, productId),
       toggleWishlist,
     }),
@@ -133,6 +144,7 @@ export function usePromoteGuestWishlistToMock(): () => void {
 export function useIsWishlisted(productId: string): boolean {
   const store = useWishlistStore();
   const { session } = useSession();
+  const userKey = session.mode === "customer" ? session.user.id : "guest";
   const subscribe = useCallback(
     (listener: Listener) => store.subscribeToProduct(session.mode, productId, listener),
     [productId, session.mode, store]
@@ -149,7 +161,7 @@ function useWishlistStore(): WishlistStore {
 }
 
 function createWishlistStore(): WishlistStore {
-  let itemsByMode: Record<WishlistMode, string[]> = { guest: [], "mock-account": [] };
+  let itemsByMode: Record<WishlistMode, string[]> = { guest: [], "customer": [] };
   const listeners = new Map<WishlistMode, Set<Listener>>();
   const productListeners = new Map<WishlistMode, Map<string, Set<Listener>>>();
 

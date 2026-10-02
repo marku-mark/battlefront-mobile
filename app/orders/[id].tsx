@@ -6,16 +6,16 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useCart } from "@/hooks/useCart";
 import { getProductById } from "@/lib/api";
 import { getOrderReturnRequests, saveOrderReturnRequest, type OrderReturnRequest } from "@/lib/orderSupport";
-import { cancelPlacedOrder, getOrderById, type OrderRecord } from "@/lib/orders";
+import { cancelPlacedOrder, getOrderById, resubmitPaymentProof, type OrderRecord } from "@/lib/orders";
+import * as ImagePicker from "expo-image-picker";
 import { useTheme } from "@/theme/ThemeProvider";
 
 const returnReasons = ["Item damaged", "Wrong item", "Changed my mind"];
 
 const statusSteps = [
-  { key: "Ordered", detail: "Your order has been confirmed." },
-  { key: "Packed", detail: "The store is preparing your items." },
-  { key: "In transit", detail: "The courier is on the way." },
-  { key: "Delivered", detail: "Your order has arrived." },
+  { key: "pending", label: "Pending", detail: "Your order is awaiting staff processing." },
+  { key: "processing", label: "Processing", detail: "The store is preparing your order." },
+  { key: "completed", label: "Completed", detail: "Your order has been fulfilled." },
 ] as const;
 
 export default function OrderDetailScreen() {
@@ -33,6 +33,19 @@ export default function OrderDetailScreen() {
   const [returnError, setReturnError] = useState("");
   const [isCancellingOrder, setIsCancellingOrder] = useState(false);
   const [isReordering, setIsReordering] = useState(false);
+  const [isUploadingProof, setIsUploadingProof] = useState(false);
+  async function replaceProof() {
+    if (!order || isUploadingProof) return;
+    setIsUploadingProof(true);
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 1 });
+      if (!result.canceled) {
+        const proof = result.assets[0];
+        setOrder(await resubmitPaymentProof(order.id, { uri: proof.uri, name: proof.fileName ?? "payment-proof.jpg", type: proof.mimeType ?? "image/jpeg" }));
+      }
+    } catch (reason) { Alert.alert("Could not replace proof", reason instanceof Error ? reason.message : "Please try again."); }
+    finally { setIsUploadingProof(false); }
+  }
 
   useEffect(() => {
     let isActive = true;
@@ -57,7 +70,7 @@ export default function OrderDetailScreen() {
     };
   }, [id]);
 
-  const currentStepIndex = order ? statusSteps.findIndex((step) => step.key === order.status) : -1;
+  const currentStepIndex = order ? statusSteps.findIndex((step) => step.key === order.statusValue) : -1;
 
   async function submitReturnRequest() {
     if (!order || !selectedReason || isSavingReturn) return;
@@ -117,11 +130,14 @@ export default function OrderDetailScreen() {
         }
       }));
       const availableItems = loadedItems.filter((item): item is NonNullable<typeof item> => item !== null);
-      availableItems.forEach(({ product, line }) => addItem(product, line.quantity, line.variant));
-      const unavailableCount = order.productLines.length - availableItems.length;
+      let addedCount = 0;
+      for (const { product, line } of availableItems) {
+        if (await addItem(product, line.quantity, line.variant)) addedCount++;
+      }
+      const unavailableCount = order.productLines.length - addedCount;
       const message = unavailableCount > 0
-        ? `${availableItems.length} item${availableItems.length === 1 ? "" : "s"} added. ${unavailableCount} item${unavailableCount === 1 ? " is" : "s are"} unavailable.`
-        : `${availableItems.length} item${availableItems.length === 1 ? "" : "s"} added to your cart.`;
+        ? `${addedCount} item(s) added. ${unavailableCount} item(s) could not be added.`
+        : `${addedCount} item(s) added to your cart.`;
       Alert.alert("Reorder ready", message, [
         { text: "Done", style: "cancel" },
         ...(availableItems.length > 0 ? [{ text: "View cart", onPress: () => router.push("/cart") }] : []),
@@ -194,7 +210,7 @@ export default function OrderDetailScreen() {
                     <View className={`mt-1 h-4 w-4 rounded-full border ${isActive ? "bg-primary border-primary" : "bg-background border-border"}`} />
                     <View className="flex-1 pb-3 border-l border-border pl-4" style={{ marginLeft: -10 }}>
                       <Text className={`text-sm font-semibold ${isCurrent ? "text-foreground" : "text-muted-foreground"}`}>
-                        {step.key}
+                        {step.label}
                       </Text>
                       <Text className="text-muted-foreground text-xs mt-1">{step.detail}</Text>
                     </View>
@@ -205,7 +221,7 @@ export default function OrderDetailScreen() {
           )}
         </View>
 
-        {order.status === "Ordered" && (
+        {order.canCancel && (
           <Pressable
             accessibilityRole="button"
             accessibilityState={{ disabled: isCancellingOrder }}
@@ -234,6 +250,8 @@ export default function OrderDetailScreen() {
           {order.paymentMethod ? <DetailRow label="Payment" value={order.paymentMethod} /> : null}
         </View>
 
+        {order.paymentNotice ? <Text className="text-muted-foreground mt-4">{order.paymentNotice}</Text> : null}
+        {order.canResubmitProof ? <Pressable disabled={isUploadingProof} onPress={() => void replaceProof()} className="mt-4 rounded-xl bg-primary p-3"><Text className="text-primary-foreground">{isUploadingProof ? "Uploading proof..." : "Replace rejected payment proof"}</Text></Pressable> : null}
         {order.productLines && order.productLines.length > 0 && (
           <Pressable
             accessibilityRole="button"
@@ -248,7 +266,7 @@ export default function OrderDetailScreen() {
           </Pressable>
         )}
 
-        {order.status === "Delivered" && returnRequest && (
+        {order.canReturn && returnRequest && (
           <View className="mt-4 rounded-xl border border-primary/30 bg-primary/10 p-4">
             <View className="flex-row items-center gap-2">
               <Ionicons name="checkmark-circle-outline" size={19} color={colors.primary} />
@@ -260,7 +278,7 @@ export default function OrderDetailScreen() {
           </View>
         )}
 
-        {order.status === "Delivered" && !returnRequest && (
+        {order.canReturn && !returnRequest && (
           <View className="mt-4 rounded-xl border border-border bg-card p-4">
             <Text className="text-foreground text-sm font-semibold">Need to return this order?</Text>
             <Text className="text-muted-foreground text-xs mt-1">Choose a reason to save a return request in this demo.</Text>

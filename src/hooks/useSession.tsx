@@ -1,68 +1,54 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { DEMO_ACCOUNT } from "@/lib/mockAccount";
+import { getProfile, login, logout, onSessionExpired, setAccessToken, type ApiUser } from "@/lib/api";
+import * as SecureStore from "expo-secure-store";
+import { Platform } from "react-native";
 
-export type Session =
-  | { mode: "guest" }
-  | { mode: "mock-account"; user: { email: string; displayName: string } };
-
-type SessionContextValue = {
-  session: Session;
-  isHydrated: boolean;
-  signIn: (email: string, password: string) => boolean;
-  signOut: () => void;
-};
-
-const SESSION_STORAGE_KEY = "battlefront-session-mode";
+export type Session = { mode: "guest" } | { mode: "customer"; user: ApiUser & { displayName: string } };
+type SessionContextValue = { session: Session; isHydrated: boolean; signIn: (email: string, password: string) => Promise<boolean>; signOut: () => Promise<void> };
 const SessionContext = createContext<SessionContextValue | null>(null);
-
-function createDemoSession(): Session {
-  return {
-    mode: "mock-account",
-    user: { email: DEMO_ACCOUNT.email, displayName: DEMO_ACCOUNT.displayName },
-  };
-}
-
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session>({ mode: "guest" });
   const [isHydrated, setIsHydrated] = useState(false);
-
   useEffect(() => {
-    AsyncStorage.getItem(SESSION_STORAGE_KEY)
-      .then((storedMode) => {
-        if (storedMode === "mock-account") setSession(createDemoSession());
-      })
-      .catch(() => undefined)
-      .finally(() => setIsHydrated(true));
-  }, []);
-
-  useEffect(() => {
-    if (!isHydrated) return;
-    AsyncStorage.setItem(SESSION_STORAGE_KEY, session.mode).catch(() => undefined);
-  }, [isHydrated, session.mode]);
-
-  const signIn = useCallback((email: string, password: string) => {
-    if (
-      email.trim().toLowerCase() !== DEMO_ACCOUNT.email ||
-      password !== DEMO_ACCOUNT.password
-    ) {
-      return false;
+    let active = true;
+    async function restoreSession() {
+      try {
+        const token = Platform.OS === "web" ? null : await SecureStore.getItemAsync("battlefront-api-token");
+        if (!token || !active) return;
+        setAccessToken(token);
+        const user = await getProfile();
+        if (!active) return;
+        setAccessToken(token, user.id);
+        setSession({ mode: "customer", user: { ...user, displayName: user.name } });
+      } catch {
+        setAccessToken(null);
+      } finally { if (active) setIsHydrated(true); }
     }
-
-    setSession(createDemoSession());
+    void restoreSession();
+    const unsubscribe = onSessionExpired(() => {
+      setSession({ mode: "guest" });
+      if (Platform.OS !== "web") void SecureStore.deleteItemAsync("battlefront-api-token").catch(() => undefined);
+    });
+    return () => { active = false; unsubscribe(); };
+  }, []);
+  const signIn = useCallback(async (email: string, password: string) => {
+    const result = await login(email, password);
+    if (Platform.OS !== "web") await SecureStore.setItemAsync("battlefront-api-token", result.token);
+    setAccessToken(result.token, result.user.id);
+    setSession({ mode: "customer", user: { ...result.user, displayName: result.user.name } });
     return true;
   }, []);
-
-  const signOut = useCallback(() => setSession({ mode: "guest" }), []);
-  const value = useMemo(
-    () => ({ session, isHydrated, signIn, signOut }),
-    [isHydrated, session, signIn, signOut]
-  );
-
+  const signOut = useCallback(async () => {
+    try { await logout(); }
+    finally {
+      setAccessToken(null); setSession({ mode: "guest" });
+      if (Platform.OS !== "web") await SecureStore.deleteItemAsync("battlefront-api-token");
+    }
+  }, []);
+  const value = useMemo(() => ({ session, isHydrated, signIn, signOut }), [session, isHydrated, signIn, signOut]);
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
-
-export function useSession(): SessionContextValue {
+export function useSession() {
   const context = useContext(SessionContext);
   if (!context) throw new Error("useSession must be used inside SessionProvider");
   return context;

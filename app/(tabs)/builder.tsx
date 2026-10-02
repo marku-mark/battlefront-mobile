@@ -25,7 +25,7 @@ import { LoadingMoreFooter } from "@/components/layout/LoadingMoreFooter";
 import { ConfirmClearModal } from "@/components/layout/ConfirmClearModal";
 import { MAX_CONTENT_WIDTH } from "@/lib/responsive";
 
-const BUILD_STORAGE_KEY = "battlefront-saved-builds";
+const BUILD_STORAGE_KEY = "battlefront-api-saved-builds";
 const PARTS_PER_PAGE = 20;
 const PAGE_LOAD_DELAY_MS = 250;
 
@@ -120,7 +120,7 @@ export default function BuilderScreen() {
     if (!activeSlot) return [];
     const normalizedQuery = query.trim().toLowerCase();
     return products
-      .filter((product) => product.categoryId === activeSlot.categoryId)
+      .filter((product) => product.categorySlug === activeSlot.categoryId)
       .filter((product) => !normalizedQuery || `${product.name} ${product.brandId}`.toLowerCase().includes(normalizedQuery))
       .sort((left, right) => left.price - right.price);
   }, [activeSlot, products, query]);
@@ -272,14 +272,20 @@ export default function BuilderScreen() {
     });
   }
 
-  function addBuildToCart() {
+  async function addBuildToCart() {
     if (selectedProducts.length === 0) return;
-    selectedProducts.forEach((product) => addItem(product));
-    setPartsAddedSummary({ count: selectedProducts.length, subtotal });
+    let count = 0;
+    let addedSubtotal = 0;
+    for (const product of selectedProducts) {
+      if (!await addItem(product)) break;
+      count++; addedSubtotal += product.price;
+    }
+    if (count > 0) setPartsAddedSummary({ count, subtotal: addedSubtotal });
   }
 
   return (
     <SafeAreaView className="flex-1 bg-background">
+      <Pressable onPress={() => router.push("/recommendations")} className="px-4 py-3 border-b border-border"><Text className="text-primary font-semibold">Find products for your budget</Text></Pressable>
       <View className="flex-row items-center gap-3 border-b border-border px-4 py-3">
         <Pressable accessibilityLabel="Go back" onPress={() => router.back()} className="h-10 w-10 items-center justify-center rounded-lg bg-secondary">
           <Ionicons name="arrow-back" size={21} color={isDark ? "#f8fafc" : "#30343b"} />

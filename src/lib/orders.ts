@@ -1,89 +1,35 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { DEMO_ORDERS } from "@/lib/mockAccount";
-
-export type OrderRecord = {
-  id: string;
-  date: string;
-  status: string;
-  items: string;
-  total: string;
-  address?: string;
-  phone?: string;
-  deliveryMethod?: string;
-  paymentMethod?: string;
-  productLines?: OrderProductLine[];
-};
-
-export type OrderProductLine = {
-  productId: string;
-  quantity: number;
-  variant: string | null;
-};
-
-const PLACED_ORDERS_STORAGE_KEY = "battlefront-placed-orders";
-
-export async function getOrders(): Promise<OrderRecord[]> {
-  const storedOrders = await getStoredOrders();
-  const storedIds = new Set(storedOrders.map((order) => order.id));
-  const demoOrders = DEMO_ORDERS.filter((order) => !storedIds.has(order.id));
-  return [...storedOrders, ...demoOrders];
+import { apiRequest, ApiError, invalidateCatalog } from "./api";
+import { collectPages } from "./apiClient";
+export type OrderProductLine = { productId: string; quantity: number; variant: string | null };
+export type OrderRecord = { id: string; reference: string; date: string; status: string; statusValue: string; items: string; total: string; address?: string; phone?: string; deliveryMethod?: string; paymentMethod?: string; productLines?: OrderProductLine[]; canReturn: boolean; canCancel: boolean; canResubmitProof: boolean; paymentNotice?: string };
+type BackendOrder = { id: number; reference: string; created_at: string; status: { value: string; label: string }; fulfillment: { label: string; delivery_address?: string | null }; payment: { method: { label: string }; notice?: string; can_resubmit_proof?: boolean }; recipient?: { contact_number: string }; total: string; total_quantity: number; items?: { product: { id: number; name: string }; quantity: number }[] };
+function mapOrder(row: BackendOrder): OrderRecord {
+  return { id: String(row.id), reference: row.reference, date: new Date(row.created_at).toLocaleDateString("en-PH"), status: row.status.label, statusValue: row.status.value,
+    items: row.items?.map((item) => `${item.quantity} × ${item.product.name}`).join(", ") ?? `${row.total_quantity} item(s)`,
+    total: `₱${Number(row.total).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`, address: row.fulfillment.delivery_address ?? undefined, phone: row.recipient?.contact_number,
+    deliveryMethod: row.fulfillment.label, paymentMethod: row.payment.method.label,
+    productLines: row.items?.map((item) => ({ productId: String(item.product.id), quantity: item.quantity, variant: null })),
+    canCancel: false, canReturn: false, canResubmitProof: row.payment.can_resubmit_proof ?? false, paymentNotice: row.payment.notice };
 }
-
-export async function getOrderById(orderId: string): Promise<OrderRecord | null> {
-  const orders = await getOrders();
-  return orders.find((order) => order.id === orderId) ?? null;
+export async function getOrders(): Promise<OrderRecord[]> { return (await collectPages<BackendOrder>(apiRequest, "orders")).map(mapOrder); }
+export async function getOrderById(id: string): Promise<OrderRecord | null> {
+  try { return mapOrder((await apiRequest<{ data: BackendOrder }>(`orders/${encodeURIComponent(id)}`)).data); }
+  catch (error) { if (error instanceof ApiError && error.status === 404) return null; throw error; }
 }
-
-export async function savePlacedOrder(order: OrderRecord): Promise<void> {
-  const storedOrders = await getStoredOrders();
-  await AsyncStorage.setItem(
-    PLACED_ORDERS_STORAGE_KEY,
-    JSON.stringify([order, ...storedOrders.filter((existing) => existing.id !== order.id)]),
-  );
-}
-
-export async function cancelPlacedOrder(orderId: string): Promise<OrderRecord | null> {
-  const storedOrders = await getStoredOrders();
-  const existingOrder = storedOrders.find((order) => order.id === orderId);
-  if (!existingOrder || existingOrder.status !== "Ordered") return null;
-
-  const cancelledOrder = { ...existingOrder, status: "Cancelled" };
-  await AsyncStorage.setItem(
-    PLACED_ORDERS_STORAGE_KEY,
-    JSON.stringify([cancelledOrder, ...storedOrders.filter((order) => order.id !== orderId)]),
-  );
-  return cancelledOrder;
-}
-
-async function getStoredOrders(): Promise<OrderRecord[]> {
-  try {
-    const rawOrders = await AsyncStorage.getItem(PLACED_ORDERS_STORAGE_KEY);
-    if (!rawOrders) return [];
-    const parsed: unknown = JSON.parse(rawOrders);
-    return Array.isArray(parsed) ? parsed.filter(isOrderRecord) : [];
-  } catch {
-    return [];
+export type OrderInput = { recipient_name: string; contact_number: string; fulfillment_method: string; payment_method: string; delivery_address?: string; payment_proof?: { uri: string; name: string; type: string } };
+export async function placeOrder(input: OrderInput): Promise<OrderRecord> {
+  const body = new FormData();
+  for (const [key, value] of Object.entries(input)) {
+    if (value === undefined) continue;
+    if (key === "payment_proof") body.append(key, value as unknown as Blob);
+    else body.append(key, String(value));
   }
+  const row = (await apiRequest<{ data: BackendOrder }>("orders", { method: "POST", body })).data;
+  invalidateCatalog();
+  return mapOrder(row);
 }
-
-function isOrderRecord(value: unknown): value is OrderRecord {
-  if (!value || typeof value !== "object") return false;
-  const order = value as Partial<OrderRecord>;
-  return typeof order.id === "string"
-    && typeof order.date === "string"
-    && typeof order.status === "string"
-    && typeof order.items === "string"
-    && typeof order.total === "string"
-    && (order.address === undefined || typeof order.address === "string")
-    && (order.phone === undefined || typeof order.phone === "string")
-    && (order.deliveryMethod === undefined || typeof order.deliveryMethod === "string")
-    && (order.paymentMethod === undefined || typeof order.paymentMethod === "string")
-    && (order.productLines === undefined || (
-      Array.isArray(order.productLines)
-      && order.productLines.every((line) => Boolean(line)
-        && typeof line.productId === "string"
-        && typeof line.quantity === "number"
-        && line.quantity > 0
-        && (typeof line.variant === "string" || line.variant === null))
-    ));
+export async function resubmitPaymentProof(id: string, proof: { uri: string; name: string; type: string }): Promise<OrderRecord> {
+  const body = new FormData(); body.append("payment_proof", proof as unknown as Blob);
+  return mapOrder((await apiRequest<{ data: BackendOrder }>(`orders/${encodeURIComponent(id)}/payment-proof`, { method: "POST", body })).data);
 }
+export async function cancelPlacedOrder(_id: string): Promise<OrderRecord | null> { throw new Error("Customer cancellation is not supported. Contact Battlefront staff."); }

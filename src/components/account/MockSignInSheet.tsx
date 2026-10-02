@@ -4,7 +4,6 @@ import { Modal, Pressable, Text, TextInput, View } from "react-native";
 import { useCartActions } from "@/hooks/useCart";
 import { useSession } from "@/hooks/useSession";
 import { usePromoteGuestWishlistToMock } from "@/hooks/useWishlist";
-import { DEMO_ACCOUNT } from "@/lib/mockAccount";
 import { useTheme } from "@/theme/ThemeProvider";
 
 type MockSignInSheetProps = {
@@ -18,14 +17,15 @@ export function MockSignInSheet({
   visible,
   onClose,
   onSuccess,
-  message = "Local preview only. These details are not sent anywhere.",
+  message = "Sign in with your Battlefront customer account.",
 }: MockSignInSheetProps) {
   const { isDark } = useTheme();
   const { signIn } = useSession();
   const { promoteGuestCartToMock } = useCartActions();
   const promoteGuestWishlistToMock = usePromoteGuestWishlistToMock();
-  const [email, setEmail] = useState<string>(DEMO_ACCOUNT.email);
-  const [password, setPassword] = useState<string>(DEMO_ACCOUNT.password);
+  const [email, setEmail] = useState<string>("");
+  const [password, setPassword] = useState<string>("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   function closeSheet() {
@@ -33,21 +33,24 @@ export function MockSignInSheet({
     onClose();
   }
 
-  function handleSignIn() {
+  async function handleSignIn() {
+    if (isSubmitting) return;
     if (!email.trim() || !password) {
-      setError("Enter the demo email and password to continue.");
+      setError("Enter your email and password to continue.");
       return;
     }
-    if (!signIn(email, password)) {
-      setError("Those details don't match the local demo account.");
-      return;
-    }
-
-    promoteGuestCartToMock();
-    promoteGuestWishlistToMock();
-    setError("");
-    onClose();
-    onSuccess?.();
+    setIsSubmitting(true);
+    try {
+      await signIn(email, password);
+      promoteGuestCartToMock();
+      promoteGuestWishlistToMock();
+      setError("");
+      setPassword("");
+      onClose();
+      onSuccess?.();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not sign in.");
+    } finally { setIsSubmitting(false); }
   }
 
   return (
@@ -56,15 +59,15 @@ export function MockSignInSheet({
         <View className="bg-background rounded-t-3xl border-t border-border px-4 pt-4 pb-8">
           <View className="flex-row items-center justify-between">
             <View>
-              <Text className="text-foreground text-xl font-bold">Sign in to demo account</Text>
+              <Text className="text-foreground text-xl font-bold">Sign in</Text>
               <Text className="text-muted-foreground text-xs mt-1">{message}</Text>
             </View>
-            <Pressable accessibilityLabel="Close demo sign in" onPress={closeSheet} hitSlop={8} className="w-9 h-9 items-center justify-center">
+            <Pressable accessibilityLabel="Close sign in" onPress={closeSheet} hitSlop={8} className="w-9 h-9 items-center justify-center">
               <Ionicons name="close" size={22} color={isDark ? "#f8fafc" : "#30343b"} />
             </Pressable>
           </View>
           <TextInput
-            accessibilityLabel="Demo account email"
+            accessibilityLabel="Customer email"
             value={email}
             onChangeText={setEmail}
             placeholder="Email address"
@@ -75,7 +78,7 @@ export function MockSignInSheet({
             className="bg-secondary border border-border rounded-xl px-3 h-12 text-foreground text-sm mt-6"
           />
           <TextInput
-            accessibilityLabel="Demo account password"
+            accessibilityLabel="Customer password"
             value={password}
             onChangeText={setPassword}
             placeholder="Password"
@@ -86,8 +89,8 @@ export function MockSignInSheet({
             className="bg-secondary border border-border rounded-xl px-3 h-12 text-foreground text-sm mt-3"
           />
           {error.length > 0 && <Text accessibilityRole="alert" className="text-danger text-xs mt-3">{error}</Text>}
-          <Pressable accessibilityLabel="Sign in to the local demo account" onPress={handleSignIn} className="bg-primary rounded-xl items-center py-3.5 mt-5">
-            <Text className="text-primary-foreground text-sm font-bold">Sign in</Text>
+          <Pressable accessibilityLabel="Sign in" disabled={isSubmitting} onPress={() => void handleSignIn()} className="bg-primary rounded-xl items-center py-3.5 mt-5">
+            <Text className="text-primary-foreground text-sm font-bold">{isSubmitting ? "Signing in..." : "Sign in"}</Text>
           </Pressable>
           <Pressable onPress={closeSheet} className="items-center py-3">
             <Text className="text-muted-foreground text-xs font-semibold">Continue as guest</Text>

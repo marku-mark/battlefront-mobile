@@ -21,7 +21,9 @@
           "resizeMode": "contain",
           "backgroundColor": "#090b10"
         }
-      ]
+      ],
+      "expo-secure-store",
+      ["expo-image-picker", { "photosPermission": "Choose a payment proof image for your Battlefront order.", "cameraPermission": false, "microphonePermission": false }]
     ],
     "ios": {
       "supportsTablet": true,

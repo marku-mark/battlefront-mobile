@@ -11,7 +11,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getChatbotReply } from "@/lib/api";
+import { getChatbotReply, resetChatContext } from "@/lib/api";
+import { useSession } from "@/hooks/useSession";
 import { useTheme } from "@/theme/ThemeProvider";
 
 type ChatMessage = {
@@ -40,11 +41,14 @@ const quickQuestions = [
 
 export function Chatbot({ visible, onClose }: ChatbotProps) {
   const { isDark } = useTheme();
+  const { session } = useSession();
   const [messages, setMessages] = useState<ChatMessage[]>([welcomeMessage]);
   const [draft, setDraft] = useState("");
   const [isReplying, setIsReplying] = useState(false);
   const [failedMessage, setFailedMessage] = useState<string | null>(null);
   const listRef = useRef<FlatList<ChatMessage>>(null);
+  const generation = useRef(0);
+  useEffect(() => { generation.current++; resetChatContext(); setMessages([welcomeMessage]); setFailedMessage(null); setIsReplying(false); }, [session]);
 
   useEffect(() => {
     if (visible) {
@@ -65,6 +69,7 @@ export function Chatbot({ visible, onClose }: ChatbotProps) {
 
   async function sendMessage(text: string, appendUser = true) {
     if (!text || isReplying) return;
+    const owner = generation.current;
 
     if (appendUser) {
       const userMessage: ChatMessage = {
@@ -80,18 +85,21 @@ export function Chatbot({ visible, onClose }: ChatbotProps) {
 
     try {
       const reply = await getChatbotReply(text);
+      if (owner !== generation.current) return;
       setMessages((current) => [
         ...current,
         { id: `assistant-${Date.now()}`, role: "assistant", text: reply },
       ]);
     } catch {
-      setFailedMessage(text);
+      if (owner === generation.current) setFailedMessage(text);
     } finally {
-      setIsReplying(false);
+      if (owner === generation.current) setIsReplying(false);
     }
   }
 
   function clearConversation() {
+    generation.current++; setIsReplying(false);
+    resetChatContext();
     setMessages([welcomeMessage]);
     setDraft("");
     setFailedMessage(null);

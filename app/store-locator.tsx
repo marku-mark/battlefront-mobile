@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Alert, Linking, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { stores, type Store } from "@/lib/data";
+import type { Store } from "@/lib/data";
+import { getBranches } from "@/lib/api";
 import { useTheme } from "@/theme/ThemeProvider";
 import { getResponsiveLayout } from "@/lib/responsive";
 
@@ -13,6 +14,8 @@ export default function StoreLocatorScreen() {
   const { width } = useWindowDimensions();
   const layout = getResponsiveLayout(width);
   const [query, setQuery] = useState("");
+  const [stores, setStores] = useState<Store[]>([]);
+  useEffect(() => { getBranches().then(setStores).catch((error) => Alert.alert("Cannot load branches", error.message)); }, []);
 
   const filteredStores = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -23,7 +26,7 @@ export default function StoreLocatorScreen() {
         value.toLowerCase().includes(normalizedQuery)
       )
     );
-  }, [query]);
+  }, [query, stores]);
 
   return (
     <SafeAreaView className="flex-1 bg-background">
@@ -88,6 +91,7 @@ export default function StoreLocatorScreen() {
 
 function StoreCard({ store, isDark }: { store: Store; isDark: boolean }) {
   function callStore() {
+    if (!store.phone) { Alert.alert("Contact unavailable", "No confirmed phone number is available for this branch."); return; }
     Linking.openURL(`tel:${store.phone.replace(/[^\d+]/g, "")}`).catch(() => {
       Alert.alert("Unable to call", "Calling is not available on this device.");
     });

@@ -47,7 +47,7 @@ export function ProductDetails({ product, quantity, onQuantityChange, onAddToCar
   const rating = product.rating ?? 0;
   const reviewCount = product.reviewCount ?? 0;
   const hasRating = rating > 0 && reviewCount > 0;
-  const stockQuantity = product.stockQuantity ?? 12;
+  const stockQuantity = ["out_of_stock", "unavailable"].includes(product.availability ?? "") ? 0 : (product.stockQuantity ?? Number.MAX_SAFE_INTEGER);
   const facts = getProductFacts(product);
   const subtotal = product.price * quantity;
 
@@ -91,7 +91,7 @@ export function ProductDetails({ product, quantity, onQuantityChange, onAddToCar
               </>
             ) : <Text className="text-muted-foreground text-xs">No reviews yet</Text>}
             <View className={`ml-2 h-1.5 w-1.5 rounded-full ${stockQuantity > 0 ? "bg-success" : "bg-danger"}`} />
-            <Text className={`text-xs ${stockQuantity > 0 ? "text-muted-foreground" : "text-danger"}`}>{stockQuantity > 0 ? `${stockQuantity} available` : "Out of stock"}</Text>
+            <Text className={`text-xs ${stockQuantity > 0 ? "text-muted-foreground" : "text-danger"}`}>{stockQuantity > 0 ? (product.availability === "low_stock" ? "Low stock" : "In stock") : "Out of stock"}</Text>
           </View>
 
           {variants.length > 0 && <View className="mt-5"><View className="flex-row items-center justify-between mb-2"><Text className="text-foreground text-sm font-semibold">Choose an option</Text><Text className="text-muted-foreground text-xs">{selectedVariant ?? "Select"}</Text></View><View className="flex-row flex-wrap gap-2">{variants.map((variant) => <Pressable key={variant} accessibilityRole="radio" accessibilityLabel={`${variant} option`} accessibilityState={{ selected: selectedVariant === variant }} onPress={() => setSelectedVariant(variant)} className={`rounded-lg border px-3 py-2 ${selectedVariant === variant ? "border-primary bg-primary/10" : "border-border bg-secondary"}`}><Text className={`text-xs font-semibold ${selectedVariant === variant ? "text-primary" : "text-foreground"}`}>{variant}</Text></Pressable>)}</View></View>}
@@ -115,7 +115,7 @@ export function ProductDetails({ product, quantity, onQuantityChange, onAddToCar
             productId={product.id}
             rating={rating}
             reviewCount={reviewCount}
-            isMockAccount={session.mode === "mock-account"}
+            isMockAccount={session.mode === "customer"}
             onSignIn={() => setIsSignInOpen(true)}
           />
           <DetailDisclosure title="Specifications" open={specificationsOpen} color={colors.muted} onPress={() => setSpecificationsOpen((current) => !current)}>{facts.specifications.map(([label, value]) => <View key={label} className="flex-row justify-between gap-4 py-2 border-b border-border"><Text className="text-muted-foreground text-sm">{label}</Text><Text className="text-foreground text-sm font-medium flex-1 text-right">{value}</Text></View>)}</DetailDisclosure>

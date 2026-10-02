@@ -49,6 +49,7 @@ export default function HomeScreen() {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hasLoadError, setHasLoadError] = useState(false);
+  const [loadErrorMessage, setLoadErrorMessage] = useState("");
   const [retryCount, setRetryCount] = useState(0);
   const { addItem, itemCount, items: cartItems, subtotal: cartSubtotal } = useCart();
   const { products: recentlyViewedProducts, refresh: refreshRecentlyViewed } = useRecentlyViewedProducts();
@@ -162,6 +163,7 @@ export default function HomeScreen() {
     let isActive = true;
     setIsLoading(true);
     setHasLoadError(false);
+    setLoadErrorMessage("");
 
     Promise.all([getBanners(), getCategories(), getHomeCatalog(), getBrands()])
       .then(([loadedBanners, loadedCategories, homeCatalog, loadedBrands]) => {
@@ -174,8 +176,11 @@ export default function HomeScreen() {
         setCatalogProducts(homeCatalog.catalogProducts);
         setBrands(loadedBrands);
       })
-      .catch(() => {
-        if (isActive) setHasLoadError(true);
+      .catch((error) => {
+        if (isActive) {
+          setHasLoadError(true);
+          setLoadErrorMessage(error instanceof Error ? error.message : "Could not reach Battlefront. Check your Wi-Fi connection and try again.");
+        }
       })
       .finally(() => {
         if (isActive) setIsLoading(false);
@@ -222,7 +227,7 @@ export default function HomeScreen() {
         <View className="flex-1 items-center justify-center px-6">
           <Ionicons name="cloud-offline-outline" size={32} color="#9ca3af" />
           <Text className="mt-3 text-foreground text-base font-semibold">Could not load the catalog</Text>
-          <Text className="mt-1 text-center text-muted-foreground text-sm">Check your local catalog and try again.</Text>
+          <Text className="mt-1 text-center text-muted-foreground text-sm">{loadErrorMessage}</Text>
           <Pressable
             accessibilityRole="button"
             onPress={() => setRetryCount((count) => count + 1)}

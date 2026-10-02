@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { getProductById } from "@/lib/api";
 import type { Product } from "@/lib/data";
 
-const RECENTLY_VIEWED_STORAGE_KEY = "battlefront-recently-viewed";
+const RECENTLY_VIEWED_STORAGE_KEY = "battlefront-api-recently-viewed";
 const MAX_RECENT_ITEMS = 8;
 
 export async function getRecentlyViewedIds(): Promise<string[]> {

@@ -89,9 +89,8 @@ export default function ProductRoute() {
       product={product}
       quantity={quantity}
       onQuantityChange={setQuantity}
-      onAddToCart={(selectedProduct, itemQuantity, variant) => {
-        addItem(selectedProduct, itemQuantity, variant);
-        router.back();
+      onAddToCart={async (selectedProduct, itemQuantity, variant) => {
+        if (await addItem(selectedProduct, itemQuantity, variant)) router.back();
       }}
       onCompare={(productId) => router.push({ pathname: "/compare", params: { productId } })}
       onClose={() => router.back()}

@@ -9,7 +9,7 @@ import { WishlistProvider } from "@/hooks/useWishlist";
 import { SessionProvider } from "@/hooks/useSession";
 import { ThemeProvider } from "@/theme/ThemeProvider";
 import { useTheme } from "@/theme/ThemeProvider";
-import { initializeCatalogDatabase } from "@/lib/database";
+
 import { useEffect, useState } from "react";
 
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
@@ -31,9 +31,7 @@ export default function RootLayout() {
   const [isAppReady, setIsAppReady] = useState(false);
 
   useEffect(() => {
-    initializeCatalogDatabase()
-      .catch(() => undefined)
-      .finally(() => setIsAppReady(true));
+    setIsAppReady(true);
   }, []);
 
   useEffect(() => {

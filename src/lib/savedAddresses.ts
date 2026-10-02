@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { DEMO_ADDRESSES } from "@/lib/mockAccount";
+import { getLocalUserId } from "@/lib/api";
 import type { PhilippineAddressFields } from "@/lib/philippineAddress";
 
 export type SavedAddress = {
@@ -12,14 +12,11 @@ export type SavedAddress = {
 
 const SAVED_ADDRESSES_STORAGE_KEY = "battlefront-saved-addresses";
 
-export const DEFAULT_SAVED_ADDRESSES: SavedAddress[] = DEMO_ADDRESSES.map((savedAddress) => ({
-  ...savedAddress,
-  id: `default-${savedAddress.label.toLowerCase()}`,
-}));
+export const DEFAULT_SAVED_ADDRESSES: SavedAddress[] = [];
 
 export async function loadSavedAddresses(): Promise<SavedAddress[]> {
   try {
-    const storedAddresses = await AsyncStorage.getItem(SAVED_ADDRESSES_STORAGE_KEY);
+    const storedAddresses = await AsyncStorage.getItem(`${SAVED_ADDRESSES_STORAGE_KEY}-api-${getLocalUserId()}`);
     if (!storedAddresses) return DEFAULT_SAVED_ADDRESSES;
     const parsed: unknown = JSON.parse(storedAddresses);
     if (!Array.isArray(parsed)) return DEFAULT_SAVED_ADDRESSES;
@@ -30,7 +27,7 @@ export async function loadSavedAddresses(): Promise<SavedAddress[]> {
 }
 
 export async function persistSavedAddresses(addresses: SavedAddress[]): Promise<void> {
-  await AsyncStorage.setItem(SAVED_ADDRESSES_STORAGE_KEY, JSON.stringify(addresses));
+  await AsyncStorage.setItem(`${SAVED_ADDRESSES_STORAGE_KEY}-api-${getLocalUserId()}`, JSON.stringify(addresses));
 }
 
 function isSavedAddress(value: unknown): value is SavedAddress {

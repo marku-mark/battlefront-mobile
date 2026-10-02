@@ -32,9 +32,9 @@ export function ProductCard({ product, width = 150, onPress }: ProductCardProps)
     if (feedbackTimeout.current) clearTimeout(feedbackTimeout.current);
   }, []);
 
-  function handleQuickAdd() {
+  async function handleQuickAdd() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
-    addItem(product, 1, variants[0] ?? null);
+    if (!await addItem(product, 1, variants[0] ?? null)) return;
     setJustAdded(true);
     if (feedbackTimeout.current) clearTimeout(feedbackTimeout.current);
     feedbackTimeout.current = setTimeout(() => {
@@ -47,7 +47,7 @@ export function ProductCard({ product, width = 150, onPress }: ProductCardProps)
   const rating = product.rating ?? 0;
   const reviewCount = product.reviewCount ?? 0;
   const hasRating = rating > 0 && reviewCount > 0;
-  const stockQuantity = product.stockQuantity ?? 12;
+  const stockQuantity = ["out_of_stock", "unavailable"].includes(product.availability ?? "") ? 0 : (product.stockQuantity ?? Number.MAX_SAFE_INTEGER);
   const variants = getProductVariants(product);
   const discountPct = hasDiscount
     ? Math.round(
@@ -126,7 +126,7 @@ export function ProductCard({ product, width = 150, onPress }: ProductCardProps)
               <View className="flex-row items-center gap-1">
                 <View className={`h-1.5 w-1.5 rounded-full ${stockQuantity > 0 ? "bg-success" : "bg-danger"}`} />
                 <Text className={`text-[10px] uppercase tracking-[0.08em] ${stockQuantity > 0 ? "text-muted-foreground" : "text-danger"}`}>
-                  {stockQuantity > 0 ? `${stockQuantity} in stock` : "Out of stock"}
+                  {stockQuantity > 0 ? (product.availability === "low_stock" ? "Low stock" : "In stock") : "Out of stock"}
                 </Text>
               </View>
             </View>

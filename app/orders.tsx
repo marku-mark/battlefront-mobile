@@ -10,15 +10,18 @@ export default function OrdersScreen() {
   const router = useRouter();
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [returnRequestIds, setReturnRequestIds] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
       let isActive = true;
+      setLoading(true); setError(null);
       Promise.all([getOrders(), getOrderReturnRequests()]).then(([loadedOrders, requests]) => {
         if (!isActive) return;
         setOrders(loadedOrders);
         setReturnRequestIds(requests.map((request) => request.orderId));
-      });
+      }).catch((failure) => { if (isActive) setError(failure instanceof Error ? failure.message : "Cannot load orders."); }).finally(() => { if (isActive) setLoading(false); });
       return () => {
         isActive = false;
       };
@@ -48,7 +51,7 @@ export default function OrdersScreen() {
             onPress={() => router.push({ pathname: "/orders/[id]", params: { id: order.id } })}
           >
             <View className="flex-row items-center justify-between">
-              <Text className="text-foreground text-sm font-bold">{order.id}</Text>
+              <Text className="text-foreground text-sm font-bold">{order.reference}</Text>
               <View className="rounded-full bg-primary/10 px-2 py-1">
                 <Text className="text-primary text-[10px] font-bold uppercase tracking-[0.08em]">{returnRequestIds.includes(order.id) ? "Return requested" : order.status}</Text>
               </View>
@@ -64,7 +67,9 @@ export default function OrdersScreen() {
             </View>
           </Pressable>
         ))}
-        {orders.length === 0 && <Text className="py-10 text-center text-muted-foreground text-sm">No orders to show.</Text>}
+        {error && <Text className="py-4 text-center text-primary">{error}</Text>}
+        {loading && <Text className="py-4 text-center text-muted-foreground">Loading orders…</Text>}
+        {!loading && !error && orders.length === 0 && <Text className="py-10 text-center text-muted-foreground text-sm">No orders to show.</Text>}
       </ScrollView>
     </SafeAreaView>
   );
