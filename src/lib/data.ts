@@ -10,11 +10,13 @@ export type Product = {
   id: string;
   name: string;
   categoryId: string;
+  categoryName?: string;
+  description?: string | null;
   categorySlug?: string;
   brandId: string;
   price: number;
   originalPrice?: number;
-  image: string | ImageSourcePropType;
+  image: string;
   sold?: number;
   rating?: number;
   reviewCount?: number;
@@ -31,8 +33,9 @@ export function getProductVariants(product: Product): string[] {
   return [];
 }
 
-export function getProductImageSource(image: Product["image"]): ImageSourcePropType {
-  return typeof image === "string" ? { uri: image } : image;
+export function getProductImageSource(image: Product["image"]): ImageSourcePropType | undefined {
+  if (!/^https?:\/\//i.test(image)) return undefined;
+  return { uri: image };
 }
 
 export type Banner = {

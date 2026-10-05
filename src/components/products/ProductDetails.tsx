@@ -3,6 +3,7 @@ import { Alert, Image, Pressable, ScrollView, Text, View, useWindowDimensions } 
 import { useState, type ReactNode } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getProductImageSource, getProductVariants, type Product } from "@/lib/data";
+import { getProductFacts } from "@/lib/productCatalog";
 import { useTheme } from "@/theme/ThemeProvider";
 import { useWishlist } from "@/hooks/useWishlist";
 import { useSession } from "@/hooks/useSession";
@@ -96,7 +97,7 @@ export function ProductDetails({ product, quantity, onQuantityChange, onAddToCar
 
           {variants.length > 0 && <View className="mt-5"><View className="flex-row items-center justify-between mb-2"><Text className="text-foreground text-sm font-semibold">Choose an option</Text><Text className="text-muted-foreground text-xs">{selectedVariant ?? "Select"}</Text></View><View className="flex-row flex-wrap gap-2">{variants.map((variant) => <Pressable key={variant} accessibilityRole="radio" accessibilityLabel={`${variant} option`} accessibilityState={{ selected: selectedVariant === variant }} onPress={() => setSelectedVariant(variant)} className={`rounded-lg border px-3 py-2 ${selectedVariant === variant ? "border-primary bg-primary/10" : "border-border bg-secondary"}`}><Text className={`text-xs font-semibold ${selectedVariant === variant ? "text-primary" : "text-foreground"}`}>{variant}</Text></Pressable>)}</View></View>}
 
-          <View className="flex-row flex-wrap gap-2 mt-4"><InfoChip icon="shield-checkmark-outline" label="Warranty included" color={colors.icon} /><InfoChip icon="cube-outline" label="Ready to ship" color={colors.icon} />{product.sold !== undefined && <InfoChip icon="trending-up-outline" label={`${product.sold} sold`} color={colors.icon} />}</View>
+          <View className="flex-row flex-wrap gap-2 mt-4"><InfoChip icon="cube-outline" label={facts.availability} color={colors.icon} />{product.sold !== undefined && <InfoChip icon="trending-up-outline" label={`${product.sold} sold`} color={colors.icon} />}</View>
           {onCompare && (
             <Pressable
               accessibilityRole="button"
@@ -108,9 +109,9 @@ export function ProductDetails({ product, quantity, onQuantityChange, onAddToCar
               <Text className="text-foreground text-xs font-semibold">Compare products</Text>
             </Pressable>
           )}
-          <View className="mt-5 rounded-2xl bg-secondary border border-border p-3 shadow-soft"><View className="flex-row items-center justify-between"><Text className="text-foreground text-sm font-semibold">Delivery</Text><Text className="text-primary text-xs font-bold uppercase tracking-[0.12em]">Free over ₱5,000</Text></View><Text className="text-muted-foreground text-xs mt-1.5">Ships in 24 hours • Cash on delivery supported</Text></View>
+          <View className="mt-5 rounded-2xl bg-secondary border border-border p-3 shadow-soft"><Text className="text-foreground text-sm font-semibold">Fulfillment and payment</Text><Text className="text-muted-foreground text-xs mt-1.5">Available pickup, delivery, and payment options are shown at checkout.</Text></View>
 
-          <View className="mt-6 pt-5 border-t border-border"><Text className="text-foreground text-base font-semibold">About this product</Text><Text className="text-muted-foreground text-sm leading-5 mt-2">{facts.description}</Text><View className="mt-3 gap-2">{facts.highlights.map((highlight) => <BulletPoint key={highlight} text={highlight} />)}</View></View>
+          <View className="mt-6 pt-5 border-t border-border"><Text className="text-foreground text-base font-semibold">About this product</Text><Text className="text-muted-foreground text-sm leading-5 mt-2">{facts.description}</Text></View>
           <ProductReviewPanel
             productId={product.id}
             rating={rating}
@@ -132,14 +133,6 @@ export function ProductDetails({ product, quantity, onQuantityChange, onAddToCar
   );
 }
 
-type ProductFacts = { description: string; highlights: string[]; specifications: [string, string][]; compatibility: string };
-
-function getProductFacts(product: Product): ProductFacts {
-  if (product.categoryId === "cat-1") return { description: `${product.name} is a portable everyday workstation for focused work, study, and travel-ready productivity.`, highlights: ["Balanced performance for work and study", "Compact setup with fewer accessories", "Covered by Battlefront support and warranty"], specifications: [["Category", "Laptop"], ["Use case", "Work, study, and portable gaming"], ["Availability", "Ready to ship"]], compatibility: "Works with standard USB accessories, external displays, and common laptop docks." };
-  if (product.categoryId === "cat-3") return { description: `${product.name} is a core desktop component selected for reliable performance in a custom PC build or upgrade.`, highlights: ["Designed for upgrade-focused builds", "Check system fit before checkout", "Covered by Battlefront support and warranty"], specifications: [["Category", "Component"], ["Build role", "Desktop upgrade"], ["Availability", "Ready to ship"]], compatibility: "Confirm your motherboard, case clearance, power requirements, and connector standards before ordering." };
-  return { description: `${product.name} is selected for dependable performance in a practical Battlefront setup.`, highlights: ["Built for reliable everyday use", "Suitable for common upgrade paths", "Covered by Battlefront support and warranty"], specifications: [["Category", "Computer hardware"], ["Availability", "Ready to ship"]], compatibility: "Review your current setup dimensions, connectors, and requirements before ordering." };
-}
-
 function getProductReviews(product: Product): ProductReview[] {
   return [
     { id: `${product.id}-review-1`, author: "Marco R.", title: "Good value for the build", body: "Arrived in good condition and matched the product details. Setup was straightforward.", rating: 5 },
@@ -157,10 +150,6 @@ function DetailDisclosure({ title, open, color, onPress, children }: { title: st
 
 function InfoChip({ icon, label, color }: { icon: "shield-checkmark-outline" | "cube-outline" | "trending-up-outline"; label: string; color: string }) {
   return <View className="flex-row items-center gap-1.5 bg-secondary border border-border rounded-xl px-2.5 py-2"><Ionicons name={icon} size={14} color={color} /><Text className="text-muted-foreground text-xs">{label}</Text></View>;
-}
-
-function BulletPoint({ text }: { text: string }) {
-  return <View className="flex-row items-start gap-2"><View className="mt-1.5 h-1.5 w-1.5 rounded-full bg-primary" /><Text className="flex-1 text-muted-foreground text-sm leading-5">{text}</Text></View>;
 }
 
 function QuantityButton({ icon, accessibilityLabel, color, disabled = false, onPress }: { icon: "remove" | "add"; accessibilityLabel: string; color: string; disabled?: boolean; onPress: () => void }) {

@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { FlashList } from "@shopify/flash-list";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ProductCard } from "@/components/sections/ProductCard";
@@ -42,31 +42,27 @@ export default function CategoriesScreen() {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [hasLoadError, setHasLoadError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     setSelectedCategoryIds(categoryId ? [categoryId] : []);
     setSelectedBrandId(brandId ?? null);
   }, [brandId, categoryId]);
 
-  useEffect(() => {
-    loadCatalog();
-  }, []);
-
-  async function loadCatalog() {
+  useFocusEffect(useCallback(() => {
+    let isActive = true;
     setIsLoading(true);
     setHasLoadError(false);
-    try {
-      const [loadedProducts, loadedCategories, loadedBrands] = await Promise.all([getProducts(), getCategories(), getBrands()]);
+    Promise.all([getProducts(), getCategories(), getBrands()]).then(([loadedProducts, loadedCategories, loadedBrands]) => {
+      if (!isActive) return;
       setProducts(loadedProducts);
       setCategories(loadedCategories);
       setBrands(loadedBrands);
-    } catch {
-      setProducts([]);
-      setHasLoadError(true);
-    } finally {
-      setIsLoading(false);
-    }
-  }
+    }).catch(() => {
+      if (isActive) { setProducts([]); setHasLoadError(true); }
+    }).finally(() => { if (isActive) setIsLoading(false); });
+    return () => { isActive = false; };
+  }, [retryCount]));
 
   const selectedCategories = useMemo(() => categories.filter((category) => selectedCategoryIds.includes(category.id)), [categories, selectedCategoryIds]);
 
@@ -227,7 +223,7 @@ export default function CategoriesScreen() {
           isLoading ? (
             <CatalogState icon="refresh-outline" title="Loading products" message="Preparing the offline catalog." showSpinner />
           ) : hasLoadError ? (
-            <CatalogState icon="cloud-offline-outline" title="Could not load products" message="Check the local catalog and try again." actionLabel="Try again" onAction={loadCatalog} />
+            <CatalogState icon="cloud-offline-outline" title="Could not load products" message="Check your connection and try again." actionLabel="Try again" onAction={() => setRetryCount((current) => current + 1)} />
           ) : products.length === 0 ? (
             <CatalogState icon="search-outline" title="No products available" message="The local catalog is empty." />
           ) : productQuery.trim() ? (

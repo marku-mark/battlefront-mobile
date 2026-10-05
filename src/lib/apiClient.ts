@@ -38,6 +38,35 @@ export function createApiClient(baseUrl: string, getToken: () => string | null =
 
 export type Page<T> = { data: T[]; meta: { current_page: number; last_page: number; total: number } };
 
+export function createCachedRead<T>(load: () => Promise<T>, maxAgeMs: number, now: () => number = Date.now) {
+  let cached: Promise<T> | null = null;
+  let pending = false;
+  let expiresAt = 0;
+  let invalidated = false;
+  return {
+    read() {
+      if (cached && (pending || now() < expiresAt)) return cached;
+      pending = true;
+      invalidated = false;
+      const current = Promise.resolve().then(load).then((value) => {
+        if (cached === current) { pending = false; expiresAt = invalidated ? 0 : now() + maxAgeMs; }
+        return value;
+      }, (error) => {
+        if (cached === current) { cached = null; pending = false; }
+        throw error;
+      });
+      cached = current;
+      return current;
+    },
+    invalidate() {
+      // Finish an active load before another read can start a duplicate pagination run.
+      if (pending) { invalidated = true; return; }
+      cached = null;
+      expiresAt = 0;
+    },
+  };
+}
+
 export function retryRateLimitedRead(request: <T>(path: string) => Promise<T>, wait: (milliseconds: number) => Promise<void> = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))) {
   return async function read<T>(path: string): Promise<T> {
     try { return await request<T>(path); }

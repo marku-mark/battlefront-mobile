@@ -8,6 +8,7 @@ import { useCart } from "@/hooks/useCart";
 import { useSession } from "@/hooks/useSession";
 import { getCheckout, type Checkout } from "@/lib/api";
 import { placeOrder } from "@/lib/orders";
+import { loadSavedAddresses, type SavedAddress } from "@/lib/savedAddresses";
 
 export default function CheckoutScreen() {
   const router = useRouter();
@@ -18,6 +19,8 @@ export default function CheckoutScreen() {
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  const [checkoutRetry, setCheckoutRetry] = useState(0);
   const [fulfillment, setFulfillment] = useState("pickup");
   const [payment, setPayment] = useState("cash");
   const [proof, setProof] = useState<ImagePicker.ImagePickerAsset | null>(null);
@@ -28,13 +31,15 @@ export default function CheckoutScreen() {
   useEffect(() => {
     let active = true;
     setPreview(null); setError("");
+    setSavedAddresses([]);
     if (customerId === null || createdOrderId) return;
-    getCheckout().then((result) => {
+    Promise.all([getCheckout(), loadSavedAddresses()]).then(([result, addresses]) => {
       if (!active) return;
       setPreview(result); setFullName(result.customer.name); setAddress(result.customer.default_delivery_address ?? "");
+      setSavedAddresses(addresses);
     }).catch((reason) => { if (active) setError(reason.message); });
     return () => { active = false; };
-  }, [customerId, items, createdOrderId]);
+  }, [customerId, items, createdOrderId, checkoutRetry]);
   const paymentOptions = preview?.payment_methods.filter((method) => method.available_for.includes(fulfillment)) ?? [];
   const selectedPayment = paymentOptions.find((method) => method.value === payment);
   async function chooseProof() {
@@ -73,14 +78,20 @@ export default function CheckoutScreen() {
           <Pressable onPress={() => router.replace({ pathname: "/orders/[id]", params: { id: createdOrderId } })} className="mt-5 rounded-xl bg-primary px-5 py-3"><Text className="text-primary-foreground">View order</Text></Pressable>
         </View> : session.mode === "guest" ? <Pressable onPress={() => setIsSignInOpen(true)} className="rounded-xl bg-primary px-5 py-3"><Text className="text-primary-foreground">Sign in to continue</Text></Pressable> : !preview ? <View>
           {error ? <Text className="text-danger">{error}</Text> : <ActivityIndicator />}
-          {error ? <Pressable onPress={() => getCheckout().then(setPreview).catch((reason) => setError(reason.message))}><Text className="text-primary mt-4">Retry</Text></Pressable> : null}
+          {error ? <Pressable onPress={() => setCheckoutRetry((current) => current + 1)}><Text className="text-primary mt-4">Retry</Text></Pressable> : null}
         </View> : <View>
           <Text className="text-foreground text-base font-bold">Recipient</Text>
           <TextInput accessibilityLabel="Recipient name" value={fullName} onChangeText={setFullName} placeholder="Full name" className="mt-3 rounded-xl border border-border bg-secondary px-3 py-3 text-foreground" />
           <TextInput accessibilityLabel="Contact number" value={phone} onChangeText={setPhone} placeholder="Contact number" keyboardType="phone-pad" className="mt-3 rounded-xl border border-border bg-secondary px-3 py-3 text-foreground" />
           <Text className="text-foreground text-base font-bold mt-6">Fulfillment</Text>
           {preview.fulfillment_methods.map((method) => <Pressable key={method.value} onPress={() => { setFulfillment(method.value); setProof(null); setPayment(preview.payment_methods.find((option) => option.available_for.includes(method.value))?.value ?? ""); }} className="mt-3 rounded-xl border border-border bg-card p-4"><Text className="text-foreground">{fulfillment === method.value ? "● " : "○ "}{method.label}</Text></Pressable>)}
-          {fulfillment === "delivery" ? <TextInput accessibilityLabel="Delivery address" value={address} onChangeText={setAddress} placeholder="Full delivery address" multiline className="mt-3 rounded-xl border border-border bg-secondary px-3 py-3 text-foreground" /> : <Text className="text-muted-foreground text-sm mt-3">{preview.pickup_location.name}{"\n"}{preview.pickup_location.address}{"\n"}{preview.pickup_location.operating_hours}</Text>}
+          {fulfillment === "delivery" ? <View>
+            {savedAddresses.length > 0 && <View className="mt-3">
+              <Text className="text-foreground text-sm font-semibold">Use a saved address</Text>
+              {savedAddresses.map((saved) => <Pressable key={saved.id} onPress={() => { setAddress(saved.address); setFullName(saved.recipient); setPhone(saved.phone); }} className="mt-2 rounded-xl border border-border bg-card p-3"><Text className="text-foreground text-sm">{saved.label} · {saved.recipient}</Text><Text className="text-muted-foreground text-xs mt-1">{saved.address}</Text></Pressable>)}
+            </View>}
+            <TextInput accessibilityLabel="Delivery address" value={address} onChangeText={setAddress} placeholder="Full delivery address" multiline maxLength={255} className="mt-3 rounded-xl border border-border bg-secondary px-3 py-3 text-foreground" />
+          </View> : <Text className="text-muted-foreground text-sm mt-3">{preview.pickup_location.name}{"\n"}{preview.pickup_location.address}{"\n"}{preview.pickup_location.operating_hours}</Text>}
           <Text className="text-foreground text-base font-bold mt-6">Payment</Text>
           {paymentOptions.map((method) => <Pressable key={method.value} onPress={() => { setPayment(method.value); setProof(null); }} className="mt-3 rounded-xl border border-border bg-card p-4"><Text className="text-foreground">{payment === method.value ? "● " : "○ "}{method.label}</Text></Pressable>)}
           {selectedPayment?.requires_proof && <View>

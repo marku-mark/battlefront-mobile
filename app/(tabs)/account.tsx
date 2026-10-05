@@ -1,12 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MockSignInSheet } from "@/components/account/MockSignInSheet";
 import { PhilippineAddressFields } from "@/components/addresses/PhilippineAddressFields";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { useSession } from "@/hooks/useSession";
+import { getLocalUserId } from "@/lib/api";
 import { getOrders, type OrderRecord } from "@/lib/orders";
 import { EMPTY_PHILIPPINE_ADDRESS, formatPhilippineAddress, isCompletePhilippineAddress, type PhilippineAddressFields as PhilippineAddressValue } from "@/lib/philippineAddress";
 import { loadSavedAddresses, persistSavedAddresses, type SavedAddress } from "@/lib/savedAddresses";
@@ -14,7 +15,7 @@ import { useTheme } from "@/theme/ThemeProvider";
 
 const accountLinks = [
   { icon: "receipt-outline", label: "My orders", detail: "View your order history", badge: "Live" },
-  { icon: "location-outline", label: "Delivery addresses", detail: "Saved locally on this device", badge: "Local" },
+  { icon: "location-outline", label: "Delivery addresses", detail: "Sync your default address for checkout", badge: "Live" },
   { icon: "heart-outline", label: "Wishlist", detail: "Saved on this device", badge: "Local" },
   { icon: "help-circle-outline", label: "Help center", detail: "Preview support information", badge: "Preview" },
 ] as const;
@@ -24,9 +25,9 @@ export default function AccountScreen() {
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const { width } = useWindowDimensions();
   const { isDark, toggleMode, colors } = useTheme();
-  const { session, isHydrated, signIn, signOut } = useSession();
+  const { session, isHydrated, signOut, saveProfile, refreshProfile } = useSession();
   const isMockAccount = session.mode === "customer";
-  useEffect(() => { setOrders([]); if (session.mode === "customer") getOrders().then(setOrders).catch(() => undefined); }, [session]);
+  useEffect(() => { setOrders([]); if (session.mode === "customer") getOrders().then(setOrders).catch(() => undefined); }, [session.mode === "customer" ? session.user.id : null]);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [selectedUtility, setSelectedUtility] = useState<string | null>(null);
   const [authMessage, setAuthMessage] = useState("");
@@ -40,27 +41,91 @@ export default function AccountScreen() {
   const [newAddressPhone, setNewAddressPhone] = useState("");
   const [newAddressLocation, setNewAddressLocation] = useState<PhilippineAddressValue>(EMPTY_PHILIPPINE_ADDRESS);
   const [isSavingAddress, setIsSavingAddress] = useState(false);
+  const [profileName, setProfileName] = useState("");
+  const [profileEmail, setProfileEmail] = useState("");
+  const [profileAddress, setProfileAddress] = useState("");
+  const [profileError, setProfileError] = useState("");
+  const [isProfileLoading, setIsProfileLoading] = useState(false);
+  const [isProfileLoaded, setIsProfileLoaded] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const customerId = session.mode === "customer" ? session.user.id : null;
+  const previousCustomerId = useRef(customerId);
+  useEffect(() => {
+    const previousId = previousCustomerId.current;
+    previousCustomerId.current = customerId;
+    if (previousId === null || previousId === customerId) return;
+    setSelectedUtility(null);
+    setSavedAddresses([]); setIsAddingAddress(false);
+    setAddressError(""); setProfileError("");
+    setIsSavingAddress(false); setIsAddressesLoading(false); setIsSavingProfile(false); setIsProfileLoading(false); setIsProfileLoaded(false);
+  }, [customerId]);
+
+  async function openProfileSettings() {
+    const owner = getLocalUserId();
+    setSelectedUtility("Account settings"); setProfileError(""); setIsProfileLoading(true); setIsProfileLoaded(false);
+    try {
+      const user = await refreshProfile();
+      if (getLocalUserId() !== owner) return;
+      setProfileName(user.name); setProfileEmail(user.email); setProfileAddress(user.default_delivery_address ?? "");
+      setIsProfileLoaded(true);
+    } catch (reason) { if (getLocalUserId() === owner) setProfileError(reason instanceof Error ? reason.message : "Could not load your profile."); }
+    finally { if (getLocalUserId() === owner) setIsProfileLoading(false); }
+  }
+
+  async function submitProfile() {
+    if (isSavingProfile || !isProfileLoaded || customerId === null) return;
+    if (!profileName.trim() || !profileEmail.trim()) { setProfileError("Enter your name and email address."); return; }
+    setIsSavingProfile(true); setProfileError("");
+    try {
+      await saveProfile({ name: profileName, email: profileEmail, default_delivery_address: profileAddress.trim() || null }, customerId);
+      if (getLocalUserId() === customerId) setSelectedUtility(null);
+    } catch (reason) { if (getLocalUserId() === customerId) setProfileError(reason instanceof Error ? reason.message : "Could not save your profile."); }
+    finally { if (getLocalUserId() === customerId) setIsSavingProfile(false); }
+  }
+
+  async function useDefaultAddress(address: string | null) {
+    if (isSavingAddress) return;
+    const owner = getLocalUserId();
+    setIsSavingAddress(true); setAddressError("");
+    try {
+      const user = await refreshProfile();
+      await saveProfile({ name: user.name, email: user.email, default_delivery_address: address }, user.id);
+    } catch (reason) { if (getLocalUserId() === owner) setAddressError(reason instanceof Error ? reason.message : "Could not update your default address."); }
+    finally { if (getLocalUserId() === owner) setIsSavingAddress(false); }
+  }
 
   async function openSavedAddresses() {
     setSelectedUtility("Delivery addresses");
     setIsAddressesLoading(true);
     setAddressError("");
-    setSavedAddresses(await loadSavedAddresses());
-    setIsAddressesLoading(false);
+    const owner = getLocalUserId();
+    try {
+      const [addresses] = await Promise.all([loadSavedAddresses(), refreshProfile()]);
+      if (getLocalUserId() === owner) setSavedAddresses(addresses);
+    } catch (reason) { if (getLocalUserId() === owner) setAddressError(reason instanceof Error ? reason.message : "Could not load your addresses."); }
+    finally { if (getLocalUserId() === owner) setIsAddressesLoading(false); }
   }
 
   async function removeSavedAddress(addressId: string) {
+    if (isSavingAddress) return;
+    const owner = getLocalUserId();
     const nextAddresses = savedAddresses.filter((address) => address.id !== addressId);
+    setIsSavingAddress(true);
     try {
       await persistSavedAddresses(nextAddresses);
+      if (getLocalUserId() !== owner) return;
       setSavedAddresses(nextAddresses);
       setAddressError("");
     } catch {
-      setAddressError("Couldn't remove this address. Please try again.");
+      if (getLocalUserId() === owner) setAddressError("Couldn't remove this address. Please try again.");
+    } finally {
+      if (getLocalUserId() === owner) setIsSavingAddress(false);
     }
   }
 
   async function addSavedAddress() {
+    if (isSavingAddress) return;
+    const owner = getLocalUserId();
     const label = newAddressLabel.trim();
     const recipient = newAddressRecipient.trim();
     const phone = newAddressPhone.trim();
@@ -82,6 +147,7 @@ export default function AccountScreen() {
     setIsSavingAddress(true);
     try {
       await persistSavedAddresses(nextAddresses);
+      if (getLocalUserId() !== owner) return;
       setSavedAddresses(nextAddresses);
       setNewAddressLabel("");
       setNewAddressRecipient("");
@@ -90,9 +156,9 @@ export default function AccountScreen() {
       setIsAddingAddress(false);
       setAddressError("");
     } catch {
-      setAddressError("Couldn't save this address. Please try again.");
+      if (getLocalUserId() === owner) setAddressError("Couldn't save this address. Please try again.");
     } finally {
-      setIsSavingAddress(false);
+      if (getLocalUserId() === owner) setIsSavingAddress(false);
     }
   }
 
@@ -165,7 +231,7 @@ export default function AccountScreen() {
             <Pressable
               onPress={() => {
                 if (isMockAccount) {
-                  setSelectedUtility("Account settings");
+                  void openProfileSettings();
                   return;
                 }
                 return;
@@ -312,7 +378,12 @@ export default function AccountScreen() {
               </View>
             ) : selectedUtility === "Delivery addresses" ? (
               <View className="mt-3 gap-3">
-                <Text className="text-muted-foreground text-xs">Saved on this device</Text>
+                <Text className="text-muted-foreground text-xs">Your default address syncs with Battlefront and pre-fills delivery checkout. Additional addresses stay on this device.</Text>
+                {session.mode === "customer" && session.user.default_delivery_address && <View className="rounded-xl border border-border bg-card p-3">
+                  <Text className="text-foreground text-sm font-semibold">Default delivery address</Text>
+                  <Text className="text-muted-foreground text-xs leading-5 mt-1">{session.user.default_delivery_address}</Text>
+                  <Pressable disabled={isSavingAddress} onPress={() => void useDefaultAddress(null)} className="mt-3 py-2"><Text className="text-primary text-xs font-semibold">{isSavingAddress ? "Updating..." : "Clear default address"}</Text></Pressable>
+                </View>}
                 {isAddressesLoading ? (
                   <ActivityIndicator color={isDark ? "#f8fafc" : "#30343b"} />
                 ) : savedAddresses.length > 0 ? (
@@ -322,10 +393,14 @@ export default function AccountScreen() {
                         <Text className="text-foreground text-sm font-semibold">{address.label} · {address.recipient}</Text>
                         <Text className="text-muted-foreground text-xs leading-5 mt-1">{address.address}</Text>
                         <Text className="text-muted-foreground text-xs mt-1">{address.phone}</Text>
+                        <Pressable disabled={isSavingAddress || isAddressesLoading || (session.mode === "customer" && session.user.default_delivery_address === address.address)} onPress={() => void useDefaultAddress(address.address)} className="mt-2 py-2">
+                          <Text className="text-primary text-xs font-semibold">{session.mode === "customer" && session.user.default_delivery_address === address.address ? "Default address" : isSavingAddress ? "Updating..." : "Use as default"}</Text>
+                        </Pressable>
                       </View>
                       <Pressable
                         accessibilityRole="button"
-                        accessibilityLabel={`Remove ${address.label} address`}
+                        accessibilityLabel={`Remove ${address.label} address from this device`}
+                        disabled={isSavingAddress}
                         onPress={() => void removeSavedAddress(address.id)}
                         hitSlop={8}
                         className="h-10 w-10 items-center justify-center"
@@ -335,7 +410,7 @@ export default function AccountScreen() {
                     </View>
                   ))
                 ) : (
-                  <Text className="text-muted-foreground text-xs">No saved addresses. You can add one during checkout.</Text>
+                  <Text className="text-muted-foreground text-xs">No additional addresses saved on this device. Add one below.</Text>
                 )}
                 {!isAddressesLoading && isAddingAddress && (
                   <View className="rounded-xl border border-border bg-secondary p-3">
@@ -409,9 +484,18 @@ export default function AccountScreen() {
               </View>
             ) : selectedUtility === "Account settings" && isMockAccount ? (
               <View className="mt-3 rounded-xl border border-border bg-card p-3">
-                <Text className="text-muted-foreground text-xs">Battlefront customer profile</Text>
-                <Text className="text-foreground text-sm mt-2">{session.user.displayName}</Text>
-                <Text className="text-muted-foreground text-xs mt-1">{session.user.email}</Text>
+                {isProfileLoading ? <ActivityIndicator /> : <>
+                  <Text className="text-foreground text-sm font-semibold">Name</Text>
+                  <TextInput accessibilityLabel="Profile name" value={profileName} onChangeText={setProfileName} editable={!isSavingProfile} maxLength={255} className="mt-2 h-11 rounded-lg border border-border bg-secondary px-3 text-foreground text-sm" />
+                  <Text className="text-foreground text-sm font-semibold mt-4">Email address</Text>
+                  <TextInput accessibilityLabel="Profile email" value={profileEmail} onChangeText={setProfileEmail} editable={!isSavingProfile} autoCapitalize="none" autoCorrect={false} keyboardType="email-address" maxLength={255} className="mt-2 h-11 rounded-lg border border-border bg-secondary px-3 text-foreground text-sm" />
+                  <Text className="text-foreground text-sm font-semibold mt-4">Default delivery address</Text>
+                  <TextInput accessibilityLabel="Default delivery address" value={profileAddress} onChangeText={setProfileAddress} editable={!isSavingProfile} multiline maxLength={255} className="mt-2 rounded-lg border border-border bg-secondary px-3 py-3 text-foreground text-sm" />
+                  <Text className="text-muted-foreground text-xs mt-2">Used to pre-fill delivery checkout. Leave empty to clear it.</Text>
+                  <Pressable disabled={isSavingProfile || !isProfileLoaded} onPress={() => void submitProfile()} className="mt-4 rounded-xl bg-primary items-center py-3"><Text className="text-primary-foreground text-sm font-semibold">{isSavingProfile ? "Saving..." : "Save changes"}</Text></Pressable>
+                </>}
+                {profileError ? <Text accessibilityRole="alert" className="text-danger text-xs mt-3">{profileError}</Text> : null}
+                {!isProfileLoading && !isProfileLoaded && <Pressable onPress={() => void openProfileSettings()} className="mt-3 py-2"><Text className="text-primary text-sm">Retry loading profile</Text></Pressable>}
               </View>
             ) : (
               <Text className="text-muted-foreground text-sm leading-5 mt-2">

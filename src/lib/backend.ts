@@ -1,5 +1,9 @@
 import { banners, type Banner, type Brand, type Category, type Product, type Store } from "./data";
-import { ApiError, collectPages, createApiClient, retryRateLimitedRead } from "./apiClient";
+import { ApiError, collectPages, createApiClient, createCachedRead, retryRateLimitedRead } from "./apiClient";
+import { createAccountApi } from "./accountApi";
+import { mapProduct, type ApiProduct } from "./productCatalog";
+export { mapProduct, type ApiProduct } from "./productCatalog";
+export type { ApiUser, AuthResult, ProfileInput, RegistrationInput } from "./accountApi";
 import type { ApiCart } from "./cartState";
 export type { ApiCart } from "./cartState";
 export { ApiError } from "./apiClient";
@@ -17,40 +21,16 @@ export const apiRequest = createApiClient(process.env.EXPO_PUBLIC_API_URL ?? "",
   sessionListeners.forEach((listener) => listener());
 });
 type Envelope<T> = { data: T };
-export type ApiUser = { id: number; name: string; email: string; default_delivery_address: string | null };
-export async function login(email: string, password: string) {
-  return (await apiRequest<Envelope<{ user: ApiUser; token: string; expires_at: string }>>("auth/login", { method: "POST", body: JSON.stringify({ email: email.trim(), password, device_name: "Battlefront Expo" }) })).data;
-}
-export async function logout() { await apiRequest<void>("auth/logout", { method: "POST" }); }
-export async function getProfile() { return (await apiRequest<Envelope<ApiUser>>("profile")).data; }
-export async function updateProfile(fields: { name: string; email: string; default_delivery_address?: string | null }) {
-  return (await apiRequest<Envelope<ApiUser>>("profile", { method: "PATCH", body: JSON.stringify(fields) })).data;
-}
-export type ApiProduct = {
-  id: number; name: string; description?: string | null; brand: string | null; price: string; discount_price: string | null;
-  image_url: string | null; category: { id: number; name: string }; tags?: { id: number; name: string }[]; inventory?: { status: string };
-};
-export function mapProduct(row: ApiProduct): Product {
-  return { id: String(row.id), name: row.name, categoryId: String(row.category.id), categorySlug: `category-${row.category.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`, brandId: row.brand ?? "",
-    price: Number(row.discount_price ?? row.price), originalPrice: row.discount_price ? Number(row.price) : undefined,
-    image: row.image_url ?? "", availability: row.inventory?.status ?? "in_stock", variants: [],
-    performanceTier: row.tags?.map((tag) => tag.name).join(", "), rating: 0, reviewCount: 0 };
-}
+export const { login, register, logout, getProfile, updateProfile } = createAccountApi(apiRequest);
 type Filters = { categories: { id: number; name: string }[]; brands: string[] };
 const readCatalog = retryRateLimitedRead(apiRequest);
-let filterPromise: Promise<Filters> | null = null;
-function getFilters() { return filterPromise ??= readCatalog<Envelope<Filters>>("products/filters").then((result) => result.data).catch((error) => { filterPromise = null; throw error; }); }
+const filterCache = createCachedRead(() => readCatalog<Envelope<Filters>>("products/filters").then((result) => result.data), 60_000);
+function getFilters() { return filterCache.read(); }
 export async function getCategories(): Promise<Category[]> { return (await getFilters()).categories.map((row) => ({ id: String(row.id), name: row.name, icon: "cube-outline" })); }
 export async function getBrands(): Promise<Brand[]> { return (await getFilters()).brands.map((name) => ({ id: name, name, logo: "" })); }
-let catalogPromise: Promise<Product[]> | null = null;
-let catalogExpires = 0;
-export function invalidateCatalog() { catalogPromise = null; catalogExpires = 0; filterPromise = null; }
-export function getProducts(): Promise<Product[]> {
-  if (catalogPromise && catalogExpires > Date.now()) return catalogPromise;
-  catalogExpires = Date.now() + 10 * 60_000;
-  catalogPromise = collectPages<ApiProduct>(readCatalog, "products").then((rows) => rows.map(mapProduct)).catch((error) => { catalogPromise = null; throw error; });
-  return catalogPromise;
-}
+const catalogCache = createCachedRead(() => collectPages<ApiProduct>(readCatalog, "products").then((rows) => rows.map(mapProduct)), 60_000);
+export function invalidateCatalog() { catalogCache.invalidate(); filterCache.invalidate(); }
+export function getProducts(): Promise<Product[]> { return catalogCache.read(); }
 export async function getProductById(id: string): Promise<Product | null> {
   try { return mapProduct((await apiRequest<Envelope<ApiProduct>>(`products/${encodeURIComponent(id)}`)).data); }
   catch (error) { if (error instanceof ApiError && error.status === 404) return null; throw error; }

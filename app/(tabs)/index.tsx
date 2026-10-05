@@ -9,6 +9,7 @@ import {
   getCategories,
   getFlashDealEndTime,
   getHomeCatalog,
+  invalidateCatalog,
 } from "@/lib/api";
 import type { Banner, Brand, Category, Product } from "@/lib/data";
 import { Header } from "@/components/layout/Header";
@@ -48,6 +49,8 @@ export default function HomeScreen() {
   const loadMoreTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const hasCatalogRef = useRef(false);
   const [hasLoadError, setHasLoadError] = useState(false);
   const [loadErrorMessage, setLoadErrorMessage] = useState("");
   const [retryCount, setRetryCount] = useState(0);
@@ -159,9 +162,9 @@ export default function HomeScreen() {
     router.push({ pathname: "/product/[id]", params: { id: product.id } });
   }
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     let isActive = true;
-    setIsLoading(true);
+    setIsLoading(!hasCatalogRef.current);
     setHasLoadError(false);
     setLoadErrorMessage("");
 
@@ -174,6 +177,7 @@ export default function HomeScreen() {
         setSulitPicks(homeCatalog.sulitPicks);
         setNewArrivals(homeCatalog.newArrivals);
         setCatalogProducts(homeCatalog.catalogProducts);
+        hasCatalogRef.current = true;
         setBrands(loadedBrands);
       })
       .catch((error) => {
@@ -183,13 +187,13 @@ export default function HomeScreen() {
         }
       })
       .finally(() => {
-        if (isActive) setIsLoading(false);
+        if (isActive) { setIsLoading(false); setIsRefreshing(false); }
       });
 
     return () => {
       isActive = false;
     };
-  }, [retryCount]);
+  }, [retryCount]));
 
   if (isLoading) {
     return (
@@ -250,6 +254,13 @@ export default function HomeScreen() {
       />
       <FlashList
         data={visibleCatalogProducts}
+        refreshing={isRefreshing}
+        onRefresh={() => {
+          if (isRefreshing) return;
+          invalidateCatalog();
+          setIsRefreshing(true);
+          setRetryCount((current) => current + 1);
+        }}
         key={`home-products-${layout.productColumns}`}
         numColumns={layout.productColumns}
         keyExtractor={(item) => item.id}
