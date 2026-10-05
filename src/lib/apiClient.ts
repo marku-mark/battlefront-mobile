@@ -7,10 +7,13 @@ export class ApiError extends Error {
   }
 }
 
-export function createApiClient(baseUrl: string, getToken: () => string | null = () => null, onUnauthorized: () => void = () => {}) {
+export function createApiClient(baseUrl: string, getToken: () => string | null = () => null, onUnauthorized: () => void = () => {}, now: () => number = Date.now) {
   const root = baseUrl.replace(/\/+$/, "");
+  let blockedUntil = 0;
   return async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     if (!/^https?:\/\//.test(root)) throw new Error("Set EXPO_PUBLIC_API_URL to the Laravel server URL including /api/v1.");
+    const remaining = Math.ceil((blockedUntil - now()) / 1000);
+    if (remaining > 0) throw new ApiError(`Battlefront is receiving too many requests. Try again in ${remaining} seconds.`, 429, {}, remaining);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30_000);
     const token = getToken();
@@ -21,13 +24,28 @@ export function createApiClient(baseUrl: string, getToken: () => string | null =
     try {
       const response = await fetch(`${root}/${path.replace(/^\//, "")}`, { ...options, headers, signal: controller.signal });
       if (response.status === 204) return undefined as T;
-      const payload = await response.json();
+      let payload: { message?: string; errors?: Record<string, string[]> } = {};
+      let validJson = false;
+      try {
+        const parsed = JSON.parse(await response.text());
+        if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) { payload = parsed; validJson = true; }
+      } catch { /* Keep HTTP failures distinct from connection failures. */ }
       if (!response.ok) {
+        if (response.status === 429) {
+          const header = response.headers.get("Retry-After");
+          const seconds = header === null ? 60 : Number(header);
+          const cooldown = Number.isFinite(seconds) && seconds >= 0 ? Math.ceil(seconds) : 60;
+          blockedUntil = Math.max(blockedUntil, now() + cooldown * 1000);
+          throw new ApiError(`Battlefront is receiving too many requests. Try again in ${Math.ceil((blockedUntil - now()) / 1000)} seconds.`, 429, {}, cooldown);
+        }
         if (response.status === 401 && token && getToken() === token) onUnauthorized();
         const errors = payload.errors ?? {};
-        const message = Object.values(errors).flat().join("\n") || payload.message || "Request failed.";
+        const fallback = response.status === 413 ? "Payment proof is too large for the server. Choose a smaller image."
+          : `Battlefront could not complete the request (HTTP ${response.status}). Please try again or contact the store.`;
+        const message = Object.values(errors).flat().join("\n") || payload.message || fallback;
         throw new ApiError(String(message), response.status, errors, response.headers.has("Retry-After") ? Number(response.headers.get("Retry-After")) : null);
       }
+      if (!validJson) throw new ApiError("Battlefront returned an unexpected response. If you submitted an order, check My orders before trying again.", response.status);
       return payload as T;
     } catch (error) {
       if (error instanceof ApiError) throw error;
@@ -37,6 +55,21 @@ export function createApiClient(baseUrl: string, getToken: () => string | null =
 }
 
 export type Page<T> = { data: T[]; meta: { current_page: number; last_page: number; total: number } };
+
+export function createPacedRead(request: <T>(path: string) => Promise<T>, intervalMs = 2500, now: () => number = Date.now, wait: (milliseconds: number) => Promise<void> = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))) {
+  let tail = Promise.resolve();
+  let nextRequestAt = 0;
+  return function read<T>(path: string): Promise<T> {
+    const result = tail.then(async () => {
+      const delay = nextRequestAt - now();
+      if (delay > 0) await wait(delay);
+      nextRequestAt = now() + intervalMs;
+      return request<T>(path);
+    });
+    tail = result.then(() => undefined, () => undefined);
+    return result;
+  };
+}
 
 export function createCachedRead<T>(load: () => Promise<T>, maxAgeMs: number, now: () => number = Date.now) {
   let cached: Promise<T> | null = null;

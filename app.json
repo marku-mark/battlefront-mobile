@@ -31,7 +31,6 @@
     },
     "android": {
       "package": "com.battlefront.mobile",
-      "resizeableActivity": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/battlefront-adaptive-icon.png",
         "backgroundColor": "#ffffff"

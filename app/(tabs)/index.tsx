@@ -10,6 +10,9 @@ import {
   getFlashDealEndTime,
   getHomeCatalog,
   invalidateCatalog,
+  subscribeCatalog,
+  homeCatalogFromProducts,
+  getCatalogPreview,
 } from "@/lib/api";
 import type { Banner, Brand, Category, Product } from "@/lib/data";
 import { Header } from "@/components/layout/Header";
@@ -31,7 +34,7 @@ import { getGridCardWidth, getResponsiveLayout, MAX_CONTENT_WIDTH } from "@/lib/
 import { getProductImageSource } from "@/lib/data";
 
 const PRODUCTS_PER_PAGE = 24;
-const PAGE_LOAD_DELAY_MS = 250;
+const PAGE_LOAD_DELAY_MS = 0;
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -53,6 +56,7 @@ export default function HomeScreen() {
   const hasCatalogRef = useRef(false);
   const [hasLoadError, setHasLoadError] = useState(false);
   const [loadErrorMessage, setLoadErrorMessage] = useState("");
+  const [isCatalogLoading, setIsCatalogLoading] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const { addItem, itemCount, items: cartItems, subtotal: cartSubtotal } = useCart();
   const { products: recentlyViewedProducts, refresh: refreshRecentlyViewed } = useRecentlyViewedProducts();
@@ -167,17 +171,34 @@ export default function HomeScreen() {
     setIsLoading(!hasCatalogRef.current);
     setHasLoadError(false);
     setLoadErrorMessage("");
+    const unsubscribe = subscribeCatalog((snapshot) => {
+      if (!isActive) return;
+      setIsCatalogLoading(snapshot.loading);
+      if (!snapshot.error) setHasLoadError(false);
+      if (snapshot.rows.length || snapshot.complete) {
+        const home = homeCatalogFromProducts(snapshot.rows);
+        setCatalogProducts(home.catalogProducts);
+        setFlashDeals(home.flashDeals);
+        setSulitPicks(home.sulitPicks);
+        setNewArrivals(home.newArrivals);
+        hasCatalogRef.current = true;
+        setIsLoading(false);
+      }
+      if (snapshot.error) {
+        setHasLoadError(true);
+        setLoadErrorMessage(snapshot.error.message);
+      }
+    });
+    void getCatalogPreview().then(
+      () => { if (isActive) setIsRefreshing(false); },
+      () => { if (isActive) setIsRefreshing(false); },
+    );
 
     Promise.all([getBanners(), getCategories(), getHomeCatalog(), getBrands()])
-      .then(([loadedBanners, loadedCategories, homeCatalog, loadedBrands]) => {
+      .then(([loadedBanners, loadedCategories, , loadedBrands]) => {
         if (!isActive) return;
         setBanners(loadedBanners);
         setCategories(loadedCategories);
-        setFlashDeals(homeCatalog.flashDeals);
-        setSulitPicks(homeCatalog.sulitPicks);
-        setNewArrivals(homeCatalog.newArrivals);
-        setCatalogProducts(homeCatalog.catalogProducts);
-        hasCatalogRef.current = true;
         setBrands(loadedBrands);
       })
       .catch((error) => {
@@ -192,6 +213,7 @@ export default function HomeScreen() {
 
     return () => {
       isActive = false;
+      unsubscribe();
     };
   }, [retryCount]));
 
@@ -218,7 +240,7 @@ export default function HomeScreen() {
     );
   }
 
-  if (hasLoadError) {
+  if (hasLoadError && !hasCatalogRef.current) {
     return (
       <View className="flex-1 bg-background">
         <Header
@@ -266,11 +288,12 @@ export default function HomeScreen() {
         keyExtractor={(item) => item.id}
         onEndReached={loadMoreProducts}
         onEndReachedThreshold={0.4}
-        ListFooterComponent={isLoadingMore ? <LoadingMoreFooter /> : null}
+        ListFooterComponent={isLoadingMore || isCatalogLoading ? <LoadingMoreFooter /> : null}
         contentContainerStyle={{ paddingBottom: 28, paddingTop: 16, paddingHorizontal: 10, width: "100%", maxWidth: MAX_CONTENT_WIDTH, alignSelf: "center" }}
         ListHeaderComponentStyle={{ marginHorizontal: -10 }}
         ListHeaderComponent={
           <View>
+            {hasLoadError && <View className="border border-border bg-card mx-4 mb-4 p-4"><Text className="text-danger text-sm">Some products could not be refreshed. {loadErrorMessage}</Text><Pressable onPress={() => setRetryCount((current) => current + 1)}><Text className="text-primary font-semibold mt-2">Retry refresh</Text></Pressable></View>}
             <PromoBanners banners={banners} onSelect={() => router.push("/categories")} />
         <BuilderEntryCard onPress={() => router.push("/builder")} />
         {cartItems.length > 0 && (

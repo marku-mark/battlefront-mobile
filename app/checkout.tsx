@@ -9,11 +9,12 @@ import { useSession } from "@/hooks/useSession";
 import { getCheckout, type Checkout } from "@/lib/api";
 import { placeOrder } from "@/lib/orders";
 import { loadSavedAddresses, type SavedAddress } from "@/lib/savedAddresses";
+import { paymentForFulfillment, paymentProofError, formatCheckoutAmount } from "@/lib/checkoutForm";
 
 export default function CheckoutScreen() {
   const router = useRouter();
   const { session } = useSession();
-  const { items, refreshCart } = useCart();
+  const { refreshCart } = useCart();
   const [preview, setPreview] = useState<Checkout | null>(null);
   const [error, setError] = useState("");
   const [fullName, setFullName] = useState("");
@@ -32,20 +33,25 @@ export default function CheckoutScreen() {
     let active = true;
     setPreview(null); setError("");
     setSavedAddresses([]);
+    setFullName(""); setPhone(""); setAddress(""); setProof(null); setFulfillment("pickup"); setPayment("cash");
     if (customerId === null || createdOrderId) return;
-    Promise.all([getCheckout(), loadSavedAddresses()]).then(([result, addresses]) => {
+    getCheckout().then((result) => {
       if (!active) return;
       setPreview(result); setFullName(result.customer.name); setAddress(result.customer.default_delivery_address ?? "");
-      setSavedAddresses(addresses);
     }).catch((reason) => { if (active) setError(reason.message); });
+    loadSavedAddresses().then((addresses) => { if (active) setSavedAddresses(addresses); }).catch(() => undefined);
     return () => { active = false; };
-  }, [customerId, items, createdOrderId, checkoutRetry]);
+  }, [customerId, createdOrderId, checkoutRetry]);
   const paymentOptions = preview?.payment_methods.filter((method) => method.available_for.includes(fulfillment)) ?? [];
   const selectedPayment = paymentOptions.find((method) => method.value === payment);
   async function chooseProof() {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 1 });
-      if (!result.canceled) setProof(result.assets[0]);
+      if (!result.canceled) {
+        const validation = paymentProofError(result.assets[0]);
+        if (validation) { Alert.alert("Cannot use this proof", validation); return; }
+        setProof(result.assets[0]);
+      }
     } catch (reason) { Alert.alert("Cannot select proof", reason instanceof Error ? reason.message : "Please try again."); }
   }
   async function submit() {
@@ -80,27 +86,55 @@ export default function CheckoutScreen() {
           {error ? <Text className="text-danger">{error}</Text> : <ActivityIndicator />}
           {error ? <Pressable onPress={() => setCheckoutRetry((current) => current + 1)}><Text className="text-primary mt-4">Retry</Text></Pressable> : null}
         </View> : <View>
-          <Text className="text-foreground text-base font-bold">Recipient</Text>
-          <TextInput accessibilityLabel="Recipient name" value={fullName} onChangeText={setFullName} placeholder="Full name" className="mt-3 rounded-xl border border-border bg-secondary px-3 py-3 text-foreground" />
-          <TextInput accessibilityLabel="Contact number" value={phone} onChangeText={setPhone} placeholder="Contact number" keyboardType="phone-pad" className="mt-3 rounded-xl border border-border bg-secondary px-3 py-3 text-foreground" />
-          <Text className="text-foreground text-base font-bold mt-6">Fulfillment</Text>
-          {preview.fulfillment_methods.map((method) => <Pressable key={method.value} onPress={() => { setFulfillment(method.value); setProof(null); setPayment(preview.payment_methods.find((option) => option.available_for.includes(method.value))?.value ?? ""); }} className="mt-3 rounded-xl border border-border bg-card p-4"><Text className="text-foreground">{fulfillment === method.value ? "● " : "○ "}{method.label}</Text></Pressable>)}
+          <View className="border border-border bg-card p-5 mb-6"><Text className="text-primary text-xs font-bold uppercase">Customer checkout</Text><Text className="text-foreground text-xl font-bold mt-2">Confirm fulfillment and payment</Text><Text className="text-muted-foreground text-sm mt-2">Review your hardware selection and the details Battlefront needs for your order.</Text></View>
+          <Text className="text-primary text-xs font-semibold">STEP 1</Text>
+          <Text className="text-foreground text-base font-bold mt-1">Recipient details</Text>
+          <Text className="text-foreground text-sm mt-3">Recipient name</Text>
+          <TextInput accessibilityLabel="Recipient name" value={fullName} onChangeText={setFullName} editable={!isSubmitting} maxLength={255} autoComplete="name" placeholder="Full name" className="mt-2 rounded-xl border border-border bg-secondary px-3 py-3 text-foreground" />
+          <Text className="text-foreground text-sm mt-3">Contact number</Text>
+          <TextInput accessibilityLabel="Contact number" value={phone} onChangeText={setPhone} editable={!isSubmitting} maxLength={20} autoComplete="tel" placeholder="e.g. 0917 123 4567" keyboardType="phone-pad" className="mt-2 rounded-xl border border-border bg-secondary px-3 py-3 text-foreground" />
+          <Text className="text-primary text-xs font-semibold mt-6">STEP 2</Text>
+          <Text className="text-foreground text-base font-bold mt-1">Fulfillment method</Text>
+          {preview.fulfillment_methods.map((method) => <Pressable key={method.value} disabled={isSubmitting} accessibilityRole="radio" accessibilityState={{ checked: fulfillment === method.value, disabled: isSubmitting }} onPress={() => { const next = paymentForFulfillment(preview.payment_methods, method.value, payment); setFulfillment(method.value); if (next !== payment) { setProof(null); setPayment(next); } }} className={`mt-3 rounded-xl border p-4 ${fulfillment === method.value ? "border-primary bg-primary/10" : "border-border bg-card"}`}><Text className="text-foreground font-semibold">{fulfillment === method.value ? "● " : "○ "}{method.label}</Text><Text className="text-muted-foreground text-xs mt-1">{method.value === "pickup" ? "Collect your order from Battlefront." : "Send the order to your supplied address."}</Text></Pressable>)}
           {fulfillment === "delivery" ? <View>
             {savedAddresses.length > 0 && <View className="mt-3">
               <Text className="text-foreground text-sm font-semibold">Use a saved address</Text>
               {savedAddresses.map((saved) => <Pressable key={saved.id} onPress={() => { setAddress(saved.address); setFullName(saved.recipient); setPhone(saved.phone); }} className="mt-2 rounded-xl border border-border bg-card p-3"><Text className="text-foreground text-sm">{saved.label} · {saved.recipient}</Text><Text className="text-muted-foreground text-xs mt-1">{saved.address}</Text></Pressable>)}
             </View>}
-            <TextInput accessibilityLabel="Delivery address" value={address} onChangeText={setAddress} placeholder="Full delivery address" multiline maxLength={255} className="mt-3 rounded-xl border border-border bg-secondary px-3 py-3 text-foreground" />
-          </View> : <Text className="text-muted-foreground text-sm mt-3">{preview.pickup_location.name}{"\n"}{preview.pickup_location.address}{"\n"}{preview.pickup_location.operating_hours}</Text>}
-          <Text className="text-foreground text-base font-bold mt-6">Payment</Text>
-          {paymentOptions.map((method) => <Pressable key={method.value} onPress={() => { setPayment(method.value); setProof(null); }} className="mt-3 rounded-xl border border-border bg-card p-4"><Text className="text-foreground">{payment === method.value ? "● " : "○ "}{method.label}</Text></Pressable>)}
+            <Text className="text-foreground text-sm mt-3">Delivery address</Text>
+            <TextInput accessibilityLabel="Delivery address" value={address} onChangeText={setAddress} editable={!isSubmitting} placeholder="House or building, street, barangay, city, and province" multiline maxLength={255} className="mt-2 rounded-xl border border-border bg-secondary px-3 py-3 text-foreground" />
+            {preview.customer.default_delivery_address && <Text className="text-muted-foreground text-xs mt-2">Pre-filled from your profile. Changes here apply only to this order.</Text>}
+          </View> : <View className="mt-3 border border-border bg-card p-4"><Text className="text-primary text-xs font-semibold">PICKUP LOCATION</Text><Text className="text-foreground font-semibold mt-2">{preview.pickup_location.name}</Text><Text className="text-muted-foreground text-sm mt-2">{preview.pickup_location.address}</Text>{preview.pickup_location.contact_number && <Text className="text-muted-foreground text-sm mt-2">{preview.pickup_location.contact_number}</Text>}{preview.pickup_location.operating_hours && <Text className="text-muted-foreground text-sm mt-2">{preview.pickup_location.operating_hours}</Text>}</View>}
+          <Text className="text-primary text-xs font-semibold mt-6">STEP 3</Text>
+          <Text className="text-foreground text-base font-bold mt-1">Payment method</Text>
+          {preview.payment_methods.map((method) => {
+            const available = method.available_for.includes(fulfillment);
+            return <Pressable key={method.value} disabled={!available || isSubmitting} accessibilityRole="radio" accessibilityState={{ checked: payment === method.value, disabled: !available || isSubmitting }} onPress={() => { setPayment(method.value); setProof(null); }} className={`mt-3 rounded-xl border p-4 ${payment === method.value ? "border-primary bg-primary/10" : "border-border bg-card"}`} style={{ opacity: available ? 1 : 0.5 }}><Text className="text-foreground font-semibold">{payment === method.value ? "● " : "○ "}{method.label}</Text><Text className="text-muted-foreground text-xs mt-1">{!available ? "Available for pickup only." : method.requires_proof ? "Manual e-wallet payment with proof." : "Pay when you collect your order."}</Text></Pressable>;
+          })}
           {selectedPayment?.requires_proof && <View>
-            <Text className="text-muted-foreground text-sm mt-3">{selectedPayment.payment_account?.is_demo ? "Demo account — do not send real money.\n" : ""}{selectedPayment.payment_account?.account_name}{"\n"}{selectedPayment.payment_account?.account_number}</Text>
-            <Pressable onPress={() => void chooseProof()} className="mt-3 rounded-xl border border-border bg-secondary p-4"><Text className="text-foreground">{proof ? `Selected: ${proof.fileName ?? "payment proof"}` : "Choose payment proof image"}</Text></Pressable>
+            <View className="mt-3 border border-border bg-card p-4">
+              <Text className="text-foreground font-semibold">{selectedPayment.label} receiving account</Text>
+              {selectedPayment.payment_account?.is_demo && <Text className="text-primary text-xs font-semibold mt-2">Demo details — do not send real money.</Text>}
+              <Text className="text-muted-foreground text-xs mt-3">Account name</Text><Text className="text-foreground font-semibold mt-1">{selectedPayment.payment_account?.account_name}</Text>
+              <Text className="text-muted-foreground text-xs mt-3">Account/mobile number</Text><Text className="text-foreground font-semibold mt-1">{selectedPayment.payment_account?.account_number}</Text>
+              <Text className="text-foreground font-semibold mt-4">Pay first, then capture proof</Text>
+              <Text className="text-muted-foreground text-sm mt-2">Send payment only to the account shown for this wallet. After a successful transaction, upload a screenshot or snapshot. Proof remains pending manual admin verification.</Text>
+              <Pressable disabled={isSubmitting} onPress={() => void chooseProof()} className="mt-3 rounded-xl border border-border bg-secondary p-4"><Text className="text-foreground">{proof ? `Selected: ${proof.fileName ?? "payment proof"}` : "Choose payment proof image"}</Text></Pressable>
+              <Text className="text-muted-foreground text-xs mt-2">JPEG, PNG, or WebP up to 5 MB. Proof is handled as private evidence.</Text>
+            </View>
           </View>}
-          <Text className="text-foreground text-lg font-bold mt-6">Total: ₱{Number(preview.cart.total).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</Text>
+          <View className="mt-6 border border-border bg-card p-5">
+            <Text className="text-primary text-xs font-semibold">CURRENT CART</Text>
+            <Text className="text-foreground text-lg font-bold mt-2">Hardware summary</Text>
+            {preview.cart.items.map((item) => <View key={item.id} className="flex-row justify-between gap-3 border-b border-border py-4"><View className="flex-1"><Text className="text-foreground font-semibold">{item.product.name}</Text><Text className="text-muted-foreground text-xs mt-1">{item.product.brand ? `${item.product.brand} · ` : ""}Qty {item.quantity}</Text></View><Text className="text-foreground font-semibold">{formatCheckoutAmount(item.line_total)}</Text></View>)}
+            <View className="flex-row justify-between mt-4"><Text className="text-muted-foreground text-sm">Products</Text><Text className="text-foreground font-semibold">{preview.cart.item_count}</Text></View>
+            <View className="flex-row justify-between mt-3"><Text className="text-muted-foreground text-sm">Units</Text><Text className="text-foreground font-semibold">{preview.cart.total_quantity}</Text></View>
+            <View className="flex-row justify-between mt-4 border-t border-border pt-4"><Text className="text-foreground font-semibold">Cart total</Text><Text className="text-foreground text-xl font-bold">{formatCheckoutAmount(preview.cart.total)}</Text></View>
+          </View>
           {error ? <Text className="text-danger mt-3">{error}</Text> : null}
           <Pressable disabled={isSubmitting} onPress={() => void submit()} className="mt-5 rounded-xl bg-primary px-5 py-3"><Text className="text-primary-foreground text-center">{isSubmitting ? "Placing order..." : "Place order"}</Text></Pressable>
+          <Text className="text-muted-foreground text-xs text-center mt-3">Stock is deducted and your cart is cleared only after the complete order succeeds.</Text>
+          <Pressable disabled={isSubmitting} onPress={() => router.navigate("/cart")} className="mt-4 rounded-xl border border-border p-3"><Text className="text-foreground text-center font-semibold">Back to cart</Text></Pressable>
         </View>}
       </ScrollView>
       <MockSignInSheet visible={isSignInOpen} onClose={() => setIsSignInOpen(false)} />

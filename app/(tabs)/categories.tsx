@@ -6,14 +6,14 @@ import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View,
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ProductCard } from "@/components/sections/ProductCard";
 import { ScreenHeader } from "@/components/layout/ScreenHeader";
-import { getBrands, getCategories, getProducts } from "@/lib/api";
+import { getBrands, getCategories, getCatalogPreview, getCatalogSnapshot, subscribeCatalog, invalidateCatalog } from "@/lib/api";
 import type { Brand, Category, Product } from "@/lib/data";
 import { useTheme } from "@/theme/ThemeProvider";
 import { LoadingMoreFooter } from "@/components/layout/LoadingMoreFooter";
 import { getGridCardWidth, getResponsiveLayout, MAX_CONTENT_WIDTH } from "@/lib/responsive";
 
 const PRODUCTS_PER_PAGE = 24;
-const PAGE_LOAD_DELAY_MS = 250;
+const PAGE_LOAD_DELAY_MS = 0;
 
 type PriceFilter = "all" | "under-5k" | "under-15k" | "over-15k";
 type SortOrder = "featured" | "price-low" | "price-high";
@@ -43,6 +43,8 @@ export default function CategoriesScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [hasLoadError, setHasLoadError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
+  const [isCatalogLoading, setIsCatalogLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     setSelectedCategoryIds(categoryId ? [categoryId] : []);
@@ -51,17 +53,27 @@ export default function CategoriesScreen() {
 
   useFocusEffect(useCallback(() => {
     let isActive = true;
-    setIsLoading(true);
+    setIsLoading(getCatalogSnapshot().rows.length === 0);
     setHasLoadError(false);
-    Promise.all([getProducts(), getCategories(), getBrands()]).then(([loadedProducts, loadedCategories, loadedBrands]) => {
+    const unsubscribe = subscribeCatalog((snapshot) => {
       if (!isActive) return;
-      setProducts(loadedProducts);
+      setIsCatalogLoading(snapshot.loading);
+      if (!snapshot.error) setHasLoadError(false);
+      if (snapshot.rows.length || snapshot.complete) { setProducts(snapshot.rows); setIsLoading(false); }
+      if (snapshot.error) setHasLoadError(true);
+    });
+    void getCatalogPreview().then(
+      () => { if (isActive) setIsRefreshing(false); },
+      () => { if (isActive) setIsRefreshing(false); },
+    );
+    Promise.all([getCatalogPreview(), getCategories(), getBrands()]).then(([, loadedCategories, loadedBrands]) => {
+      if (!isActive) return;
       setCategories(loadedCategories);
       setBrands(loadedBrands);
     }).catch(() => {
-      if (isActive) { setProducts([]); setHasLoadError(true); }
-    }).finally(() => { if (isActive) setIsLoading(false); });
-    return () => { isActive = false; };
+      if (isActive) setHasLoadError(true);
+    }).finally(() => { if (isActive) { setIsLoading(false); setIsRefreshing(false); } });
+    return () => { isActive = false; unsubscribe(); };
   }, [retryCount]));
 
   const selectedCategories = useMemo(() => categories.filter((category) => selectedCategoryIds.includes(category.id)), [categories, selectedCategoryIds]);
@@ -147,11 +159,13 @@ export default function CategoriesScreen() {
     <SafeAreaView edges={["left", "right", "bottom"]} className="flex-1 bg-background">
       <ScreenHeader title="Categories" subtitle="Find the right parts for your next build." />
       <FlashList
-        data={isLoading || hasLoadError ? [] : visibleProducts}
+        data={isLoading ? [] : visibleProducts}
+        refreshing={isRefreshing}
+        onRefresh={() => { if (isRefreshing) return; invalidateCatalog(); setIsRefreshing(true); setRetryCount((current) => current + 1); }}
         keyExtractor={(item) => item.id}
         onEndReached={loadMoreProducts}
         onEndReachedThreshold={0.4}
-        ListFooterComponent={isLoadingMore ? <LoadingMoreFooter /> : null}
+        ListFooterComponent={isLoadingMore || isCatalogLoading ? <LoadingMoreFooter /> : null}
         key={`category-products-${layout.productColumns}`}
         numColumns={layout.productColumns}
         contentContainerStyle={{ paddingBottom: 32, paddingTop: 16, paddingHorizontal: 10, width: "100%", maxWidth: MAX_CONTENT_WIDTH, alignSelf: "center" }}
@@ -159,6 +173,7 @@ export default function CategoriesScreen() {
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <View className="pb-2">
+            {hasLoadError && products.length > 0 && <View className="mx-4 mb-3 border border-border bg-card p-3"><Text className="text-danger text-sm">Could not refresh all products. Showing loaded products.</Text><Pressable onPress={() => setRetryCount((current) => current + 1)}><Text className="text-primary mt-2">Retry refresh</Text></Pressable></View>}
             <View className="self-center w-full px-4" style={{ maxWidth: MAX_CONTENT_WIDTH }}>
               <View className="h-10 flex-row items-center gap-2 rounded-lg border border-border bg-secondary px-3">
                 <Ionicons name="search-outline" size={16} color={isDark ? "#cbd5e1" : "#68717e"} />
@@ -220,12 +235,12 @@ export default function CategoriesScreen() {
           </View>
         }
         ListEmptyComponent={
-          isLoading ? (
-            <CatalogState icon="refresh-outline" title="Loading products" message="Preparing the offline catalog." showSpinner />
+          isLoading || isCatalogLoading ? (
+            <CatalogState icon="refresh-outline" title="Loading products" message="Fetching products from Battlefront." showSpinner />
           ) : hasLoadError ? (
             <CatalogState icon="cloud-offline-outline" title="Could not load products" message="Check your connection and try again." actionLabel="Try again" onAction={() => setRetryCount((current) => current + 1)} />
           ) : products.length === 0 ? (
-            <CatalogState icon="search-outline" title="No products available" message="The local catalog is empty." />
+            <CatalogState icon="search-outline" title="No products available" message="There are no products available in the catalog." />
           ) : productQuery.trim() ? (
             <CatalogState icon="search-outline" title="No matching products" message="Try another product name or clear the search." actionLabel="Clear search" onAction={() => setProductQuery("")} />
           ) : selectedCategoryIds.length > 0 && !selectedBrandId && priceFilter === "all" ? (
