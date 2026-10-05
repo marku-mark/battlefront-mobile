@@ -94,7 +94,6 @@ export async function getBanners(): Promise<Banner[]> { return banners; }
 export async function getFlashDeals() { return (await getHomeCatalog()).flashDeals; }
 export async function getSulitPicks() { return (await getHomeCatalog()).sulitPicks; }
 export async function getNewArrivals() { return (await getHomeCatalog()).newArrivals; }
-export function getFlashDealEndTime() { return new Date(); }
 export async function getChatbotReply(message: string): Promise<string> {
   const generation = chatGeneration;
   const result = (await apiRequest<Envelope<{ message: string; context_token: string | null }>>("chatbot", { method: "POST", body: JSON.stringify({ message, context_token: chatContext }) })).data;

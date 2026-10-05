@@ -16,29 +16,7 @@ type Notification = {
   icon: "pricetag-outline" | "cube-outline" | "shield-checkmark-outline";
 };
 
-const demoNotifications: Notification[] = [
-  {
-    id: "deal-update",
-    title: "Flash deals are live",
-    message: "Save on selected GPUs, peripherals, and gaming monitors today.",
-    time: "Just now",
-    icon: "pricetag-outline",
-  },
-  {
-    id: "support-update",
-    title: "Warranty support is available",
-    message: "Need help with a Battlefront purchase? Our support team is ready.",
-    time: "Yesterday",
-    icon: "shield-checkmark-outline",
-  },
-  {
-    id: "store-update",
-    title: "Store pickup is coming soon",
-    message: "We are preparing faster pickup options for local branches.",
-    time: "2 days ago",
-    icon: "cube-outline",
-  },
-];
+const notifications: Notification[] = [];
 
 const READ_NOTIFICATIONS_STORAGE_KEY = "battlefront-read-notifications";
 
@@ -53,7 +31,7 @@ export default function NotificationsScreen() {
   const [hasError, setHasError] = useState(false);
   const pendingReadIds = useRef<string[]>([]);
   const markAllDuringLoad = useRef(false);
-  const unreadCount = demoNotifications.filter((item) => !readIds.includes(item.id)).length;
+  const unreadCount = notifications.filter((item) => !readIds.includes(item.id)).length;
 
   useEffect(() => {
     let isActive = true;
@@ -61,10 +39,10 @@ export default function NotificationsScreen() {
       .then((storedIds) => {
         const parsed: unknown = storedIds ? JSON.parse(storedIds) : [];
         const validIds = Array.isArray(parsed)
-          ? parsed.filter((id): id is string => typeof id === "string" && demoNotifications.some((item) => item.id === id))
+          ? parsed.filter((id): id is string => typeof id === "string" && notifications.some((item) => item.id === id))
           : [];
         const nextIds = markAllDuringLoad.current
-          ? demoNotifications.map((item) => item.id)
+          ? notifications.map((item) => item.id)
           : Array.from(new Set([...validIds, ...pendingReadIds.current]));
         if (isActive) setReadIds(nextIds);
       })
@@ -89,7 +67,7 @@ export default function NotificationsScreen() {
 
   function markAllAsRead() {
     if (!isReadStateLoaded) markAllDuringLoad.current = true;
-    setReadIds(demoNotifications.map((item) => item.id));
+    setReadIds(notifications.map((item) => item.id));
   }
 
   function retry() {
@@ -125,17 +103,16 @@ export default function NotificationsScreen() {
             <Text className="text-primary-foreground text-sm font-semibold">Try again</Text>
           </Pressable>
         </View>
-      ) : demoNotifications.length === 0 ? (
+      ) : notifications.length === 0 ? (
         <View className="flex-1 items-center justify-center px-6">
           <View className="w-20 h-20 rounded-full bg-secondary border border-border items-center justify-center">
             <Ionicons name="notifications-off-outline" size={34} color={isDark ? "#9ca3af" : "#68717e"} />
           </View>
           <Text className="text-foreground text-lg font-semibold mt-5">No notifications yet</Text>
-          <Text className="text-muted-foreground text-sm text-center mt-2">Deals and order updates will appear here.</Text>
         </View>
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: layout.horizontalPadding, paddingBottom: 28, width: "100%", maxWidth: 760, alignSelf: "center" }}>
-          {demoNotifications.map((notification) => {
+          {notifications.map((notification) => {
             const isRead = readIds.includes(notification.id);
             return (
               <Pressable

@@ -15,9 +15,6 @@ export function SulitPicks({ products, onSelectProduct }: SulitPicksProps) {
       <View className="flex-row items-center justify-between px-4 mb-3">
         <View>
           <Text className="text-foreground font-bold text-base">Sulit Picks</Text>
-          <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.14em]">
-            best value everyday
-          </Text>
         </View>
       </View>
       <FlatList

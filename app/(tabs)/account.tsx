@@ -14,10 +14,9 @@ import { loadSavedAddresses, persistSavedAddresses, type SavedAddress } from "@/
 import { useTheme } from "@/theme/ThemeProvider";
 
 const accountLinks = [
-  { icon: "receipt-outline", label: "My orders", detail: "View your order history", badge: "Live" },
-  { icon: "location-outline", label: "Delivery addresses", detail: "Sync your default address for checkout", badge: "Live" },
+  { icon: "receipt-outline", label: "My orders", detail: "View your order history", badge: null },
+  { icon: "location-outline", label: "Delivery addresses", detail: "Sync your default address for checkout", badge: null },
   { icon: "heart-outline", label: "Wishlist", detail: "Saved on this device", badge: "Local" },
-  { icon: "help-circle-outline", label: "Help center", detail: "Preview support information", badge: "Preview" },
 ] as const;
 
 export default function AccountScreen() {
@@ -190,9 +189,6 @@ export default function AccountScreen() {
       >
         <View className="px-4 pt-3 pb-5 border-b border-border">
           <Text className="text-foreground text-2xl font-bold">Account</Text>
-          <Text className="text-muted-foreground text-sm mt-1">
-            Manage your Battlefront shopping experience.
-          </Text>
         </View>
 
         <View className="mx-4 mt-5 rounded-2xl bg-card border border-border p-4">
@@ -204,9 +200,7 @@ export default function AccountScreen() {
               <Text className="text-foreground text-base font-semibold">
                 {isMockAccount ? `Welcome, ${session.user.displayName}` : "Shop as a guest"}
               </Text>
-              <Text className="text-muted-foreground text-xs mt-1">
-                {isMockAccount ? "Signed in to Battlefront." : "Browse, shop, and save items locally without signing in."}
-              </Text>
+              {!isMockAccount && <Text className="text-muted-foreground text-xs mt-1">Browse, shop, and save items locally without signing in.</Text>}
             </View>
           </View>
 
@@ -248,9 +242,6 @@ export default function AccountScreen() {
 
         <View className="flex-row items-center justify-between px-4 mt-7 mb-3">
           <Text className="text-foreground text-base font-bold">Account shortcuts</Text>
-          <Text className="text-muted-foreground text-[11px] uppercase tracking-[0.14em]">
-            {isMockAccount ? "Customer account" : "Guest mode"}
-          </Text>
         </View>
         <View className="mx-4 rounded-2xl bg-card border border-border overflow-hidden">
           <Pressable
@@ -292,7 +283,6 @@ export default function AccountScreen() {
                   void openSavedAddresses();
                   return;
                 }
-                setSelectedUtility(link.label);
               }}
               className={`flex-row items-center p-4 ${index < accountLinks.length - 1 ? "border-b border-border" : ""}`}
               style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
@@ -305,11 +295,11 @@ export default function AccountScreen() {
                   <Text className="text-foreground text-sm font-medium">
                     {link.label}
                   </Text>
-                  <View className={`rounded-full px-1.5 py-0.5 ${link.badge === "Live" ? "bg-primary/15" : "bg-secondary"}`}>
-                    <Text className={`text-[9px] font-bold uppercase tracking-[0.08em] ${link.badge === "Live" ? "text-primary" : "text-muted-foreground"}`}>
+                  {link.badge && <View className="rounded-full px-1.5 py-0.5 bg-secondary">
+                    <Text className="text-[9px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
                       {link.badge}
                     </Text>
-                  </View>
+                  </View>}
                 </View>
                 <Text className="text-muted-foreground text-xs mt-0.5">
                   {link.detail}
@@ -496,11 +486,7 @@ export default function AccountScreen() {
                 {profileError ? <Text accessibilityRole="alert" className="text-danger text-xs mt-3">{profileError}</Text> : null}
                 {!isProfileLoading && !isProfileLoaded && <Pressable onPress={() => void openProfileSettings()} className="mt-3 py-2"><Text className="text-primary text-sm">Retry loading profile</Text></Pressable>}
               </View>
-            ) : (
-              <Text className="text-muted-foreground text-sm leading-5 mt-2">
-                Support information is a preview and is not connected to a live service.
-              </Text>
-            )}
+            ) : null}
             <Pressable onPress={() => setSelectedUtility(null)} className="bg-primary rounded-xl items-center py-3 mt-5">
               <Text className="text-primary-foreground text-sm font-semibold">Close</Text>
             </Pressable>

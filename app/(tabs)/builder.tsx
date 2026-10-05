@@ -314,7 +314,7 @@ export default function BuilderScreen() {
         <View className="flex-1 items-center justify-center px-8">
           <Ionicons name="cloud-offline-outline" size={30} color={isDark ? "#9ca3af" : "#68717e"} />
           <Text className="mt-3 text-foreground text-base font-semibold">Could not load the catalog</Text>
-          <Text className="mt-1 text-center text-muted-foreground text-sm">The builder needs the local product catalog to show available parts.</Text>
+          <Text className="mt-1 text-center text-muted-foreground text-sm">Load the product catalog to browse available parts.</Text>
           <Pressable
             accessibilityRole="button"
             onPress={() => setRetryCount((count) => count + 1)}
@@ -410,7 +410,7 @@ export default function BuilderScreen() {
             </Pressable>
             <View className="flex-1">
               <Text className="text-foreground text-base font-bold">Choose {activeSlot?.label.toLowerCase()}</Text>
-              <Text className="text-muted-foreground text-xs">{visibleProducts.length} parts in the local catalog</Text>
+              <Text className="text-muted-foreground text-xs">{visibleProducts.length} available parts</Text>
             </View>
             {activeSlot && selection[activeSlot.id] && (
               <Pressable onPress={() => removeProduct(activeSlot.id)} className="px-2 py-2">

@@ -1,16 +1,14 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { FlatList, Text, View } from "react-native";
-import { useCountdown } from "@/hooks/useCountdown";
 import type { Product } from "@/lib/data";
 import { ProductCard } from "./ProductCard";
 
 type FlashDealsProps = {
   products: Product[];
-  endTime: Date;
   onSelectProduct?: (product: Product) => void;
 };
 
-export function FlashDeals({ products, endTime, onSelectProduct }: FlashDealsProps) {
+export function FlashDeals({ products, onSelectProduct }: FlashDealsProps) {
   if (products.length === 0) return null;
 
   return (
@@ -22,15 +20,10 @@ export function FlashDeals({ products, endTime, onSelectProduct }: FlashDealsPro
           </View>
           <View>
             <Text className="text-foreground font-bold text-base">
-              Flash Deals
-            </Text>
-            <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.14em]">
-              limited time offers
+              Deals
             </Text>
           </View>
         </View>
-
-        <FlashDealCountdown endTime={endTime} />
       </View>
 
       <FlatList
@@ -47,37 +40,6 @@ export function FlashDeals({ products, endTime, onSelectProduct }: FlashDealsPro
           <ProductCard product={item} width={140} onPress={onSelectProduct} />
         )}
       />
-    </View>
-  );
-}
-
-function FlashDealCountdown({ endTime }: { endTime: Date }) {
-  const { hours, minutes, seconds, isDone } = useCountdown(endTime);
-
-  if (isDone) {
-    return <Text className="text-muted-foreground text-xs">Deal ended</Text>;
-  }
-
-  return (
-    <View className="items-end">
-      <Text className="text-muted-foreground text-[9px] uppercase tracking-[0.14em] mb-1.5">
-        Ends in
-      </Text>
-      <View className="flex-row items-center gap-1.5">
-        <TimeBlock value={hours} />
-        <Text className="text-muted-foreground text-[10px] font-bold">:</Text>
-        <TimeBlock value={minutes} />
-        <Text className="text-muted-foreground text-[10px] font-bold">:</Text>
-        <TimeBlock value={seconds} />
-      </View>
-    </View>
-  );
-}
-
-function TimeBlock({ value }: { value: string }) {
-  return (
-    <View className="bg-card border border-border rounded-md px-1.5 py-1 min-w-[25px] items-center">
-      <Text className="text-foreground text-[10px] font-bold">{value}</Text>
     </View>
   );
 }

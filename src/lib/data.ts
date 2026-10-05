@@ -65,9 +65,9 @@ export type Store = {
 };
 
 export const banners: Banner[] = [
-  { id: "banner-1", title: "Build Season Sale", subtitle: "Browse current inventory", image: "https://images.unsplash.com/photo-1591488320449-011701bb6704?w=800&q=80" },
+  { id: "banner-1", title: "Shop PC components", subtitle: "Browse current inventory", image: "https://images.unsplash.com/photo-1591488320449-011701bb6704?w=800&q=80" },
   { id: "banner-2", title: "New Arrivals", subtitle: "Latest products in stock", image: "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=800&q=80" },
-  { id: "banner-3", title: "Peripherals Week", subtitle: "Keyboards, mice, and more", image: "https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=800&q=80" },
+  { id: "banner-3", title: "Peripherals", subtitle: "Keyboards, mice, and more", image: "https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=800&q=80" },
 ];
 
 export const stores: Store[] = [

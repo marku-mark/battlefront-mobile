@@ -7,7 +7,6 @@ import {
   getBanners,
   getBrands,
   getCategories,
-  getFlashDealEndTime,
   getHomeCatalog,
   invalidateCatalog,
   subscribeCatalog,
@@ -19,7 +18,6 @@ import { Header } from "@/components/layout/Header";
 import { PromoBanners } from "@/components/sections/PromoBanners";
 import { Categories } from "@/components/sections/Categories";
 import { FlashDeals } from "@/components/sections/FlashDeals";
-import { TrustBar } from "@/components/sections/TrustBar";
 import { SulitPicks } from "@/components/sections/SulitPicks";
 import { NewArrivals } from "@/components/sections/NewArrivals";
 import { Brands } from "@/components/sections/Brands";
@@ -63,7 +61,6 @@ export default function HomeScreen() {
   const { width } = useWindowDimensions();
   const layout = getResponsiveLayout(width);
 
-  const flashDealEndTime = useMemo(() => getFlashDealEndTime(), []);
   const searchableProducts = useMemo(
     () => catalogProducts.length > 0 ? catalogProducts : [...flashDeals, ...sulitPicks, ...newArrivals],
     [catalogProducts, flashDeals, newArrivals, sulitPicks]
@@ -232,8 +229,7 @@ export default function HomeScreen() {
         <ScrollView showsVerticalScrollIndicator={false} removeClippedSubviews contentContainerStyle={{ paddingBottom: 112 }}>
           <LoadingHero width={width} />
           <LoadingCategories />
-          <LoadingProductRail showCountdown />
-          <LoadingTrustBar />
+          <LoadingProductRail />
           <LoadingProductRail />
         </ScrollView>
       </View>
@@ -333,16 +329,13 @@ export default function HomeScreen() {
         />
         <FlashDeals
           products={flashDeals}
-          endTime={flashDealEndTime}
           onSelectProduct={handleProductSelect}
         />
-        <TrustBar />
         <SulitPicks products={sulitPicks} onSelectProduct={handleProductSelect} />
         <NewArrivals products={newArrivals} onSelectProduct={handleProductSelect} />
         <Brands brands={brands} onSelect={(brand) => router.push({ pathname: "/categories", params: { brandId: brand.id } })} />
         <View className="px-4 mt-7 mb-3">
           <Text className="text-foreground text-base font-bold">All products</Text>
-          <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.14em] mt-1">Browse the complete catalog</Text>
         </View>
           </View>
         }
@@ -418,7 +411,6 @@ function RecentlyViewedSection({
     <View className="mt-7">
       <View className="mb-3 px-4 flex-row items-center justify-between">
         <Text className="text-foreground text-base font-bold">Recently viewed</Text>
-        <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.14em]">Your history</Text>
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 6, gap: 10 }}>
@@ -456,7 +448,6 @@ function RecommendedProductsSection({
     <View className="mt-7">
       <View className="mb-3 px-4 flex-row items-center justify-between">
         <Text className="text-foreground text-base font-bold">Recommended for you</Text>
-        <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.14em]">Top picks</Text>
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 6, gap: 10 }}>
@@ -498,7 +489,6 @@ function SetupBundleSection({
     <View className="mt-7">
       <View className="mb-3 px-4 flex-row items-center justify-between">
         <Text className="text-foreground text-base font-bold">Complete your setup</Text>
-        <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.14em]">Bundle picks</Text>
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 6, gap: 10 }}>
@@ -574,24 +564,16 @@ function LoadingCategories() {
   );
 }
 
-function LoadingProductRail({ showCountdown = false }: { showCountdown?: boolean }) {
+function LoadingProductRail() {
   return (
     <View className="mt-6">
       <View className="flex-row items-center justify-between px-4 mb-3">
         <View className="flex-row items-center gap-2">
-          {showCountdown && <View className="w-7 h-7 rounded-full bg-secondary" />}
           <View>
             <View className="h-4 w-24 rounded-full bg-secondary" />
             <View className="mt-1.5 h-2.5 w-28 rounded-full bg-secondary" />
           </View>
         </View>
-        {showCountdown && (
-          <View className="flex-row gap-1.5">
-            <View className="h-5 w-6 rounded-md bg-secondary" />
-            <View className="h-5 w-6 rounded-md bg-secondary" />
-            <View className="h-5 w-6 rounded-md bg-secondary" />
-          </View>
-        )}
       </View>
       <ScrollView
         horizontal
@@ -614,21 +596,6 @@ function LoadingProductRail({ showCountdown = false }: { showCountdown?: boolean
           </View>
         ))}
       </ScrollView>
-    </View>
-  );
-}
-
-function LoadingTrustBar() {
-  return (
-    <View className="mx-4 mt-6 overflow-hidden rounded-2xl border border-border bg-card">
-      <View className="flex-row px-3 py-3.5">
-        {Array.from({ length: 3 }).map((_, index) => (
-          <View key={index} className={`flex-1 flex-row items-center justify-center gap-1.5 ${index > 0 ? "border-l border-border" : ""}`}>
-            <View className="w-4 h-4 rounded-full bg-secondary" />
-            <View className="h-2.5 w-12 rounded-full bg-secondary" />
-          </View>
-        ))}
-      </View>
     </View>
   );
 }
