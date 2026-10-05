@@ -1,22 +1,27 @@
-import { Ionicons } from "@expo/vector-icons";
+import { useSession } from "@/hooks/useSession";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { FlatList, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getOrderReturnRequests } from "@/lib/orderSupport";
-import { getOrders, type OrderRecord } from "@/lib/orders";
+import { getOrders, getOrdersSnapshot, type OrderRecord } from "@/lib/orders";
 
 export default function OrdersScreen() {
   const router = useRouter();
-  const [orders, setOrders] = useState<OrderRecord[]>([]);
+  const { session } = useSession();
+  const owner = session.mode === "customer" ? session.user.id : null;
+  const [orders, setOrders] = useState<OrderRecord[]>(() => getOrdersSnapshot() ?? []);
   const [returnRequestIds, setReturnRequestIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !getOrdersSnapshot());
 
   useFocusEffect(
     useCallback(() => {
       let isActive = true;
-      setLoading(true); setError(null);
+      const cached = getOrdersSnapshot();
+      setOrders(cached ?? []); setLoading(!cached); setError(null);
+      if (owner === null) { setLoading(false); return; }
       Promise.all([getOrders(), getOrderReturnRequests()]).then(([loadedOrders, requests]) => {
         if (!isActive) return;
         setOrders(loadedOrders);
@@ -25,7 +30,7 @@ export default function OrdersScreen() {
       return () => {
         isActive = false;
       };
-    }, []),
+    }, [owner]),
   );
 
   return (
@@ -42,8 +47,7 @@ export default function OrdersScreen() {
         <Text className="text-foreground text-lg font-semibold ml-2">My orders</Text>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
-        {orders.map((order) => (
+      <FlatList data={orders} keyExtractor={(order) => order.id} initialNumToRender={8} maxToRenderPerBatch={6} windowSize={5} showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 32 }} renderItem={({ item: order }) => (
           <Pressable
             key={order.id}
             accessibilityRole="button"
@@ -66,11 +70,11 @@ export default function OrdersScreen() {
               <Ionicons name="chevron-forward" size={16} color="#94a3b8" />
             </View>
           </Pressable>
-        ))}
+        )} ListFooterComponent={<View>
         {error && <Text className="py-4 text-center text-primary">{error}</Text>}
         {loading && <Text className="py-4 text-center text-muted-foreground">Loading orders…</Text>}
         {!loading && !error && orders.length === 0 && <Text className="py-10 text-center text-muted-foreground text-sm">No orders to show.</Text>}
-      </ScrollView>
+      </View>} />
     </SafeAreaView>
   );
 }

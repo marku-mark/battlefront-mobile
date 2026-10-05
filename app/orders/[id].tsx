@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
@@ -6,7 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useCart } from "@/hooks/useCart";
 import { getProductById } from "@/lib/api";
 import { getOrderReturnRequests, saveOrderReturnRequest, type OrderReturnRequest } from "@/lib/orderSupport";
-import { cancelPlacedOrder, getOrderById, resubmitPaymentProof, type OrderRecord } from "@/lib/orders";
+import { cancelPlacedOrder, getOrderById, getOrderSnapshot, resubmitPaymentProof, type OrderRecord } from "@/lib/orders";
 import * as ImagePicker from "expo-image-picker";
 import { useTheme } from "@/theme/ThemeProvider";
 
@@ -23,8 +23,9 @@ export default function OrderDetailScreen() {
   const { colors } = useTheme();
   const { addItem } = useCart();
   const { id } = useLocalSearchParams<{ id?: string }>();
-  const [order, setOrder] = useState<OrderRecord | null>(null);
-  const [isLoadingOrder, setIsLoadingOrder] = useState(true);
+  const [order, setOrder] = useState<OrderRecord | null>(() => id ? getOrderSnapshot(id) ?? null : null);
+  const [isLoadingOrder, setIsLoadingOrder] = useState(() => !id || !getOrderSnapshot(id));
+  const [loadError, setLoadError] = useState(false);
   const [returnRequest, setReturnRequest] = useState<OrderReturnRequest | null>(null);
   const [isReturnFormOpen, setIsReturnFormOpen] = useState(false);
   const [selectedReason, setSelectedReason] = useState("");
@@ -54,7 +55,10 @@ export default function OrderDetailScreen() {
       setIsLoadingOrder(false);
       return () => { isActive = false; };
     }
-    setIsLoadingOrder(true);
+    setLoadError(false);
+    const cached = getOrderSnapshot(id);
+    setOrder(cached ?? null);
+    setIsLoadingOrder(!cached);
     Promise.all([getOrderById(id), getOrderReturnRequests()]).then(([loadedOrder, requests]) => {
       if (!isActive) return;
       setOrder(loadedOrder);
@@ -62,7 +66,7 @@ export default function OrderDetailScreen() {
       setIsLoadingOrder(false);
     }).catch(() => {
       if (!isActive) return;
-      setOrder(null);
+      setLoadError(true);
       setIsLoadingOrder(false);
     });
     return () => {
@@ -160,7 +164,7 @@ export default function OrderDetailScreen() {
   if (!order) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-background px-6">
-        <Text className="text-foreground text-base font-semibold">Order not found</Text>
+        <Text className="text-foreground text-base font-semibold">{loadError ? "Could not load this order" : "Order not found"}</Text>
         <Pressable accessibilityRole="button" onPress={() => router.back()} className="mt-4 rounded-xl bg-primary px-5 py-3">
           <Text className="text-primary-foreground text-sm font-semibold">Back to orders</Text>
         </Pressable>
@@ -183,6 +187,7 @@ export default function OrderDetailScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
+        {loadError && <Text className="text-danger text-sm mb-3">Could not refresh this order. Showing saved details.</Text>}
         <View className="rounded-2xl border border-border bg-card p-4">
           <Text className="text-foreground text-xl font-bold">{order.id}</Text>
           <Text className="text-muted-foreground text-xs mt-1">Placed {order.date}</Text>

@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
@@ -6,22 +6,24 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ProductDetails } from "@/components/products/ProductDetails";
 import { useCart } from "@/hooks/useCart";
 import { addRecentlyViewedProduct } from "@/hooks/useRecentlyViewed";
-import { getProductById } from "@/lib/api";
+import { getProductById, getProductSnapshot } from "@/lib/api";
 import type { Product } from "@/lib/data";
 
 export default function ProductRoute() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { addItem } = useCart();
-  const [product, setProduct] = useState<Product | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [product, setProduct] = useState<Product | null>(() => id ? getProductSnapshot(id) ?? null : null);
+  const [isLoading, setIsLoading] = useState(() => !id || !getProductSnapshot(id));
   const [hasLoadError, setHasLoadError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [quantity, setQuantity] = useState(1);
 
   useEffect(() => {
     let isActive = true;
-    setIsLoading(true);
+    const cached = id ? getProductSnapshot(id) : null;
+    setProduct(cached ?? null);
+    setIsLoading(!cached);
     setHasLoadError(false);
 
     if (!id) {
@@ -43,7 +45,6 @@ export default function ProductRoute() {
       })
       .catch(() => {
         if (isActive) {
-          setProduct(null);
           setHasLoadError(true);
         }
       })
@@ -86,6 +87,8 @@ export default function ProductRoute() {
 
   return (
     <ProductDetails
+      refreshError={hasLoadError}
+      onRetry={() => setRetryCount((count) => count + 1)}
       product={product}
       quantity={quantity}
       onQuantityChange={setQuantity}

@@ -8,8 +8,11 @@ import { useCart } from "@/hooks/useCart";
 import { useSession } from "@/hooks/useSession";
 import { getCheckout, type Checkout } from "@/lib/api";
 import { placeOrder } from "@/lib/orders";
-import { loadSavedAddresses, type SavedAddress } from "@/lib/savedAddresses";
-import { paymentForFulfillment, paymentProofError, formatCheckoutAmount } from "@/lib/checkoutForm";
+import { loadSavedAddresses, persistSavedAddresses, type SavedAddress } from "@/lib/savedAddresses";
+import { checkoutRecipient, paymentForFulfillment, paymentProofError, formatCheckoutAmount } from "@/lib/checkoutForm";
+import { PhilippineAddressFields } from "@/components/addresses/PhilippineAddressFields";
+import { EMPTY_PHILIPPINE_ADDRESS, isCompletePhilippineAddress, formatPhilippineAddress } from "@/lib/philippineAddress";
+import { getLocalUserId } from "@/lib/api";
 
 export default function CheckoutScreen() {
   const router = useRouter();
@@ -21,6 +24,11 @@ export default function CheckoutScreen() {
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  const [isAddingAddress, setIsAddingAddress] = useState(false);
+  const [addressLabel, setAddressLabel] = useState("");
+  const [location, setLocation] = useState(EMPTY_PHILIPPINE_ADDRESS);
+  const [isSavingAddress, setIsSavingAddress] = useState(false);
+  const [addressError, setAddressError] = useState("");
   const [checkoutRetry, setCheckoutRetry] = useState(0);
   const [fulfillment, setFulfillment] = useState("pickup");
   const [payment, setPayment] = useState("cash");
@@ -33,17 +41,39 @@ export default function CheckoutScreen() {
     let active = true;
     setPreview(null); setError("");
     setSavedAddresses([]);
+    setIsAddingAddress(false); setAddressLabel(""); setLocation(EMPTY_PHILIPPINE_ADDRESS); setAddressError(""); setIsSavingAddress(false);
     setFullName(""); setPhone(""); setAddress(""); setProof(null); setFulfillment("pickup"); setPayment("cash");
     if (customerId === null || createdOrderId) return;
-    getCheckout().then((result) => {
+    Promise.all([getCheckout(), loadSavedAddresses()]).then(([result, addresses]) => {
       if (!active) return;
-      setPreview(result); setFullName(result.customer.name); setAddress(result.customer.default_delivery_address ?? "");
+      const recipient = checkoutRecipient(result.customer, addresses);
+      setPreview(result); setSavedAddresses(addresses);
+      setFullName(recipient.name); setPhone(recipient.phone); setAddress(recipient.address);
+      setIsAddingAddress(!recipient.phone.trim() || !recipient.address.trim());
     }).catch((reason) => { if (active) setError(reason.message); });
-    loadSavedAddresses().then((addresses) => { if (active) setSavedAddresses(addresses); }).catch(() => undefined);
     return () => { active = false; };
   }, [customerId, createdOrderId, checkoutRetry]);
   const paymentOptions = preview?.payment_methods.filter((method) => method.available_for.includes(fulfillment)) ?? [];
   const selectedPayment = paymentOptions.find((method) => method.value === payment);
+  async function saveAddress() {
+    if (isSavingAddress || customerId === null) return;
+    if (!addressLabel.trim() || !fullName.trim() || !phone.trim() || !isCompletePhilippineAddress(location)) {
+      setAddressError("Complete the label, recipient, phone, and every required Philippine address field."); return;
+    }
+    const formatted = formatPhilippineAddress(location);
+    if (formatted.length > 255) { setAddressError("Keep the complete address within 255 characters."); return; }
+    const existing = savedAddresses.find((entry) => entry.label.toLowerCase() === addressLabel.trim().toLowerCase());
+    const entry: SavedAddress = { ...location, id: existing?.id ?? `address-${Date.now()}`, label: addressLabel.trim(), recipient: fullName.trim(), phone: phone.trim(), address: formatted };
+    const next = [entry, ...savedAddresses.filter((saved) => saved.id !== entry.id)];
+    setIsSavingAddress(true); setAddressError("");
+    try {
+      await persistSavedAddresses(next);
+      if (getLocalUserId() !== customerId) return;
+      setSavedAddresses(next); setAddress(formatted); setIsAddingAddress(false);
+    } catch {
+      if (getLocalUserId() === customerId) setAddressError("Couldn't save this address. Please try again.");
+    } finally { if (getLocalUserId() === customerId) setIsSavingAddress(false); }
+  }
   async function chooseProof() {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 1 });
@@ -55,7 +85,7 @@ export default function CheckoutScreen() {
     } catch (reason) { Alert.alert("Cannot select proof", reason instanceof Error ? reason.message : "Please try again."); }
   }
   async function submit() {
-    if (isSubmitting || !preview || !selectedPayment) return;
+    if (isSubmitting || isSavingAddress || isAddingAddress || !preview || !selectedPayment) return;
     if (!fullName.trim() || !phone.trim() || (fulfillment === "delivery" && !address.trim()) || (selectedPayment.requires_proof && !proof)) {
       setError("Complete the recipient details, delivery address when needed, and required payment proof."); return;
     }
@@ -90,20 +120,31 @@ export default function CheckoutScreen() {
           <Text className="text-primary text-xs font-semibold">STEP 1</Text>
           <Text className="text-foreground text-base font-bold mt-1">Recipient details</Text>
           <Text className="text-foreground text-sm mt-3">Recipient name</Text>
-          <TextInput accessibilityLabel="Recipient name" value={fullName} onChangeText={setFullName} editable={!isSubmitting} maxLength={255} autoComplete="name" placeholder="Full name" className="mt-2 rounded-xl border border-border bg-secondary px-3 py-3 text-foreground" />
+          <TextInput accessibilityLabel="Recipient name" value={fullName} onChangeText={setFullName} editable={!isSubmitting && !isSavingAddress} maxLength={255} autoComplete="name" placeholder="Full name" className="mt-2 rounded-xl border border-border bg-secondary px-3 py-3 text-foreground" />
           <Text className="text-foreground text-sm mt-3">Contact number</Text>
-          <TextInput accessibilityLabel="Contact number" value={phone} onChangeText={setPhone} editable={!isSubmitting} maxLength={20} autoComplete="tel" placeholder="e.g. 0917 123 4567" keyboardType="phone-pad" className="mt-2 rounded-xl border border-border bg-secondary px-3 py-3 text-foreground" />
+          <TextInput accessibilityLabel="Contact number" value={phone} onChangeText={setPhone} editable={!isSubmitting && !isSavingAddress} maxLength={20} autoComplete="tel" placeholder="e.g. 0917 123 4567" keyboardType="phone-pad" className="mt-2 rounded-xl border border-border bg-secondary px-3 py-3 text-foreground" />
+          {isAddingAddress ? <View className="mt-3 rounded-xl border border-border bg-secondary p-3">
+            <Text className="text-foreground text-sm font-semibold">Add delivery address</Text>
+            <Text className="text-muted-foreground text-xs mt-2">Save your recipient details and address for checkout and Account on this device.</Text>
+            <TextInput accessibilityLabel="Address label" value={addressLabel} onChangeText={setAddressLabel} editable={!isSavingAddress} placeholder="Label (Home, Work)" className="mt-3 h-11 rounded-lg border border-border bg-background px-3 text-foreground text-sm" />
+            <View pointerEvents={isSavingAddress ? "none" : "auto"}>
+              <PhilippineAddressFields value={location} onChange={(patch) => setLocation((current) => ({ ...current, ...patch }))} />
+            </View>
+            {addressError ? <Text className="text-danger mt-2">{addressError}</Text> : null}
+            <Pressable disabled={isSavingAddress} onPress={() => void saveAddress()} className="mt-3 rounded-xl bg-primary px-5 py-3"><Text className="text-primary-foreground text-center">{isSavingAddress ? "Saving..." : "Save address and use for checkout"}</Text></Pressable>
+            {!!address.trim() && !!phone.trim() && <Pressable disabled={isSavingAddress} onPress={() => setIsAddingAddress(false)} className="mt-2 p-3"><Text className="text-foreground text-center">Cancel</Text></Pressable>}
+          </View> : <Pressable disabled={isSubmitting} onPress={() => { setAddressLabel(""); setLocation(EMPTY_PHILIPPINE_ADDRESS); setAddressError(""); setIsAddingAddress(true); }} className="mt-3 py-2"><Text className="text-primary font-semibold">Add another address</Text></Pressable>}
           <Text className="text-primary text-xs font-semibold mt-6">STEP 2</Text>
           <Text className="text-foreground text-base font-bold mt-1">Fulfillment method</Text>
           {preview.fulfillment_methods.map((method) => <Pressable key={method.value} disabled={isSubmitting} accessibilityRole="radio" accessibilityState={{ checked: fulfillment === method.value, disabled: isSubmitting }} onPress={() => { const next = paymentForFulfillment(preview.payment_methods, method.value, payment); setFulfillment(method.value); if (next !== payment) { setProof(null); setPayment(next); } }} className={`mt-3 rounded-xl border p-4 ${fulfillment === method.value ? "border-primary bg-primary/10" : "border-border bg-card"}`}><Text className="text-foreground font-semibold">{fulfillment === method.value ? "● " : "○ "}{method.label}</Text><Text className="text-muted-foreground text-xs mt-1">{method.value === "pickup" ? "Collect your order from Battlefront." : "Send the order to your supplied address."}</Text></Pressable>)}
           {fulfillment === "delivery" ? <View>
             {savedAddresses.length > 0 && <View className="mt-3">
               <Text className="text-foreground text-sm font-semibold">Use a saved address</Text>
-              {savedAddresses.map((saved) => <Pressable key={saved.id} onPress={() => { setAddress(saved.address); setFullName(saved.recipient); setPhone(saved.phone); }} className="mt-2 rounded-xl border border-border bg-card p-3"><Text className="text-foreground text-sm">{saved.label} · {saved.recipient}</Text><Text className="text-muted-foreground text-xs mt-1">{saved.address}</Text></Pressable>)}
+              {savedAddresses.map((saved) => <Pressable key={saved.id} disabled={isSubmitting || isSavingAddress} onPress={() => { setAddress(saved.address); setFullName(saved.recipient); setPhone(saved.phone); setIsAddingAddress(!saved.phone.trim() || !saved.address.trim()); }} className="mt-2 rounded-xl border border-border bg-card p-3"><Text className="text-foreground text-sm">{saved.label} · {saved.recipient}</Text><Text className="text-muted-foreground text-xs mt-1">{saved.address}</Text></Pressable>)}
             </View>}
             <Text className="text-foreground text-sm mt-3">Delivery address</Text>
-            <TextInput accessibilityLabel="Delivery address" value={address} onChangeText={setAddress} editable={!isSubmitting} placeholder="House or building, street, barangay, city, and province" multiline maxLength={255} className="mt-2 rounded-xl border border-border bg-secondary px-3 py-3 text-foreground" />
-            {preview.customer.default_delivery_address && <Text className="text-muted-foreground text-xs mt-2">Pre-filled from your profile. Changes here apply only to this order.</Text>}
+            <Text className="text-foreground mt-2">{address || "Add your delivery address above."}</Text>
+            <Text className="text-muted-foreground text-xs mt-2">Selected from your saved details. Choose another address above if needed.</Text>
           </View> : <View className="mt-3 border border-border bg-card p-4"><Text className="text-primary text-xs font-semibold">PICKUP LOCATION</Text><Text className="text-foreground font-semibold mt-2">{preview.pickup_location.name}</Text><Text className="text-muted-foreground text-sm mt-2">{preview.pickup_location.address}</Text>{preview.pickup_location.contact_number && <Text className="text-muted-foreground text-sm mt-2">{preview.pickup_location.contact_number}</Text>}{preview.pickup_location.operating_hours && <Text className="text-muted-foreground text-sm mt-2">{preview.pickup_location.operating_hours}</Text>}</View>}
           <Text className="text-primary text-xs font-semibold mt-6">STEP 3</Text>
           <Text className="text-foreground text-base font-bold mt-1">Payment method</Text>
@@ -132,7 +173,7 @@ export default function CheckoutScreen() {
             <View className="flex-row justify-between mt-4 border-t border-border pt-4"><Text className="text-foreground font-semibold">Cart total</Text><Text className="text-foreground text-xl font-bold">{formatCheckoutAmount(preview.cart.total)}</Text></View>
           </View>
           {error ? <Text className="text-danger mt-3">{error}</Text> : null}
-          <Pressable disabled={isSubmitting} onPress={() => void submit()} className="mt-5 rounded-xl bg-primary px-5 py-3"><Text className="text-primary-foreground text-center">{isSubmitting ? "Placing order..." : "Place order"}</Text></Pressable>
+          <Pressable disabled={isSubmitting || isSavingAddress || isAddingAddress} onPress={() => void submit()} className="mt-5 rounded-xl bg-primary px-5 py-3"><Text className="text-primary-foreground text-center">{isSubmitting ? "Placing order..." : "Place order"}</Text></Pressable>
           <Text className="text-muted-foreground text-xs text-center mt-3">Stock is deducted and your cart is cleared only after the complete order succeeds.</Text>
           <Pressable disabled={isSubmitting} onPress={() => router.navigate("/cart")} className="mt-4 rounded-xl border border-border p-3"><Text className="text-foreground text-center font-semibold">Back to cart</Text></Pressable>
         </View>}

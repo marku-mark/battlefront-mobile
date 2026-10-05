@@ -1,6 +1,7 @@
-import { Ionicons } from "@expo/vector-icons";
+import { ProductImage } from "@/components/products/ProductImage";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
-import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, Text, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { useEffect, useRef, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MockSignInSheet } from "@/components/account/MockSignInSheet";
@@ -64,7 +65,7 @@ export default function CartScreen() {
     );
   }
 
-  if (items.length === 0 && !removedItem) {
+  if (items.length === 0 && !removedItem && !isUpdating) {
     return (
       <SafeAreaView edges={["left", "right", "bottom"]} className="flex-1 bg-background">
         <ScreenHeader
@@ -140,7 +141,7 @@ export default function CartScreen() {
               accessibilityLabel={`View details for ${product.name}`}
               onPress={() => router.push({ pathname: "/product/[id]", params: { id: product.id } })}
             >
-              <Image source={getProductImageSource(product.image)} className="w-20 h-20 rounded-xl bg-secondary" />
+              <ProductImage source={getProductImageSource(product.image)} className="w-20 h-20 rounded-xl bg-secondary" />
             </Pressable>
             <View className="flex-1 ml-3">
               <View className="flex-row items-start gap-2">
@@ -229,7 +230,7 @@ export default function CartScreen() {
 
         <View className="bg-card border border-border rounded-2xl p-4 mt-4 shadow-soft">
           <View className="flex-row justify-between mb-2">
-            <Text className="text-muted-foreground text-sm">Subtotal</Text>
+            <Text className="text-muted-foreground text-sm">{isUpdating ? "Estimated subtotal" : "Subtotal"}</Text>
             <Text className="text-foreground text-base font-bold">{formatPrice(subtotal)}</Text>
           </View>
           <View className="border-t border-border pt-3 mt-1 flex-row justify-between">

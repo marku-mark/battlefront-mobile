@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { cartSnapshot, createCartQueue } from "../src/lib/cartState.ts";
+import { cartSnapshot, createCartQueue, createOptimisticCart } from "../src/lib/cartState.ts";
 
 function cart(overrides = {}) {
   return {
@@ -60,4 +60,84 @@ test("a failed cart operation does not prevent retry or subsequent updates", asy
   await assert.rejects(failed, /Offline/);
   assert.equal(await retry, "recovered");
   assert.equal(attempts, 2);
+});
+
+test("quantity changes immediately update the displayed line, count and estimated subtotal", () => {
+  const state = createOptimisticCart();
+  state.confirm(cart());
+  state.begin("42", 3);
+
+  const snapshot = state.snapshot();
+  assert.equal(snapshot.items[0].quantity, 3);
+  assert.equal(snapshot.items[0].lineTotal, 2700);
+  assert.equal(snapshot.subtotal, 2700);
+  assert.equal(state.find("42").quantity, 2);
+});
+
+test("a rejected quantity change restores confirmed quantity, totals and stock conflicts", () => {
+  const state = createOptimisticCart();
+  state.confirm(cart({ conflict_count: 1 }));
+  const operation = state.begin("42", 8);
+
+  state.settle(operation);
+
+  assert.deepEqual(state.snapshot(), cartSnapshot(cart({ conflict_count: 1 })));
+});
+
+test("removing the last item hides it immediately but preserves its server ID for the request and rollback", () => {
+  const state = createOptimisticCart();
+  state.confirm(cart());
+  const operation = state.begin("42", 0);
+  assert.deepEqual(state.snapshot().items, []);
+  assert.equal(state.snapshot().subtotal, 0);
+  assert.equal(state.find("42").serverId, 8);
+
+  state.settle(operation);
+
+  assert.deepEqual(state.snapshot(), cartSnapshot(cart()));
+});
+
+test("an earlier response cannot overwrite a newer pending quantity and final prices come from the server", () => {
+  const state = createOptimisticCart();
+  state.confirm(cart());
+  const first = state.begin("42", 3);
+  const second = state.begin("42", 4);
+  const response = cart();
+  response.items[0].quantity = 3;
+  response.items[0].unit_price = "850.00";
+  response.items[0].line_total = "2550.00";
+  response.total = "2550.00";
+
+  state.settle(first);
+  state.confirm(response);
+  assert.equal(state.snapshot().items[0].quantity, 4);
+  assert.equal(state.snapshot().subtotal, 3400);
+  state.settle(second);
+
+  assert.equal(state.snapshot().items[0].quantity, 3);
+  assert.equal(state.snapshot().subtotal, 2550);
+});
+
+test("refresh after a lost removal response reconciles a deletion that reached the server", () => {
+  const state = createOptimisticCart();
+  state.confirm(cart());
+  const operation = state.begin("42", 0);
+
+  state.settle(operation);
+  state.confirm(cart({ items: [], total: "0.00" }));
+
+  assert.deepEqual(state.snapshot().items, []);
+  assert.equal(state.snapshot().subtotal, 0);
+});
+
+test("a new session has no pending changes or confirmed items from the previous session", () => {
+  const previous = createOptimisticCart();
+  previous.confirm(cart());
+  const operation = previous.begin("42", 0);
+  const current = createOptimisticCart();
+
+  previous.settle(operation);
+  previous.confirm(cart());
+
+  assert.deepEqual(current.snapshot(), { items: [], subtotal: 0, conflictCount: 0 });
 });

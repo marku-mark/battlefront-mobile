@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { FlatList, Pressable, Text, View } from "react-native";
 import type { Category } from "@/lib/data";
 import { useTheme } from "@/theme/ThemeProvider";

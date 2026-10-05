@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { FlashList } from "@shopify/flash-list";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -20,6 +20,7 @@ type SortOrder = "featured" | "price-low" | "price-high";
 
 export default function CategoriesScreen() {
   const router = useRouter();
+  const openProduct = useCallback((product: Product) => router.push({ pathname: "/product/[id]", params: { id: product.id } }), [router]);
   const { width } = useWindowDimensions();
   const layout = getResponsiveLayout(width);
   const { isDark } = useTheme();
@@ -254,7 +255,7 @@ export default function CategoriesScreen() {
             <ProductCard
               product={item}
               width={cardWidth}
-              onPress={(product) => router.push({ pathname: "/product/[id]", params: { id: product.id } })}
+              onPress={openProduct}
             />
           </View>
         )}

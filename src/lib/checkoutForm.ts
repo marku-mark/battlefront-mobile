@@ -1,5 +1,14 @@
 type PaymentMethod = { value: string; available_for: string[] };
 
+export function checkoutRecipient(customer: { name: string; default_delivery_address?: string | null }, addresses: { recipient: string; phone: string; address: string }[]) {
+  const saved = addresses.find((entry) => entry.address === customer.default_delivery_address) ?? addresses[0];
+  return {
+    name: saved?.recipient || customer.name,
+    phone: saved?.phone ?? "",
+    address: saved?.address || customer.default_delivery_address || "",
+  };
+}
+
 export function paymentForFulfillment(methods: PaymentMethod[], fulfillment: string, current: string): string {
   const available = methods.filter((method) => method.available_for.includes(fulfillment));
   return available.some((method) => method.value === current) ? current : available[0]?.value ?? "";

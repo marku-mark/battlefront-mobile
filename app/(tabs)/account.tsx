@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
 import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { useEffect, useRef, useState } from "react";
@@ -8,7 +8,7 @@ import { PhilippineAddressFields } from "@/components/addresses/PhilippineAddres
 import { LoadingState } from "@/components/layout/LoadingState";
 import { useSession } from "@/hooks/useSession";
 import { getLocalUserId } from "@/lib/api";
-import { getOrders, type OrderRecord } from "@/lib/orders";
+import { getOrdersSnapshot } from "@/lib/orders";
 import { EMPTY_PHILIPPINE_ADDRESS, formatPhilippineAddress, isCompletePhilippineAddress, type PhilippineAddressFields as PhilippineAddressValue } from "@/lib/philippineAddress";
 import { loadSavedAddresses, persistSavedAddresses, type SavedAddress } from "@/lib/savedAddresses";
 import { useTheme } from "@/theme/ThemeProvider";
@@ -22,12 +22,11 @@ const accountLinks = [
 
 export default function AccountScreen() {
   const router = useRouter();
-  const [orders, setOrders] = useState<OrderRecord[]>([]);
+  const orders = getOrdersSnapshot() ?? [];
   const { width } = useWindowDimensions();
   const { isDark, toggleMode, colors } = useTheme();
   const { session, isHydrated, signOut, saveProfile, refreshProfile } = useSession();
   const isMockAccount = session.mode === "customer";
-  useEffect(() => { setOrders([]); if (session.mode === "customer") getOrders().then(setOrders).catch(() => undefined); }, [session.mode === "customer" ? session.user.id : null]);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [selectedUtility, setSelectedUtility] = useState<string | null>(null);
   const [authMessage, setAuthMessage] = useState("");
@@ -62,7 +61,7 @@ export default function AccountScreen() {
 
   async function openProfileSettings() {
     const owner = getLocalUserId();
-    setSelectedUtility("Account settings"); setProfileError(""); setIsProfileLoading(true); setIsProfileLoaded(false);
+    setSelectedUtility("Account settings"); setProfileError(""); setIsProfileLoading(!isProfileLoaded);
     try {
       const user = await refreshProfile();
       if (getLocalUserId() !== owner) return;
@@ -96,7 +95,7 @@ export default function AccountScreen() {
 
   async function openSavedAddresses() {
     setSelectedUtility("Delivery addresses");
-    setIsAddressesLoading(true);
+    setIsAddressesLoading(savedAddresses.length === 0);
     setAddressError("");
     const owner = getLocalUserId();
     try {

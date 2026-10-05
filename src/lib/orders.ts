@@ -1,4 +1,5 @@
-import { apiRequest, ApiError, invalidateCatalog } from "./api";
+import { createReadCache } from "./readCache";
+import { apiRequest, ApiError, invalidateCatalog, onSessionChange, getSessionRevision } from "./api";
 import { collectPages } from "./apiClient";
 import { Platform } from "react-native";
 import { File } from "expo-file-system";
@@ -15,10 +16,27 @@ function mapOrder(row: BackendOrder): OrderRecord {
     productLines: row.items?.map((item) => ({ productId: String(item.product.id), quantity: item.quantity, variant: null })),
     canCancel: false, canReturn: false, canResubmitProof: row.payment.can_resubmit_proof ?? false, paymentNotice: row.payment.notice };
 }
-export async function getOrders(): Promise<OrderRecord[]> { return (await collectPages<BackendOrder>(apiRequest, "orders")).map(mapOrder); }
-export async function getOrderById(id: string): Promise<OrderRecord | null> {
-  try { return mapOrder((await apiRequest<{ data: BackendOrder }>(`orders/${encodeURIComponent(id)}`)).data); }
-  catch (error) { if (error instanceof ApiError && error.status === 404) return null; throw error; }
+const ordersCache = createReadCache<OrderRecord[]>(30_000, Date.now, 1);
+const orderCache = createReadCache<OrderRecord | null>(30_000);
+function clearOrders() { ordersCache.clear(); orderCache.clear(); }
+onSessionChange(clearOrders);
+export function getOrdersSnapshot() { return ordersCache.peek("orders"); }
+export function getOrderSnapshot(id: string) { return orderCache.peek(id); }
+export function getOrders(): Promise<OrderRecord[]> {
+  const revision = getSessionRevision();
+  return ordersCache.read("orders", async () => {
+    const request = <T>(path: string): Promise<T> => {
+      if (revision !== getSessionRevision()) return Promise.reject(new Error("Your account changed. Reopen orders."));
+      return apiRequest<T>(path);
+    };
+    return (await collectPages<BackendOrder>(request, "orders")).map(mapOrder);
+  });
+}
+export function getOrderById(id: string): Promise<OrderRecord | null> {
+  return orderCache.read(id, async () => {
+    try { return mapOrder((await apiRequest<{ data: BackendOrder }>("orders/" + encodeURIComponent(id))).data); }
+    catch (error) { if (error instanceof ApiError && error.status === 404) return null; throw error; }
+  });
 }
 const orderSubmission = createOrderSubmission<BackendOrder>(apiRequest, Platform.OS === "web" ? "web" : "native", (proof) => {
   const file = new File(proof.uri);
@@ -27,10 +45,14 @@ const orderSubmission = createOrderSubmission<BackendOrder>(apiRequest, Platform
 });
 export async function placeOrder(input: OrderInput): Promise<OrderRecord> {
   const row = await orderSubmission.placeOrder(input);
+  clearOrders();
   invalidateCatalog();
   return mapOrder(row);
 }
 export async function resubmitPaymentProof(id: string, proof: { uri: string; name: string; type: string }): Promise<OrderRecord> {
-  return mapOrder(await orderSubmission.resubmitPaymentProof(id, proof));
+  const revision = getSessionRevision();
+  const updated = mapOrder(await orderSubmission.resubmitPaymentProof(id, proof));
+  if (revision === getSessionRevision()) { clearOrders(); orderCache.seed(id, updated); }
+  return updated;
 }
 export async function cancelPlacedOrder(_id: string): Promise<OrderRecord | null> { throw new Error("Customer cancellation is not supported. Contact Battlefront staff."); }

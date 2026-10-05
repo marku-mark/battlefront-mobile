@@ -1,5 +1,6 @@
-import { Ionicons } from "@expo/vector-icons";
-import { Alert, Image, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
+import { ProductImage } from "@/components/products/ProductImage";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { Alert, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { useState, type ReactNode } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getProductImageSource, getProductVariants, type Product } from "@/lib/data";
@@ -12,6 +13,8 @@ import { ProductReviewPanel } from "@/components/products/ProductReviewPanel";
 import { getResponsiveLayout, MAX_CONTENT_WIDTH } from "@/lib/responsive";
 
 type ProductDetailsProps = {
+  refreshError?: boolean;
+  onRetry?: () => void;
   product: Product;
   quantity: number;
   onQuantityChange: (quantity: number) => void;
@@ -26,7 +29,7 @@ function formatPrice(value: number): string {
   return `₱${value.toLocaleString("en-PH")}`;
 }
 
-export function ProductDetails({ product, quantity, onQuantityChange, onAddToCart, onCompare, onClose }: ProductDetailsProps) {
+export function ProductDetails({ refreshError = false, onRetry, product, quantity, onQuantityChange, onAddToCart, onCompare, onClose }: ProductDetailsProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -54,6 +57,7 @@ export function ProductDetails({ product, quantity, onQuantityChange, onAddToCar
 
   return (
     <View className="flex-1 bg-background">
+      {refreshError && <Pressable onPress={onRetry} className="px-4 py-3"><Text className="text-danger text-sm">Could not update this product. Showing saved details. Tap to retry.</Text></Pressable>}
       <View className="flex-row items-center justify-between px-4 pb-3 border-b border-border" style={{ paddingTop: Math.max(insets.top, 12) }}>
         <Pressable accessibilityLabel="Close product details" accessibilityRole="button" onPress={onClose} hitSlop={10} className="w-9 h-9 items-center justify-center">
           <Ionicons name="arrow-back" size={22} color={colors.foreground} />
@@ -70,9 +74,9 @@ export function ProductDetails({ product, quantity, onQuantityChange, onAddToCar
           style={{ maxWidth: MAX_CONTENT_WIDTH }}
         >
           <View style={{ width: useTwoColumnLayout ? imageWidth : "100%", maxWidth: useTwoColumnLayout ? 560 : undefined, alignSelf: useTwoColumnLayout ? undefined : "center" }}>
-            <Image source={getProductImageSource(product.image)} accessibilityLabel={`${product.name} product image`} accessible style={{ width: imageWidth, height: imageWidth }} className="self-center bg-card" resizeMode="cover" />
+            <ProductImage source={getProductImageSource(product.image)} accessibilityLabel={`${product.name} product image`} accessible style={{ width: imageWidth, height: imageWidth }} className="self-center bg-card" resizeMode="cover" />
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ width: imageWidth, alignSelf: "center" }} contentContainerStyle={{ gap: 8, padding: 12 }}>
-              <View className="h-16 w-16 overflow-hidden rounded-lg border-2 border-primary"><Image source={getProductImageSource(product.image)} accessibilityLabel={`${product.name} thumbnail`} className="h-full w-full" /></View>
+              <View className="h-16 w-16 overflow-hidden rounded-lg border-2 border-primary"><ProductImage source={getProductImageSource(product.image)} accessibilityLabel={`${product.name} thumbnail`} className="h-full w-full" /></View>
             </ScrollView>
           </View>
 

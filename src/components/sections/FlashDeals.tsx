@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { FlatList, Text, View } from "react-native";
 import { useCountdown } from "@/hooks/useCountdown";
 import type { Product } from "@/lib/data";

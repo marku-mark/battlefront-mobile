@@ -1,3 +1,5 @@
+import { createReadCache, loadSelectedProducts } from "./readCache";
+import type { ApiUser, ProfileInput } from "./accountApi";
 import { banners, type Banner, type Brand, type Category, type Product, type Store } from "./data";
 import { ApiError, createApiClient, createCachedRead, createPacedRead, type Page } from "./apiClient";
 import { createProgressiveCatalog } from "./catalogCache";
@@ -8,12 +10,16 @@ export type { ApiUser, AuthResult, ProfileInput, RegistrationInput } from "./acc
 import type { ApiCart } from "./cartState";
 export type { ApiCart } from "./cartState";
 export { ApiError } from "./apiClient";
+let sessionRevision = 0;
+export function getSessionRevision() { return sessionRevision; }
 let accessToken: string | null = null;
 let localUserId: number | null = null;
 let chatContext: string | null = null;
 let chatGeneration = 0;
+const sessionChangeListeners = new Set<() => void>();
+export function onSessionChange(listener: () => void) { sessionChangeListeners.add(listener); return () => { sessionChangeListeners.delete(listener); }; }
 const sessionListeners = new Set<() => void>();
-export function setAccessToken(token: string | null, userId: number | null = null) { accessToken = token; localUserId = userId; resetChatContext(); }
+export function setAccessToken(token: string | null, userId: number | null = null) { if (accessToken !== token || localUserId !== userId) { sessionRevision++; profileCache.clear(); sessionChangeListeners.forEach((listener) => listener()); } accessToken = token; localUserId = userId; resetChatContext(); }
 export function getLocalUserId() { return localUserId ?? "guest"; }
 export function onSessionExpired(listener: () => void) { sessionListeners.add(listener); return () => { sessionListeners.delete(listener); }; }
 export function resetChatContext() { chatContext = null; chatGeneration++; }
@@ -22,27 +28,60 @@ export const apiRequest = createApiClient(process.env.EXPO_PUBLIC_API_URL ?? "",
   sessionListeners.forEach((listener) => listener());
 });
 type Envelope<T> = { data: T };
-export const { login, register, logout, getProfile, updateProfile } = createAccountApi(apiRequest);
+const account = createAccountApi(apiRequest);
+const profileCache = createReadCache<ApiUser>(30_000, Date.now, 1);
+export const { login, register, logout } = account;
+export function getProfile() { return profileCache.read("profile", account.getProfile); }
+export async function updateProfile(fields: ProfileInput) {
+  const owner = sessionRevision;
+  const user = await account.updateProfile(fields);
+  if (owner === sessionRevision) { profileCache.clear(); profileCache.seed("profile", user); }
+  return user;
+}
 type Filters = { categories: { id: number; name: string }[]; brands: string[] };
 const readCatalog = createPacedRead(apiRequest);
 const filterCache = createCachedRead(() => readCatalog<Envelope<Filters>>("products/filters").then((result) => result.data), 60_000);
 function getFilters() { return filterCache.read(); }
 export async function getCategories(): Promise<Category[]> { return (await getFilters()).categories.map((row) => ({ id: String(row.id), name: row.name, icon: "cube-outline" })); }
 export async function getBrands(): Promise<Brand[]> { return (await getFilters()).brands.map((name) => ({ id: name, name, logo: "" })); }
+const productCache = createReadCache<Product | null>(60_000);
+const searchCache = createReadCache<Product[]>(30_000, Date.now, 20);
+let productRevision = 0;
 const catalogCache = createProgressiveCatalog(async (page) => {
+  const revision = productRevision;
   const result = await readCatalog<Page<ApiProduct>>(`products?page=${page}`);
-  return { ...result, data: result.data.map(mapProduct) };
+  const products = result.data.map(mapProduct);
+  if (revision === productRevision) products.forEach((product) => productCache.seed(product.id, product));
+  return { ...result, data: products };
 });
-export function invalidateCatalog() { catalogCache.invalidate(); filterCache.invalidate(); }
+export function invalidateCatalog() { productRevision++; catalogCache.invalidate(); filterCache.invalidate(); productCache.clear(); searchCache.clear(); }
 export function getProducts(): Promise<Product[]> { return catalogCache.all(); }
 export const getCatalogPreview = catalogCache.first;
 export const getCatalogSnapshot = catalogCache.snapshot;
 export const subscribeCatalog = catalogCache.subscribe;
-export async function getProductById(id: string): Promise<Product | null> {
-  try { return mapProduct((await apiRequest<Envelope<ApiProduct>>(`products/${encodeURIComponent(id)}`)).data); }
-  catch (error) { if (error instanceof ApiError && error.status === 404) return null; throw error; }
+export function getProductSnapshot(id: string) {
+  const cached = productCache.peek(id);
+  return cached === undefined ? catalogCache.snapshot().rows.find((product) => product.id === id) : cached;
 }
-export function prefetchProductById(_id: string): void {}
+export function getProductById(id: string): Promise<Product | null> {
+  return productCache.read(id, async () => {
+    try { return mapProduct((await apiRequest<Envelope<ApiProduct>>("products/" + encodeURIComponent(id))).data); }
+    catch (error) { if (error instanceof ApiError && error.status === 404) return null; throw error; }
+  });
+}
+export function getSelectedProducts(ids: string[]) { return loadSelectedProducts(ids, getProductById); }
+export function searchProducts(query: string): Promise<Product[]> {
+  const term = query.trim();
+  if (term.length < 2) return Promise.resolve([]);
+  return searchCache.read(term, async () => {
+    const revision = productRevision;
+    const result = await apiRequest<Page<ApiProduct>>("products?q=" + encodeURIComponent(term));
+    const products = result.data.map(mapProduct);
+    if (revision === productRevision) products.forEach((product) => productCache.seed(product.id, product));
+    return products;
+  });
+}
+export function prefetchProductById(id: string): void { void getProductById(id).catch(() => undefined); }
 export type HomeCatalog = { catalogProducts: Product[]; flashDeals: Product[]; sulitPicks: Product[]; newArrivals: Product[] };
 export async function getHomeCatalog(): Promise<HomeCatalog> {
   const catalogProducts = await getCatalogPreview();

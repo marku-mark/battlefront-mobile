@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { FlashList } from "@shopify/flash-list";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Alert, Image as RNImage, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
@@ -161,10 +161,10 @@ export default function HomeScreen() {
     }, [refreshRecentlyViewed])
   );
 
-  function handleProductSelect(product: Product) {
+  const handleProductSelect = useCallback((product: Product) => {
     setIsSearchOpen(false);
     router.push({ pathname: "/product/[id]", params: { id: product.id } });
-  }
+  }, [router]);
 
   useFocusEffect(useCallback(() => {
     let isActive = true;

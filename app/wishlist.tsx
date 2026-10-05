@@ -1,10 +1,11 @@
-import { Ionicons } from "@expo/vector-icons";
+import { ProductImage } from "@/components/products/ProductImage";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
-import { Image, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
-import { useEffect, useState } from "react";
+import { FlatList, Pressable, Text, View, useWindowDimensions } from "react-native";
+import { useEffect, useRef, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getProductImageSource, getProductVariants, type Product } from "@/lib/data";
-import { getProducts } from "@/lib/api";
+import { getSelectedProducts, getProductSnapshot } from "@/lib/api";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { useWishlist } from "@/hooks/useWishlist";
 import { useCart } from "@/hooks/useCart";
@@ -25,22 +26,27 @@ export default function WishlistScreen() {
   const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
   const [isCatalogLoading, setIsCatalogLoading] = useState(true);
   const [hasCatalogError, setHasCatalogError] = useState(false);
-  const { isHydrated } = useSession();
+  const { isHydrated, session } = useSession();
+  const owner = session.mode === "customer" ? session.user.id : "guest";
+  const [visibleCount, setVisibleCount] = useState(12);
+  const [retryCount, setRetryCount] = useState(0);
+  const loadingMore = useRef(false);
+  const idsKey = wishlistIds.slice(0, visibleCount).join(",");
 
+  useEffect(() => { setVisibleCount(12); setRemovedProduct(null); }, [owner]);
   useEffect(() => {
-    loadCatalog();
-  }, []);
-
-  function loadCatalog() {
-    setIsCatalogLoading(true);
-    setHasCatalogError(false);
-    getProducts()
-      .then(setCatalogProducts)
-      .catch(() => setHasCatalogError(true))
-      .finally(() => setIsCatalogLoading(false));
-  }
-
-  const isLoading = !isHydrated || isWishlistLoading || isCatalogLoading;
+    if (!isHydrated || isWishlistLoading) return;
+    let active = true;
+    const ids = idsKey ? idsKey.split(",") : [];
+    const cached = ids.map(getProductSnapshot).filter((product): product is Product => Boolean(product));
+    setCatalogProducts(cached); setIsCatalogLoading(true); setHasCatalogError(false);
+    getSelectedProducts(ids).then((rows) => { if (active) setCatalogProducts(rows); })
+      .catch(() => { if (active) { setCatalogProducts(ids.map(getProductSnapshot).filter((product): product is Product => Boolean(product))); setHasCatalogError(true); } })
+      .finally(() => { if (active) { setIsCatalogLoading(false); loadingMore.current = false; } });
+    return () => { active = false; };
+  }, [idsKey, owner, isHydrated, isWishlistLoading, retryCount]);
+  function loadCatalog() { setRetryCount((current) => current + 1); }
+  const isLoading = !isHydrated || isWishlistLoading || (isCatalogLoading && catalogProducts.length === 0);
   const products = catalogProducts.filter((product) => wishlistIds.includes(product.id));
 
   return (
@@ -57,14 +63,14 @@ export default function WishlistScreen() {
         <View className="ml-2">
           <Text className="text-foreground text-lg font-bold">Wishlist</Text>
           <Text className="text-muted-foreground text-xs mt-0.5">
-            {isLoading ? "Loading saved items" : `${products.length} saved item${products.length === 1 ? "" : "s"}`}
+            {isLoading ? "Loading saved items" : `${wishlistIds.length} saved item${wishlistIds.length === 1 ? "" : "s"}`}
           </Text>
         </View>
       </View>
 
       {isLoading ? (
         <LoadingState label="Loading wishlist..." />
-      ) : hasCatalogError ? (
+      ) : hasCatalogError && catalogProducts.length === 0 ? (
         <View className="flex-1 items-center justify-center px-6">
           <Ionicons name="cloud-offline-outline" size={30} color="#94a3b8" />
           <Text className="mt-3 text-foreground text-sm font-semibold">Could not load saved products</Text>
@@ -73,7 +79,7 @@ export default function WishlistScreen() {
             <Text className="text-primary-foreground text-xs font-semibold">Try again</Text>
           </Pressable>
         </View>
-      ) : products.length === 0 ? (
+      ) : products.length === 0 && wishlistIds.length === 0 ? (
         <View className="flex-1 items-center justify-center px-6">
           <View className="w-20 h-20 rounded-full bg-secondary items-center justify-center border border-border">
             <Ionicons name="heart-outline" size={34} color="#94a3b8" />
@@ -106,8 +112,7 @@ export default function WishlistScreen() {
           </Pressable>
         </View>
       ) : (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: layout.horizontalPadding, paddingBottom: 28, width: "100%", maxWidth: 860, alignSelf: "center" }}>
-          {removedProduct && (
+        <FlatList data={products} keyExtractor={(product) => product.id} initialNumToRender={8} maxToRenderPerBatch={6} windowSize={5} onEndReached={() => { if (!isCatalogLoading && !loadingMore.current && visibleCount < wishlistIds.length) { loadingMore.current = true; setVisibleCount((count) => count + 12); } }} onEndReachedThreshold={0.4} ListFooterComponent={<Text className="text-muted-foreground text-center py-3">{isCatalogLoading ? "Loading saved products…" : hasCatalogError ? "Some products could not be updated." : visibleCount < wishlistIds.length ? "Scroll for more saved products" : ""}</Text>} showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: layout.horizontalPadding, paddingBottom: 28, width: "100%", maxWidth: 860, alignSelf: "center" }} ListHeaderComponent={removedProduct ? (
             <View className="flex-row items-center justify-between rounded-xl border border-primary/30 bg-primary/10 px-3 py-3 mb-3">
               <Text className="flex-1 text-foreground text-xs">{removedProduct.name} removed</Text>
               <Pressable
@@ -121,14 +126,13 @@ export default function WishlistScreen() {
                 <Text className="text-primary text-xs font-bold">Undo</Text>
               </Pressable>
             </View>
-          )}
-          {products.map((product) => (
+          ) : null} renderItem={({ item: product }) => (
             <View key={product.id} className="flex-row bg-card border border-border rounded-2xl p-3 mb-3 shadow-soft">
               <Pressable
                 accessibilityLabel={`View details for ${product.name}`}
                 onPress={() => router.push({ pathname: "/product/[id]", params: { id: product.id } })}
               >
-                <Image source={getProductImageSource(product.image)} className="w-20 h-20 rounded-xl bg-secondary" />
+                <ProductImage source={getProductImageSource(product.image)} className="w-20 h-20 rounded-xl bg-secondary" />
               </Pressable>
               <View className="flex-1 ml-3">
                 <View className="flex-row items-start gap-2">
@@ -171,8 +175,7 @@ export default function WishlistScreen() {
                 </View>
               </View>
             </View>
-          ))}
-        </ScrollView>
+          )} />
       )}
     </SafeAreaView>
   );

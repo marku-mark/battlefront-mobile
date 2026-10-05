@@ -1,12 +1,12 @@
+import { ProductImage } from "@/components/products/ProductImage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -18,7 +18,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCart } from "@/hooks/useCart";
-import { getBrands, getProducts } from "@/lib/api";
+import { getBrands, getCatalogPreview, getCatalogSnapshot, subscribeCatalog } from "@/lib/api";
 import { getProductImageSource, type Brand, type Product } from "@/lib/data";
 import { useTheme } from "@/theme/ThemeProvider";
 import { LoadingMoreFooter } from "@/components/layout/LoadingMoreFooter";
@@ -68,7 +68,7 @@ export default function BuilderScreen() {
   const router = useRouter();
   const { isDark } = useTheme();
   const { addItem } = useCart();
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>(() => getCatalogSnapshot().rows);
   const [visiblePartCount, setVisiblePartCount] = useState(PARTS_PER_PAGE);
   const [isLoadingMoreParts, setIsLoadingMoreParts] = useState(false);
   const isLoadingMorePartsRef = useRef(false);
@@ -85,16 +85,21 @@ export default function BuilderScreen() {
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   const [partsAddedSummary, setPartsAddedSummary] = useState<{ count: number; subtotal: number } | null>(null);
   const [query, setQuery] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => getCatalogSnapshot().rows.length === 0);
   const [hasLoadError, setHasLoadError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
 
   useFocusEffect(useCallback(() => {
     let isActive = true;
-    setIsLoading(true);
+    setIsLoading(getCatalogSnapshot().rows.length === 0);
     setHasLoadError(false);
 
-    Promise.all([getProducts(), getBrands(), AsyncStorage.getItem(BUILD_STORAGE_KEY)])
+    const unsubscribe = subscribeCatalog((snapshot) => {
+      if (!isActive) return;
+      if (snapshot.rows.length || snapshot.complete) { setProducts(snapshot.rows); setIsLoading(false); }
+      if (snapshot.error) setHasLoadError(true);
+    });
+    Promise.all([getCatalogPreview(), getBrands(), AsyncStorage.getItem(BUILD_STORAGE_KEY)])
       .then(([catalog, catalogBrands, storedBuilds]) => {
         if (!isActive) return;
         setProducts(catalog);
@@ -113,6 +118,7 @@ export default function BuilderScreen() {
 
     return () => {
       isActive = false;
+      unsubscribe();
     };
   }, [retryCount]));
 
@@ -304,7 +310,7 @@ export default function BuilderScreen() {
           <ActivityIndicator color="#ef1b1b" />
           <Text className="text-muted-foreground text-sm">Loading parts catalog</Text>
         </View>
-      ) : hasLoadError ? (
+      ) : hasLoadError && products.length === 0 ? (
         <View className="flex-1 items-center justify-center px-8">
           <Ionicons name="cloud-offline-outline" size={30} color={isDark ? "#9ca3af" : "#68717e"} />
           <Text className="mt-3 text-foreground text-base font-semibold">Could not load the catalog</Text>
@@ -642,7 +648,7 @@ function BuilderSlotCard({ slot, product, isDark, onSelect, onRemove }: { slot: 
 function PartOption({ product, brandName, selected, isDark, onPress }: { product: Product; brandName: string; selected: boolean; isDark: boolean; onPress: () => void }) {
   return (
     <Pressable accessibilityRole="button" accessibilityState={{ selected }} onPress={onPress} className={`flex-row items-center gap-3 rounded-xl border p-3 ${selected ? "border-primary bg-primary/10" : "border-border bg-card"}`}>
-      <Image source={getProductImageSource(product.image)} className="h-14 w-14 rounded-lg bg-secondary" resizeMode="cover" />
+      <ProductImage source={getProductImageSource(product.image)} className="h-14 w-14 rounded-lg bg-secondary" resizeMode="cover" />
       <View className="flex-1">
         <Text numberOfLines={2} className="text-foreground text-xs font-semibold">{product.name}</Text>
         <Text className="mt-1 text-muted-foreground text-[10px]">{brandName}</Text>

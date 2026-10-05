@@ -1,11 +1,12 @@
-import { Ionicons } from "@expo/vector-icons";
+import { ProductImage } from "@/components/products/ProductImage";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
-import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LoadingState } from "@/components/layout/LoadingState";
-import { getBrands, getCategories, getProducts } from "@/lib/api";
-import { getProductImageSource, type Brand, type Category, type Product } from "@/lib/data";
+import { getProductById, searchProducts } from "@/lib/api";
+import { getProductImageSource, type Product } from "@/lib/data";
 import { useTheme } from "@/theme/ThemeProvider";
 
 const MAX_COMPARE_ITEMS = 3;
@@ -21,49 +22,43 @@ export default function CompareScreen() {
   const { productId } = useLocalSearchParams<{ productId?: string }>();
   const { colors } = useTheme();
   const [products, setProducts] = useState<Product[]>([]);
-  const [brands, setBrands] = useState<Brand[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [query, setQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
+  const [queryResults, setQueryResults] = useState<Product[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState(false);
 
   useEffect(() => {
-    let isActive = true;
-    Promise.all([getProducts(), getBrands(), getCategories()])
-      .then(([loadedProducts, loadedBrands, loadedCategories]) => {
-        if (!isActive) return;
-        setProducts(loadedProducts);
-        setBrands(loadedBrands);
-        setCategories(loadedCategories);
-      })
-      .catch(() => {
-        if (isActive) setHasError(true);
-      })
-      .finally(() => {
-        if (isActive) setIsLoading(false);
-      });
-    return () => {
-      isActive = false;
-    };
-  }, []);
+    let active = true;
+    if (!productId) { setIsLoading(false); return; }
+    getProductById(productId).then((product) => {
+      if (!active || !product) return;
+      setProducts((current) => [...current.filter((row) => row.id !== product.id), product]);
+      setSelectedIds((current) => current.includes(product.id) ? current : [product.id, ...current].slice(0, MAX_COMPARE_ITEMS));
+    }).catch(() => { if (active) setHasError(true); }).finally(() => { if (active) setIsLoading(false); });
+    return () => { active = false; };
+  }, [productId]);
 
   useEffect(() => {
-    if (productId && products.some((product) => product.id === productId)) {
-      setSelectedIds((current) => current.includes(productId) ? current : [productId, ...current].slice(0, MAX_COMPARE_ITEMS));
-    }
-  }, [productId, products]);
-
+    let active = true;
+    setSearchError(false); setQueryResults([]);
+    if (query.trim().length < 2) { setIsSearching(false); return; }
+    setIsSearching(true);
+    const timer = setTimeout(() => {
+      searchProducts(query).then((rows) => {
+        if (!active) return;
+        setQueryResults(rows);
+        setProducts((current) => [...current.filter((row) => !rows.some((fresh) => fresh.id === row.id)), ...rows]);
+      }).catch(() => { if (active) setSearchError(true); }).finally(() => { if (active) setIsSearching(false); });
+    }, 400);
+    return () => { active = false; clearTimeout(timer); };
+  }, [query]);
   const selectedProducts = selectedIds
     .map((selectedId) => products.find((product) => product.id === selectedId))
     .filter((product): product is Product => Boolean(product));
-  const searchResults = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) return [];
-    return products
-      .filter((product) => !selectedIds.includes(product.id) && product.name.toLowerCase().includes(normalizedQuery))
-      .slice(0, 6);
-  }, [products, query, selectedIds]);
+  const searchResults = queryResults.filter((product) => !selectedIds.includes(product.id)).slice(0, 6);
 
   function toggleProduct(productIdToToggle: string) {
     setSelectedIds((current) => {
@@ -74,11 +69,11 @@ export default function CompareScreen() {
   }
 
   function brandName(product: Product): string {
-    return brands.find((brand) => brand.id === product.brandId)?.name ?? "Not specified";
+    return product.brandId || "Not specified";
   }
 
   function categoryName(product: Product): string {
-    return categories.find((category) => category.id === product.categoryId)?.name ?? "Not specified";
+    return product.categoryName || "Not specified";
   }
 
   return (
@@ -138,7 +133,7 @@ export default function CompareScreen() {
                     className="flex-row items-center border-b border-border px-3 py-2.5"
                     style={{ opacity: selectedIds.length >= MAX_COMPARE_ITEMS ? 0.5 : 1 }}
                   >
-                    <Image source={getProductImageSource(product.image)} className="h-10 w-10 rounded-lg bg-secondary" />
+                    <ProductImage source={getProductImageSource(product.image)} className="h-10 w-10 rounded-lg bg-secondary" />
                     <View className="ml-3 flex-1">
                       <Text className="text-foreground text-xs font-semibold" numberOfLines={1}>{product.name}</Text>
                       <Text className="text-muted-foreground text-[10px] mt-1">{formatPrice(product.price)}</Text>
@@ -146,7 +141,7 @@ export default function CompareScreen() {
                     <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
                   </Pressable>
                 ))}
-                {searchResults.length === 0 && <Text className="px-3 py-4 text-muted-foreground text-xs">No matching products.</Text>}
+                {searchResults.length === 0 && <Text className="px-3 py-4 text-muted-foreground text-xs">{isSearching ? "Searching…" : searchError ? "Could not search. Try again." : query.trim().length < 2 ? "Type at least two characters." : "No matching products."}</Text>}
                 {selectedIds.length >= MAX_COMPARE_ITEMS && <Text className="px-3 py-2 text-muted-foreground text-[10px]">Remove a product to add another.</Text>}
               </View>
             )}
@@ -170,7 +165,7 @@ export default function CompareScreen() {
                           <Ionicons name="close-circle-outline" size={19} color={colors.muted} />
                         </Pressable>
                       </View>
-                      <Image source={getProductImageSource(product.image)} className="h-24 w-24 self-center rounded-xl bg-card" resizeMode="cover" />
+                      <ProductImage source={getProductImageSource(product.image)} className="h-24 w-24 self-center rounded-xl bg-card" resizeMode="cover" />
                       <Text className="mt-2 text-center text-foreground text-xs font-semibold" numberOfLines={3}>{product.name}</Text>
                       <Text className="mt-1 text-center text-primary text-sm font-bold">{formatPrice(product.price)}</Text>
                     </View>

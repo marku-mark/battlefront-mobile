@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useState } from "react";
-import { getProductById } from "@/lib/api";
+import { getSelectedProducts } from "@/lib/api";
 import type { Product } from "@/lib/data";
 
 const RECENTLY_VIEWED_STORAGE_KEY = "battlefront-api-recently-viewed";
@@ -46,10 +46,10 @@ export function useRecentlyViewedProducts() {
         return;
       }
 
-      const loadedProducts = await Promise.all(recentIds.map((productId) => getProductById(productId)));
+      const loadedProducts = await getSelectedProducts(recentIds);
       setProducts(loadedProducts.filter((product): product is Product => Boolean(product)));
     } catch {
-      setProducts([]);
+      // Preserve the visible products if a background refresh fails.
     } finally {
       setIsLoading(false);
     }

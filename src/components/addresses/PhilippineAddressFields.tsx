@@ -7,7 +7,7 @@ import {
   getMunicipalitiesByProvince,
   getProvincesByRegion,
 } from "@aivangogh/ph-address";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useTheme } from "@/theme/ThemeProvider";

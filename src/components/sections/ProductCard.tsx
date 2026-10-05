@@ -1,9 +1,9 @@
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { Image as ExpoImage } from "expo-image";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeInDown, FadeOutUp } from "react-native-reanimated";
 import { Pressable, Text, View } from "react-native";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { getProductImageSource, getProductVariants, type Product } from "@/lib/data";
 import { useCartActions } from "@/hooks/useCart";
 import { useIsWishlisted, useWishlistActions } from "@/hooks/useWishlist";
@@ -20,10 +20,11 @@ function formatPrice(value: number): string {
   return `₱${value.toLocaleString("en-PH")}`;
 }
 
-export function ProductCard({ product, width = 150, onPress }: ProductCardProps) {
+function ProductCardView({ product, width = 150, onPress }: ProductCardProps) {
   const { addItem } = useCartActions();
   const toggleWishlist = useWishlistActions();
   const { colors } = useTheme();
+  const adding = useRef(false);
   const [justAdded, setJustAdded] = useState(false);
   const feedbackTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wishlisted = useIsWishlisted(product.id);
@@ -33,8 +34,11 @@ export function ProductCard({ product, width = 150, onPress }: ProductCardProps)
   }, []);
 
   async function handleQuickAdd() {
+    if (adding.current) return;
+    adding.current = true;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
-    if (!await addItem(product, 1, variants[0] ?? null)) return;
+    try { if (!await addItem(product, 1, variants[0] ?? null)) return; }
+    finally { adding.current = false; }
     setJustAdded(true);
     if (feedbackTimeout.current) clearTimeout(feedbackTimeout.current);
     feedbackTimeout.current = setTimeout(() => {
@@ -183,3 +187,5 @@ export function ProductCard({ product, width = 150, onPress }: ProductCardProps)
     </View>
   );
 }
+
+export const ProductCard = memo(ProductCardView);
