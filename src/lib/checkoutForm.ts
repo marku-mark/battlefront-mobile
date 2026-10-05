@@ -24,3 +24,11 @@ export function paymentProofError(proof: { mimeType?: string | null; fileSize?: 
 export function formatCheckoutAmount(value: string): string {
   return `₱${Number(value).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
+
+export function checkoutDetailsError(details: { name: string; phone: string; fulfillment: string; address: string; editingAddress: boolean; requiresProof: boolean; hasProof: boolean }): string | null {
+  if (!details.name.trim()) return "Enter the recipient name.";
+  if (!details.phone.trim()) return "Enter a contact number.";
+  if (details.fulfillment === "delivery" && (details.editingAddress || !details.address.trim())) return "Save a complete delivery address before placing your order.";
+  if (details.requiresProof && !details.hasProof) return "Choose payment proof before placing your order.";
+  return null;
+}

@@ -29,8 +29,9 @@ export function Header({ cartCount = 0, onCartPress, onNotificationPress, onSear
 
         <Pressable
           onPress={onNotificationPress}
+          accessibilityRole="button"
           accessibilityLabel="Open notifications"
-          className="w-11 h-11 items-center justify-center rounded-xl bg-secondary border border-border shadow-soft"
+          className="w-12 h-12 items-center justify-center rounded-xl bg-secondary border border-border shadow-soft"
           style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
         >
           <Ionicons name="notifications-outline" size={20} color={isDark ? "#f8fafc" : "#30343b"} />
@@ -38,8 +39,9 @@ export function Header({ cartCount = 0, onCartPress, onNotificationPress, onSear
 
         <Pressable
           onPress={onCartPress}
+          accessibilityRole="button"
           accessibilityLabel={`Open cart${cartCount > 0 ? `, ${cartCount} items` : ""}`}
-          className="relative w-11 h-11 items-center justify-center rounded-xl bg-secondary border border-border shadow-soft"
+          className="relative w-12 h-12 items-center justify-center rounded-xl bg-secondary border border-border shadow-soft"
           style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
         >
           <Ionicons name="cart-outline" size={20} color={isDark ? "#f8fafc" : "#30343b"} />
@@ -57,14 +59,15 @@ export function Header({ cartCount = 0, onCartPress, onNotificationPress, onSear
         <Pressable
           onPress={onSearchPress}
           disabled={searchDisabled}
+          accessibilityRole="button"
           accessibilityLabel="Search products"
           accessibilityState={{ disabled: searchDisabled }}
-          className="flex-row items-center gap-2 bg-secondary border border-border rounded-xl px-3 py-2.5"
+          className="min-h-12 flex-row items-center gap-2 bg-secondary border border-border rounded-xl px-3 py-2.5"
           style={({ pressed }) => ({ opacity: searchDisabled ? 0.5 : pressed ? 0.82 : 1 })}
         >
           <Ionicons name="search-outline" size={16} color={isDark ? "#cbd5e1" : "#68717e"} />
           <Text className="text-muted-foreground text-sm">
-            Search parts, brands, builds
+            Search products or brands
           </Text>
         </Pressable>
       </View>

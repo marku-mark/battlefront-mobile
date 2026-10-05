@@ -14,19 +14,26 @@ export function createOrderSubmission<T>(request: Request, platform: "web" | "na
       body.append("payment_proof", await readNativeProof(proof), proof.name);
     }
   }
-  return {
-    async placeOrder(input: OrderInput): Promise<T> {
-      let body: string | FormData;
-      if (!input.payment_proof) {
-        body = JSON.stringify(input);
-      } else {
-        body = new FormData();
-        for (const [key, value] of Object.entries(input)) {
-          if (value !== undefined && key !== "payment_proof") body.append(key, String(value));
-        }
-        await appendProof(body, input.payment_proof);
+  let pendingPlacement: Promise<T> | null = null;
+  async function submitOrder(input: OrderInput): Promise<T> {
+    let body: string | FormData;
+    if (!input.payment_proof) {
+      body = JSON.stringify(input);
+    } else {
+      body = new FormData();
+      for (const [key, value] of Object.entries(input)) {
+        if (value !== undefined && key !== "payment_proof") body.append(key, String(value));
       }
-      return (await request<{ data: T }>("orders", { method: "POST", body })).data;
+      await appendProof(body, input.payment_proof);
+    }
+    return (await request<{ data: T }>("orders", { method: "POST", body })).data;
+  }
+  return {
+    placeOrder(input: OrderInput): Promise<T> {
+      if (pendingPlacement) return Promise.reject(new Error("An order is still being submitted. Wait for its result before trying again."));
+      const placement = submitOrder(input).finally(() => { if (pendingPlacement === placement) pendingPlacement = null; });
+      pendingPlacement = placement;
+      return placement;
     },
     async resubmitPaymentProof(id: string, proof: PaymentProof): Promise<T> {
       const body = new FormData();

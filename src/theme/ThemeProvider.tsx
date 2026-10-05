@@ -1,3 +1,4 @@
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { vars } from "nativewind";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
@@ -7,6 +8,8 @@ type ThemeMode = "dark" | "light";
 
 type ThemeContextValue = {
   mode: ThemeMode;
+  isHydrated: boolean;
+  reducedMotion: boolean;
   isDark: boolean;
   colors: {
     foreground: string;
@@ -64,17 +67,23 @@ const themes = {
 } as const;
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
+  const reducedMotion = useReducedMotion();
+  const [isHydrated, setIsHydrated] = useState(false);
   const [mode, setMode] = useState<ThemeMode>("dark");
 
   useEffect(() => {
+    let active = true;
     AsyncStorage.getItem(THEME_STORAGE_KEY).then((storedMode) => {
-      if (storedMode === "light" || storedMode === "dark") setMode(storedMode);
-    });
+      if (active && (storedMode === "light" || storedMode === "dark")) setMode(storedMode);
+    }).catch(() => undefined).finally(() => { if (active) setIsHydrated(true); });
+    return () => { active = false; };
   }, []);
 
   const value = useMemo<ThemeContextValue>(
     () => ({
       mode,
+      isHydrated,
+      reducedMotion,
       isDark: mode === "dark",
       colors: themes[mode].colors,
       toggleMode: () => {
@@ -85,7 +94,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         });
       },
     }),
-    [mode]
+    [mode, isHydrated, reducedMotion]
   );
 
   return (

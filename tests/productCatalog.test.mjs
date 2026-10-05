@@ -51,3 +51,24 @@ test("old bundled image IDs and device-local paths cannot become catalog image s
     assert.equal(getProductImageSource(localImage), undefined);
   }
 });
+
+test("search queries the requested server page and preserves pagination metadata", async () => {
+  const { loadProductSearchPage } = await import("../src/lib/productCatalog.ts");
+  const result = await loadProductSearchPage(async (path) => {
+    assert.equal(path, "products?q=SSD%20%26%20RAM&page=2");
+    return { data: [{ id: 91, name: "SSD", price: "2500", discount_price: null, brand: "Test", image_url: null, category: { id: 3, name: "Storage" } }], meta: { current_page: 2, last_page: 4, total: 40 } };
+  }, " SSD & RAM ", 2);
+  assert.equal(result.data[0].id, "91");
+  assert.equal(result.data[0].price, 2500);
+  assert.deepEqual(result.meta, { current_page: 2, last_page: 4, total: 40 });
+});
+
+test("short search terms send no request, while failed searches remain retryable errors", async () => {
+  const { loadProductSearchPage } = await import("../src/lib/productCatalog.ts");
+  let calls = 0;
+  const request = async () => { calls++; throw new Error("Offline"); };
+  assert.deepEqual((await loadProductSearchPage(request, " a ")).data, []);
+  assert.equal(calls, 0);
+  await assert.rejects(loadProductSearchPage(request, "monitor"), /Offline/);
+  assert.equal(calls, 1);
+});

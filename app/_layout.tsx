@@ -10,36 +10,29 @@ import { SessionProvider } from "@/hooks/useSession";
 import { ThemeProvider } from "@/theme/ThemeProvider";
 import { useTheme } from "@/theme/ThemeProvider";
 
-import { useEffect, useState } from "react";
+import { View } from "react-native";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { useFonts } from "expo-font";
 
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 function AppStack() {
-  const { isDark } = useTheme();
+  const { isDark, isHydrated, reducedMotion } = useTheme();
+  const [fontsLoaded, fontError] = useFonts(Ionicons.font);
+  const ready = isHydrated && (fontsLoaded || Boolean(fontError));
+  if (!ready) return null;
 
   return (
-    <>
+    <View className="flex-1 bg-background" onLayout={() => { void SplashScreen.hideAsync().catch(() => undefined); }}>
       <StatusBar style={isDark ? "light" : "dark"} />
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack screenOptions={{ headerShown: false, animation: reducedMotion ? "none" : "default" }}>
         <Stack.Screen name="(tabs)" />
       </Stack>
-    </>
+    </View>
   );
 }
 
 export default function RootLayout() {
-  const [isAppReady, setIsAppReady] = useState(false);
-
-  useEffect(() => {
-    setIsAppReady(true);
-  }, []);
-
-  useEffect(() => {
-    if (isAppReady) void SplashScreen.hideAsync().catch(() => undefined);
-  }, [isAppReady]);
-
-  if (!isAppReady) return null;
-
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>

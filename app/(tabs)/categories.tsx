@@ -1,19 +1,19 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { FlashList } from "@shopify/flash-list";
+import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ProductCard } from "@/components/sections/ProductCard";
 import { ScreenHeader } from "@/components/layout/ScreenHeader";
-import { getBrands, getCategories, getCatalogPreview, getCatalogSnapshot, subscribeCatalog, invalidateCatalog } from "@/lib/api";
+import { getBrands, getCategories, getCategoryCatalog } from "@/lib/api";
+import { categoryQueryString } from "@/lib/categoryQuery";
 import type { Brand, Category, Product } from "@/lib/data";
 import { useTheme } from "@/theme/ThemeProvider";
 import { LoadingMoreFooter } from "@/components/layout/LoadingMoreFooter";
 import { getGridCardWidth, getResponsiveLayout, MAX_CONTENT_WIDTH } from "@/lib/responsive";
 
-const PRODUCTS_PER_PAGE = 24;
-const PAGE_LOAD_DELAY_MS = 0;
+
 
 type PriceFilter = "all" | "under-5k" | "under-15k" | "over-15k";
 type SortOrder = "featured" | "price-low" | "price-high";
@@ -21,18 +21,16 @@ type SortOrder = "featured" | "price-low" | "price-high";
 export default function CategoriesScreen() {
   const router = useRouter();
   const openProduct = useCallback((product: Product) => router.push({ pathname: "/product/[id]", params: { id: product.id } }), [router]);
-  const { width } = useWindowDimensions();
-  const layout = getResponsiveLayout(width);
+  const { width, fontScale } = useWindowDimensions();
+  const layout = getResponsiveLayout(width, fontScale);
   const { isDark } = useTheme();
   const { categoryId, brandId } = useLocalSearchParams<{ categoryId?: string; brandId?: string }>();
   const [categories, setCategories] = useState<Category[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [visibleProductCount, setVisibleProductCount] = useState(PRODUCTS_PER_PAGE);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const isLoadingMoreRef = useRef(false);
-  const loadMoreTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const listRef = useRef<FlashListRef<Product>>(null);
   const [productQuery, setProductQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  useEffect(() => { const timer = setTimeout(() => setDebouncedQuery(productQuery), 300); return () => clearTimeout(timer); }, [productQuery]);
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>(categoryId ? [categoryId] : []);
   const [selectedBrandId, setSelectedBrandId] = useState<string | null>(brandId ?? null);
   const [priceFilter, setPriceFilter] = useState<PriceFilter>("all");
@@ -41,11 +39,19 @@ export default function CategoriesScreen() {
   const [draftPriceFilter, setDraftPriceFilter] = useState<PriceFilter>("all");
   const [draftSortOrder, setDraftSortOrder] = useState<SortOrder>("featured");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [hasLoadError, setHasLoadError] = useState(false);
+  const [metadataError, setMetadataError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
-  const [isCatalogLoading, setIsCatalogLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const queryKey = categoryQueryString({ categoryIds: selectedCategoryIds, brand: selectedBrandId, query: debouncedQuery, price: priceFilter, sort: sortOrder });
+  const catalog = useMemo(() => getCategoryCatalog(queryKey), [queryKey]);
+  const restoreOffset = useMemo(() => catalog.scrollOffset, [catalog, layout.productColumns]);
+  const [observed, setObserved] = useState({ catalog, snapshot: catalog.pager.snapshot() });
+  const snapshot = observed.catalog === catalog ? observed.snapshot : catalog.pager.snapshot();
+  const products = snapshot.rows;
+  const isCatalogLoading = snapshot.loading;
+  const hasLoadError = Boolean(snapshot.error);
+  const isLoading = !products.length && !snapshot.complete && !snapshot.error;
+  const visibleProducts = products;
 
   useEffect(() => {
     setSelectedCategoryIds(categoryId ? [categoryId] : []);
@@ -53,64 +59,28 @@ export default function CategoriesScreen() {
   }, [brandId, categoryId]);
 
   useFocusEffect(useCallback(() => {
-    let isActive = true;
-    setIsLoading(getCatalogSnapshot().rows.length === 0);
-    setHasLoadError(false);
-    const unsubscribe = subscribeCatalog((snapshot) => {
-      if (!isActive) return;
-      setIsCatalogLoading(snapshot.loading);
-      if (!snapshot.error) setHasLoadError(false);
-      if (snapshot.rows.length || snapshot.complete) { setProducts(snapshot.rows); setIsLoading(false); }
-      if (snapshot.error) setHasLoadError(true);
-    });
-    void getCatalogPreview().then(
-      () => { if (isActive) setIsRefreshing(false); },
-      () => { if (isActive) setIsRefreshing(false); },
-    );
-    Promise.all([getCatalogPreview(), getCategories(), getBrands()]).then(([, loadedCategories, loadedBrands]) => {
-      if (!isActive) return;
-      setCategories(loadedCategories);
-      setBrands(loadedBrands);
-    }).catch(() => {
-      if (isActive) setHasLoadError(true);
-    }).finally(() => { if (isActive) { setIsLoading(false); setIsRefreshing(false); } });
-    return () => { isActive = false; unsubscribe(); };
-  }, [retryCount]));
-
-  const selectedCategories = useMemo(() => categories.filter((category) => selectedCategoryIds.includes(category.id)), [categories, selectedCategoryIds]);
-
-  const filteredProducts = useMemo(() => {
-    const normalizedProductQuery = productQuery.trim().toLowerCase();
-    const result = products.filter((product) => {
-      const categoryMatch = selectedCategoryIds.length === 0 || selectedCategoryIds.includes(product.categoryId);
-      const brandMatch = !selectedBrandId || product.brandId === selectedBrandId;
-      const priceMatch = priceFilter === "all" || (priceFilter === "under-5k" && product.price < 5000) || (priceFilter === "under-15k" && product.price < 15000) || (priceFilter === "over-15k" && product.price >= 15000);
-      const productMatch = !normalizedProductQuery || `${product.name} ${product.brandId}`.toLowerCase().includes(normalizedProductQuery);
-      return categoryMatch && brandMatch && priceMatch && productMatch;
-    });
-
-    return [...result].sort((left, right) => {
-      if (sortOrder === "price-low") return left.price - right.price;
-      if (sortOrder === "price-high") return right.price - left.price;
-      return 0;
-    });
-  }, [priceFilter, productQuery, products, selectedBrandId, selectedCategoryIds, sortOrder]);
-  const visibleProducts = useMemo(
-    () => filteredProducts.slice(0, visibleProductCount),
-    [filteredProducts, visibleProductCount]
-  );
+    const unsubscribe = catalog.pager.subscribe((value) => setObserved({ catalog, snapshot: value }));
+    void catalog.pager.resume().catch(() => undefined);
+    return unsubscribe;
+  }, [catalog]));
 
   useEffect(() => {
-    if (loadMoreTimerRef.current) clearTimeout(loadMoreTimerRef.current);
-    loadMoreTimerRef.current = null;
-    isLoadingMoreRef.current = false;
-    setIsLoadingMore(false);
-    setVisibleProductCount(PRODUCTS_PER_PAGE);
-  }, [priceFilter, productQuery, selectedBrandId, selectedCategoryIds, sortOrder]);
+    let active = true;
+    setMetadataError(false);
+    Promise.all([getCategories(), getBrands()]).then(([loadedCategories, loadedBrands]) => {
+      if (active) { setCategories(loadedCategories); setBrands(loadedBrands); }
+    }).catch(() => { if (active) setMetadataError(true); });
+    return () => { active = false; };
+  }, [retryCount]);
 
-  useEffect(() => () => {
-    if (loadMoreTimerRef.current) clearTimeout(loadMoreTimerRef.current);
-  }, []);
+  function refreshProducts() {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    catalog.pager.invalidate();
+    void catalog.pager.first().catch(() => undefined).finally(() => setIsRefreshing(false));
+  }
+
+  const selectedCategories = useMemo(() => categories.filter((category) => selectedCategoryIds.includes(category.id)), [categories, selectedCategoryIds]);
 
   const cardWidth = getGridCardWidth(width, layout.productColumns);
   const hasActiveFilters = selectedCategoryIds.length > 0 || Boolean(selectedBrandId) || priceFilter !== "all" || sortOrder !== "featured";
@@ -145,36 +115,34 @@ export default function CategoriesScreen() {
   }
 
   function loadMoreProducts() {
-    if (isLoadingMoreRef.current || visibleProductCount >= filteredProducts.length) return;
-    isLoadingMoreRef.current = true;
-    setIsLoadingMore(true);
-    loadMoreTimerRef.current = setTimeout(() => {
-      setVisibleProductCount((current) => Math.min(current + PRODUCTS_PER_PAGE, filteredProducts.length));
-      setIsLoadingMore(false);
-      isLoadingMoreRef.current = false;
-      loadMoreTimerRef.current = null;
-    }, PAGE_LOAD_DELAY_MS);
+    const current = catalog.pager.snapshot();
+    if (!current.complete && !current.loading && !current.error) void catalog.pager.next().catch(() => undefined);
   }
 
   return (
     <SafeAreaView edges={["left", "right", "bottom"]} className="flex-1 bg-background">
       <ScreenHeader title="Categories" subtitle="Find the right parts for your next build." />
       <FlashList
+        ref={listRef}
+        onLoad={() => { if (restoreOffset > 0) listRef.current?.scrollToOffset({ offset: restoreOffset, animated: false }); }}
+        onScroll={(event) => { catalog.scrollOffset = event.nativeEvent.contentOffset.y; }}
+        scrollEventThrottle={100}
         data={isLoading ? [] : visibleProducts}
         refreshing={isRefreshing}
-        onRefresh={() => { if (isRefreshing) return; invalidateCatalog(); setIsRefreshing(true); setRetryCount((current) => current + 1); }}
+        onRefresh={refreshProducts}
         keyExtractor={(item) => item.id}
         onEndReached={loadMoreProducts}
         onEndReachedThreshold={0.4}
-        ListFooterComponent={isLoadingMore || isCatalogLoading ? <LoadingMoreFooter /> : null}
-        key={`category-products-${layout.productColumns}`}
+        ListFooterComponent={isCatalogLoading && products.length > 0 ? <LoadingMoreFooter /> : hasLoadError && products.length > 0 ? <Pressable accessibilityRole="button" onPress={() => { void catalog.pager.next().catch(() => undefined); }} className="p-4"><Text className="text-primary text-center">Retry loading products</Text></Pressable> : null}
+        key={`category-products-${queryKey}-${layout.productColumns}`}
         numColumns={layout.productColumns}
         contentContainerStyle={{ paddingBottom: 32, paddingTop: 16, paddingHorizontal: 10, width: "100%", maxWidth: MAX_CONTENT_WIDTH, alignSelf: "center" }}
         ListHeaderComponentStyle={{ marginHorizontal: -10 }}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         ListHeaderComponent={
           <View className="pb-2">
-            {hasLoadError && products.length > 0 && <View className="mx-4 mb-3 border border-border bg-card p-3"><Text className="text-danger text-sm">Could not refresh all products. Showing loaded products.</Text><Pressable onPress={() => setRetryCount((current) => current + 1)}><Text className="text-primary mt-2">Retry refresh</Text></Pressable></View>}
+            {metadataError && <Pressable accessibilityRole="button" onPress={() => setRetryCount((count) => count + 1)} className="mx-4 p-3"><Text className="text-primary">Could not load filter options. Tap to retry.</Text></Pressable>}
             <View className="self-center w-full px-4" style={{ maxWidth: MAX_CONTENT_WIDTH }}>
               <View className="h-10 flex-row items-center gap-2 rounded-lg border border-border bg-secondary px-3">
                 <Ionicons name="search-outline" size={16} color={isDark ? "#cbd5e1" : "#68717e"} />
@@ -195,7 +163,7 @@ export default function CategoriesScreen() {
                 )}
               </View>
             </View>
-            {categories.length > 0 && !hasLoadError && (
+            {categories.length > 0 && (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: layout.horizontalPadding, paddingTop: 14 }}>
                 {categories.map((category) => (
                   <CategoryChip
@@ -237,10 +205,28 @@ export default function CategoriesScreen() {
         }
         ListEmptyComponent={
           isLoading || isCatalogLoading ? (
-            <CatalogState icon="refresh-outline" title="Loading products" message="Fetching products from Battlefront." showSpinner />
+            <View accessible accessibilityLabel="Loading products" accessibilityState={{ busy: true }} className="pt-2">
+              {Array.from({ length: 2 }, (_, row) => (
+                <View key={row} className="flex-row">
+                  {Array.from({ length: layout.productColumns }, (_, column) => (
+                    <View key={column} style={{ flex: 1, paddingHorizontal: 6, paddingBottom: 12 }}>
+                      <View className="rounded-2xl overflow-hidden border border-border bg-card" style={{ width: cardWidth }}>
+                        <View className="bg-secondary" style={{ height: cardWidth * 0.96 }} />
+                        <View className="px-2.5 pt-2.5 pb-3">
+                          <View className="h-3 rounded bg-secondary" />
+                          <View className="h-3 w-2/3 mt-2 rounded bg-secondary" />
+                          <View className="h-5 w-1/2 mt-3 rounded bg-secondary" />
+                          <View className="h-9 mt-3 rounded-xl bg-secondary" />
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ))}
+            </View>
           ) : hasLoadError ? (
-            <CatalogState icon="cloud-offline-outline" title="Could not load products" message="Check your connection and try again." actionLabel="Try again" onAction={() => setRetryCount((current) => current + 1)} />
-          ) : products.length === 0 ? (
+            <CatalogState icon="cloud-offline-outline" title="Could not load products" message="Check your connection and try again." actionLabel="Try again" onAction={() => { void catalog.pager.next().catch(() => undefined); }} />
+          ) : !hasActiveFilters && !productQuery.trim() ? (
             <CatalogState icon="search-outline" title="No products available" message="There are no products available in the catalog." />
           ) : productQuery.trim() ? (
             <CatalogState icon="search-outline" title="No matching products" message="Try another product name or clear the search." actionLabel="Clear search" onAction={() => setProductQuery("")} />

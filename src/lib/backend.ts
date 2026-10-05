@@ -1,3 +1,5 @@
+import { createCategoryCachePool } from "./categoryQuery";
+import { loadProductSearchPage } from "./productCatalog";
 import { createReadCache, loadSelectedProducts } from "./readCache";
 import type { ApiUser, ProfileInput } from "./accountApi";
 import { banners, type Banner, type Brand, type Category, type Product, type Store } from "./data";
@@ -40,12 +42,12 @@ export async function updateProfile(fields: ProfileInput) {
 }
 type Filters = { categories: { id: number; name: string }[]; brands: string[] };
 const readCatalog = createPacedRead(apiRequest);
-const filterCache = createCachedRead(() => readCatalog<Envelope<Filters>>("products/filters").then((result) => result.data), 60_000);
+const filterCache = createCachedRead(() => apiRequest<Envelope<Filters>>("products/filters").then((result) => result.data), 60_000);
 function getFilters() { return filterCache.read(); }
 export async function getCategories(): Promise<Category[]> { return (await getFilters()).categories.map((row) => ({ id: String(row.id), name: row.name, icon: "cube-outline" })); }
 export async function getBrands(): Promise<Brand[]> { return (await getFilters()).brands.map((name) => ({ id: name, name, logo: "" })); }
 const productCache = createReadCache<Product | null>(60_000);
-const searchCache = createReadCache<Product[]>(30_000, Date.now, 20);
+const searchCache = createReadCache<Page<Product>>(30_000, Date.now, 40);
 let productRevision = 0;
 const catalogCache = createProgressiveCatalog(async (page) => {
   const revision = productRevision;
@@ -54,9 +56,17 @@ const catalogCache = createProgressiveCatalog(async (page) => {
   if (revision === productRevision) products.forEach((product) => productCache.seed(product.id, product));
   return { ...result, data: products };
 });
+export const getCategoryCatalog = createCategoryCachePool((key: string) => ({
+  pager: createProgressiveCatalog(async (page) => {
+    const result = await apiRequest<Page<ApiProduct>>("products?" + key + "&page=" + page);
+    return { ...result, data: result.data.map(mapProduct) };
+  }),
+  scrollOffset: 0,
+}));
 export function invalidateCatalog() { productRevision++; catalogCache.invalidate(); filterCache.invalidate(); productCache.clear(); searchCache.clear(); }
-export function getProducts(): Promise<Product[]> { return catalogCache.all(); }
-export const getCatalogPreview = catalogCache.first;
+export function getProducts(shouldContinue?: () => boolean): Promise<Product[]> { return catalogCache.all(shouldContinue); }
+export const getCatalogPreview = catalogCache.resume;
+export const loadNextCatalogPage = catalogCache.next;
 export const getCatalogSnapshot = catalogCache.snapshot;
 export const subscribeCatalog = catalogCache.subscribe;
 export function getProductSnapshot(id: string) {
@@ -70,16 +80,19 @@ export function getProductById(id: string): Promise<Product | null> {
   });
 }
 export function getSelectedProducts(ids: string[]) { return loadSelectedProducts(ids, getProductById); }
-export function searchProducts(query: string): Promise<Product[]> {
+export function searchProductPage(query: string, page = 1): Promise<Page<Product>> {
   const term = query.trim();
-  if (term.length < 2) return Promise.resolve([]);
-  return searchCache.read(term, async () => {
+  if (term.length < 2) return Promise.resolve({ data: [], meta: { current_page: 1, last_page: 1, total: 0 } });
+  return searchCache.read(JSON.stringify([term, page]), async () => {
     const revision = productRevision;
-    const result = await apiRequest<Page<ApiProduct>>("products?q=" + encodeURIComponent(term));
-    const products = result.data.map(mapProduct);
+    const result = await loadProductSearchPage(apiRequest, term, page);
+    const products = result.data;
     if (revision === productRevision) products.forEach((product) => productCache.seed(product.id, product));
-    return products;
+    return { ...result, data: products };
   });
+}
+export async function searchProducts(query: string): Promise<Product[]> {
+  return (await searchProductPage(query)).data;
 }
 export function prefetchProductById(id: string): void { void getProductById(id).catch(() => undefined); }
 export type HomeCatalog = { catalogProducts: Product[]; flashDeals: Product[]; sulitPicks: Product[]; newArrivals: Product[] };

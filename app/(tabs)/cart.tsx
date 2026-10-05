@@ -117,7 +117,7 @@ export default function CartScreen() {
       />
 
       <ScrollView refreshControl={<RefreshControl refreshing={isUpdating} onRefresh={() => void refreshCart().catch(() => undefined)} tintColor="#ef1b1b" />} showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: layout.horizontalPadding, paddingBottom: 28, width: "100%", maxWidth: 800, alignSelf: "center" }}>
-        {error && <Text className="text-danger mb-3">{error}</Text>}
+        {error && <View className="mb-3"><Text accessibilityRole="alert" className="text-danger">{error}</Text><Pressable accessibilityRole="button" disabled={isUpdating} onPress={() => void refreshCart().catch(() => undefined)} className="min-h-12 justify-center"><Text className="text-primary font-semibold">Refresh cart</Text></Pressable></View>}
         {isUpdating && <View className="flex-row items-center gap-2 mb-3"><ActivityIndicator size="small" color="#ef1b1b" /><Text className="text-muted-foreground text-xs">Updating cart…</Text></View>}
         {conflictCount > 0 && <Text className="text-danger mb-3">Some items are unavailable or exceed current stock. Update or remove them before checkout.</Text>}
         <View className="mb-4 rounded-2xl border border-border bg-card p-3 shadow-soft">
@@ -173,7 +173,7 @@ export default function CartScreen() {
                     accessibilityLabel={`Decrease ${product.name} quantity`}
                     disabled={isUpdating}
                     onPress={() => void runAction(() => updateQuantity(product.id, quantity - 1, variant))}
-                    className="w-8 h-8 items-center justify-center"
+                    className="w-12 h-12 items-center justify-center"
                   >
                     <Ionicons name="remove" size={14} color="#f8fafc" />
                   </Pressable>
@@ -183,7 +183,7 @@ export default function CartScreen() {
                     accessibilityState={{ disabled: isUpdating || product.availability !== "available" || quantity >= (product.stockQuantity ?? 0) }}
                     disabled={isUpdating || product.availability !== "available" || quantity >= (product.stockQuantity ?? 0)}
                     onPress={() => void runAction(() => updateQuantity(product.id, quantity + 1, variant))}
-                    className="w-8 h-8 items-center justify-center"
+                    className="w-12 h-12 items-center justify-center"
                     style={({ pressed }) => ({ opacity: isUpdating || product.availability !== "available" || quantity >= (product.stockQuantity ?? 0) ? 0.4 : pressed ? 0.7 : 1 })}
                   >
                     <Ionicons name="add" size={14} color="#f8fafc" />

@@ -24,3 +24,10 @@ export function getProductFacts(product: Product) {
     compatibility: "Check the product description for specifications and contact Battlefront to confirm compatibility and warranty details before ordering.",
   };
 }
+
+export async function loadProductSearchPage(request: <T>(path: string) => Promise<T>, query: string, page = 1): Promise<{ data: Product[]; meta: { current_page: number; last_page: number; total: number } }> {
+  const term = query.trim();
+  if (term.length < 2) return { data: [], meta: { current_page: 1, last_page: 1, total: 0 } };
+  const result = await request<{ data: ApiProduct[]; meta: { current_page: number; last_page: number; total: number } }>("products?q=" + encodeURIComponent(term) + "&page=" + page);
+  return { ...result, data: result.data.map(mapProduct) };
+}

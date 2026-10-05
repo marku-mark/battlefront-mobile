@@ -1,7 +1,7 @@
 import { ProductImage } from "@/components/products/ProductImage";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Alert, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getProductImageSource, getProductVariants, type Product } from "@/lib/data";
 import { getProductFacts } from "@/lib/productCatalog";
@@ -18,7 +18,7 @@ type ProductDetailsProps = {
   product: Product;
   quantity: number;
   onQuantityChange: (quantity: number) => void;
-  onAddToCart: (product: Product, quantity: number, variant?: string | null) => void;
+  onAddToCart: (product: Product, quantity: number, variant?: string | null) => void | Promise<void>;
   onCompare?: (productId: string) => void;
   onClose?: () => void;
 };
@@ -31,6 +31,14 @@ function formatPrice(value: number): string {
 
 export function ProductDetails({ refreshError = false, onRetry, product, quantity, onQuantityChange, onAddToCart, onCompare, onClose }: ProductDetailsProps) {
   const { colors } = useTheme();
+  const [isAdding, setIsAdding] = useState(false);
+  const adding = useRef(false);
+  async function addToCart() {
+    if (adding.current) return;
+    adding.current = true; setIsAdding(true);
+    try { await onAddToCart(product, quantity, selectedVariant); }
+    finally { adding.current = false; setIsAdding(false); }
+  }
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const layout = getResponsiveLayout(width);
@@ -131,7 +139,7 @@ export function ProductDetails({ refreshError = false, onRetry, product, quantit
         </View>
       </ScrollView>
 
-      <View className="self-center w-full px-4 pt-3 border-t border-border bg-background" style={{ maxWidth: 760, paddingBottom: Math.max(insets.bottom, 12) }}><View className="flex-row items-center justify-between mb-3"><Text className="text-muted-foreground text-xs uppercase tracking-[0.12em]">Total</Text><Text className="text-foreground text-lg font-bold">{formatPrice(subtotal)}</Text></View><Pressable accessibilityLabel={`Add ${product.name} to cart`} accessibilityRole="button" disabled={stockQuantity === 0 || (variants.length > 0 && !selectedVariant)} onPress={() => onAddToCart(product, quantity, selectedVariant)} className="h-12 rounded-xl bg-primary items-center justify-center" style={({ pressed }) => ({ opacity: stockQuantity === 0 || (variants.length > 0 && !selectedVariant) ? 0.45 : pressed ? 0.8 : 1 })}><Text className="text-primary-foreground text-sm font-bold">{stockQuantity === 0 ? "Out of stock" : variants.length > 0 && !selectedVariant ? "Choose an option" : "Add to cart"}</Text></Pressable></View>
+      <View className="self-center w-full px-4 pt-3 border-t border-border bg-background" style={{ maxWidth: 760, paddingBottom: Math.max(insets.bottom, 12) }}><View className="flex-row items-center justify-between mb-3"><Text className="text-muted-foreground text-xs uppercase tracking-[0.12em]">Total</Text><Text className="text-foreground text-lg font-bold">{formatPrice(subtotal)}</Text></View><Pressable accessibilityLabel={`Add ${product.name} to cart`} accessibilityRole="button" accessibilityState={{ busy: isAdding, disabled: isAdding || stockQuantity === 0 }} disabled={isAdding || stockQuantity === 0 || (variants.length > 0 && !selectedVariant)} onPress={() => void addToCart()} className="min-h-12 py-3 rounded-xl bg-primary items-center justify-center" style={({ pressed }) => ({ opacity: stockQuantity === 0 || (variants.length > 0 && !selectedVariant) ? 0.45 : pressed ? 0.8 : 1 })}><Text className="text-primary-foreground text-sm font-bold">{isAdding ? "Adding…" : stockQuantity === 0 ? "Out of stock" : variants.length > 0 && !selectedVariant ? "Choose an option" : "Add to cart"}</Text></Pressable></View>
       <MockSignInSheet visible={isSignInOpen} onClose={() => setIsSignInOpen(false)} />
     </View>
   );
@@ -157,5 +165,5 @@ function InfoChip({ icon, label, color }: { icon: "shield-checkmark-outline" | "
 }
 
 function QuantityButton({ icon, accessibilityLabel, color, disabled = false, onPress }: { icon: "remove" | "add"; accessibilityLabel: string; color: string; disabled?: boolean; onPress: () => void }) {
-  return <Pressable accessibilityLabel={accessibilityLabel} accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} className="w-10 h-10 items-center justify-center" style={({ pressed }) => ({ opacity: disabled ? 0.35 : pressed ? 0.7 : 1 })}><Ionicons name={icon} size={16} color={color} /></Pressable>;
+  return <Pressable accessibilityLabel={accessibilityLabel} accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} className="w-12 h-12 items-center justify-center" style={({ pressed }) => ({ opacity: disabled ? 0.35 : pressed ? 0.7 : 1 })}><Ionicons name={icon} size={16} color={color} /></Pressable>;
 }

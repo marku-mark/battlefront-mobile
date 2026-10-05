@@ -1,5 +1,6 @@
-import { FlatList, Text, View } from "react-native";
+import { Text, View, useWindowDimensions } from "react-native";
 import type { Product } from "@/lib/data";
+import { getGridCardWidth, getResponsiveLayout } from "@/lib/responsive";
 import { ProductCard } from "./ProductCard";
 
 type SulitPicksProps = {
@@ -8,29 +9,25 @@ type SulitPicksProps = {
 };
 
 export function SulitPicks({ products, onSelectProduct }: SulitPicksProps) {
+  const { width, fontScale } = useWindowDimensions();
+  const { productColumns } = getResponsiveLayout(width, fontScale);
+  const cardWidth = getGridCardWidth(width, productColumns);
   if (products.length === 0) return null;
 
   return (
     <View className="mt-6">
-      <View className="flex-row items-center justify-between px-4 mb-3">
-        <View>
-          <Text className="text-foreground font-bold text-base">Sulit Picks</Text>
-        </View>
+      <View className="px-4 mb-3">
+        <Text className="text-foreground font-bold text-base">Sulit Picks</Text>
       </View>
-      <FlatList
-        data={products}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingRight: 20, gap: 12 }}
-        initialNumToRender={4}
-        maxToRenderPerBatch={4}
-        windowSize={3}
-        removeClippedSubviews
-        renderItem={({ item }) => (
-          <ProductCard product={item} width={140} onPress={onSelectProduct} />
-        )}
-      />
+      {Array.from({ length: Math.ceil(products.length / productColumns) }, (_, row) => (
+        <View key={row} className="flex-row items-stretch px-2.5 pb-3">
+          {products.slice(row * productColumns, (row + 1) * productColumns).map((product) => (
+            <View key={product.id} style={{ width: cardWidth + 12, paddingHorizontal: 6 }}>
+              <ProductCard product={product} width={cardWidth} stretch onPress={onSelectProduct} />
+            </View>
+          ))}
+        </View>
+      ))}
     </View>
   );
 }

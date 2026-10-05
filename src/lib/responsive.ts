@@ -8,7 +8,7 @@ export type ResponsiveLayout = {
   productColumns: number;
 };
 
-export function getResponsiveLayout(windowWidth: number): ResponsiveLayout {
+export function getResponsiveLayout(windowWidth: number, fontScale = 1): ResponsiveLayout {
   const isTablet = windowWidth >= 600;
   const isExpanded = windowWidth >= 900;
 
@@ -17,7 +17,7 @@ export function getResponsiveLayout(windowWidth: number): ResponsiveLayout {
     isExpanded,
     contentWidth: Math.min(windowWidth, MAX_CONTENT_WIDTH),
     horizontalPadding: isTablet ? 24 : 16,
-    productColumns: windowWidth >= 1024 ? 4 : windowWidth >= 640 ? 3 : 2,
+    productColumns: fontScale >= 1.3 ? Math.max(1, Math.floor(Math.min(windowWidth, MAX_CONTENT_WIDTH) / (190 * fontScale))) : windowWidth >= 1024 ? 4 : windowWidth >= 640 ? 3 : 2,
   };
 }
 

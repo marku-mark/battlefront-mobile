@@ -77,7 +77,7 @@ test("refresh prevents old pagination responses from overwriting new prices", as
     return new Promise((resolve) => { finishOld = resolve; });
   });
   await cache.first();
-  const old = cache.all();
+  const old = cache.next();
   cache.invalidate();
   assert.deepEqual(await cache.first(), ["new"]);
   finishOld(page(["stale"], 2, 2));
@@ -101,8 +101,70 @@ test("subscribers receive progressive batches and can unsubscribe", async () => 
   const updates = [];
   const unsubscribe = cache.subscribe((snapshot) => { updates.push(snapshot.rows); });
   await cache.all();
-  assert.deepEqual(updates, [[], [], [1], [1, 2]]);
+  assert.deepEqual(updates, [[], [], [1], [1], [1, 2]]);
   unsubscribe();
   cache.invalidate();
-  assert.equal(updates.length, 4);
+  assert.equal(updates.length, 5);
+});
+
+
+test("preview loads just one page and concurrent next-page requests are shared", async () => {
+  const calls = [];
+  const cache = createProgressiveCatalog(async (number) => {
+    calls.push(number);
+    return page([number], number, 3);
+  });
+  await cache.first();
+  assert.deepEqual(calls, [1]);
+  assert.equal(cache.snapshot().loading, false);
+  assert.equal(cache.snapshot().complete, false);
+  await Promise.all([cache.next(), cache.next()]);
+  assert.deepEqual(calls, [1, 2]);
+  assert.deepEqual(cache.snapshot().rows, [1, 2]);
+  await cache.next();
+  await cache.next();
+  assert.deepEqual(calls, [1, 2, 3]);
+});
+
+test("a failed demand-loaded page can be retried without losing earlier rows", async () => {
+  let fails = true;
+  const cache = createProgressiveCatalog(async (number) => {
+    if (number === 2 && fails) throw new Error("Offline");
+    return page([number], number, 2);
+  });
+  await cache.first();
+  await assert.rejects(cache.next(), /Offline/);
+  assert.deepEqual(await cache.first(), [1]);
+  fails = false;
+  assert.deepEqual(await cache.next(), [1, 2]);
+});
+
+
+test("returning to a screen retains loaded pages until an explicit refresh", async () => {
+  let now = 0;
+  let calls = 0;
+  const cache = createProgressiveCatalog(async (number) => { calls++; return page([number], number, 2); }, 60_000, () => now);
+  await cache.first(); await cache.next();
+  now = 120_000;
+  assert.deepEqual(await cache.resume(), [1, 2]);
+  assert.equal(calls, 2);
+  cache.invalidate();
+  assert.deepEqual(await cache.resume(), [1]);
+  assert.equal(calls, 3);
+});
+
+
+test("leaving a filtered screen stops fetching remaining pages and allows later resumption", async () => {
+  const calls = [];
+  let active = true;
+  const cache = createProgressiveCatalog(async (number) => {
+    calls.push(number);
+    if (number === 2) active = false;
+    return page([number], number, 4);
+  });
+  assert.deepEqual(await cache.all(() => active), [1, 2]);
+  assert.deepEqual(calls, [1, 2]);
+  assert.equal(cache.snapshot().loading, false);
+  assert.equal(cache.snapshot().complete, false);
+  assert.deepEqual(await cache.all(), [1, 2, 3, 4]);
 });

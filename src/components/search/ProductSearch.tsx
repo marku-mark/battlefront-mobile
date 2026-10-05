@@ -1,143 +1,87 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { FlashList } from "@shopify/flash-list";
-import { useDeferredValue, useMemo, useState } from "react";
-import { Modal, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { FlashList, type FlashListRef } from "@shopify/flash-list";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import type { Product } from "@/lib/data";
 import { ProductCard } from "@/components/sections/ProductCard";
+import { LoadingMoreFooter } from "@/components/layout/LoadingMoreFooter";
 import { getGridCardWidth, getResponsiveLayout, MAX_CONTENT_WIDTH } from "@/lib/responsive";
+import { searchProductPage } from "@/lib/api";
+import { createProgressiveCatalog } from "@/lib/catalogCache";
+import { useTheme } from "@/theme/ThemeProvider";
 
-type ProductSearchProps = {
-  visible: boolean;
-  products: Product[];
-  onClose: () => void;
-  onSelectProduct: (product: Product) => void;
-};
+type ProductSearchProps = { visible: boolean; products: Product[]; onClose: () => void; onSelectProduct: (product: Product) => void };
 
-export function ProductSearch({
-  visible,
-  products,
-  onClose,
-  onSelectProduct,
-}: ProductSearchProps) {
+export function ProductSearch({ visible, products, onClose, onSelectProduct }: ProductSearchProps) {
   const [query, setQuery] = useState("");
-  const { width } = useWindowDimensions();
-  const layout = getResponsiveLayout(width);
-  const deferredQuery = useDeferredValue(query.trim());
-  const normalizedQuery = deferredQuery.toLowerCase();
+  const [term, setTerm] = useState("");
+  const { colors, reducedMotion } = useTheme();
+  const { width, fontScale } = useWindowDimensions();
+  const layout = getResponsiveLayout(width, fontScale);
+  const list = useRef<FlashListRef<Product>>(null);
+  const scrollOffset = useRef(0);
+  const cache = useMemo(() => createProgressiveCatalog((page) => searchProductPage(term, page), 30_000), [term]);
+  const [snapshot, setSnapshot] = useState(cache.snapshot);
+  const [resultTerm, setResultTerm] = useState(term);
+  const waiting = query.trim() !== term || resultTerm !== term;
 
-  const popularSuggestions = useMemo(() => {
-    const suggestions = ["monitor", "keyboard", "ssd", "gpu", "laptop", "mouse"];
-    return suggestions.filter((term) =>
-      products.some((product) => product.name.toLowerCase().includes(term))
-    );
-  }, [products]);
+  useEffect(() => {
+    if (!visible) return;
+    const timer = setTimeout(() => { setTerm(query.trim()); }, 300);
+    return () => clearTimeout(timer);
+  }, [query, visible]);
+  useEffect(() => {
+    setSnapshot(cache.snapshot()); setResultTerm(term); scrollOffset.current = 0;
+  }, [cache, term]);
+  useEffect(() => {
+    if (!visible || term.length < 2) return;
+    const unsubscribe = cache.subscribe(setSnapshot);
+    void cache.resume().catch(() => undefined);
+    return unsubscribe;
+  }, [cache, term, visible]);
+  const loadMore = useCallback(() => {
+    const current = cache.snapshot();
+    if (visible && !waiting && term.length >= 2 && !current.loading && !current.complete && !current.error) void cache.next().catch(() => undefined);
+  }, [cache, term, waiting, visible]);
+  const select = useCallback((product: Product) => { onSelectProduct(product); }, [onSelectProduct]);
+  const renderItem = useCallback(({ item }: { item: Product }) => <View style={{ paddingHorizontal: 6, marginBottom: 16 }}><ProductCard product={item} width={getGridCardWidth(width, layout.productColumns)} onPress={select} /></View>, [width, layout.productColumns, select]);
+  const searching = waiting || snapshot.loading;
+  const results = term.length >= 2 ? (resultTerm === term ? snapshot.rows : []) : products.slice(0, 12);
 
-  const filteredProducts = useMemo(
-    () =>
-      products.filter((product) =>
-        product.name.toLowerCase().includes(normalizedQuery)
-      ),
-    [normalizedQuery, products]
-  );
-
-  function handleClose() {
-    setQuery("");
-    onClose();
-  }
-
-  function handleSelectProduct(product: Product) {
-    setQuery("");
-    onSelectProduct(product);
-  }
-
-  return (
-    <Modal visible={visible} animationType="slide" onRequestClose={handleClose}>
-      <View className="flex-1 bg-background">
-        <View className="self-center w-full flex-row items-center gap-3 px-4 pt-3 pb-4 border-b border-border" style={{ maxWidth: MAX_CONTENT_WIDTH }}>
-          <Pressable
-            accessibilityLabel="Close product search"
-            onPress={handleClose}
-            hitSlop={10}
-            className="w-9 h-9 items-center justify-center"
-          >
-            <Ionicons name="arrow-back" size={22} color="#f8fafc" />
-          </Pressable>
-          <View className="flex-1 flex-row items-center gap-2 bg-secondary rounded-xl px-3 h-11 border border-border">
-            <Ionicons name="search-outline" size={18} color="#9ca3af" />
-            <TextInput
-              autoFocus
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search parts, brands, builds"
-              placeholderTextColor="#9ca3af"
-              autoCapitalize="none"
-              className="flex-1 text-foreground text-sm"
-            />
-            {query.length > 0 && (
-              <Pressable accessibilityLabel="Clear product search" onPress={() => setQuery("")} hitSlop={8}>
-                <Ionicons name="close-circle" size={18} color="#9ca3af" />
-              </Pressable>
-            )}
+  return <Modal visible={visible} animationType={reducedMotion ? "none" : "slide"} onRequestClose={onClose}>
+    <SafeAreaView className="flex-1 bg-background">
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+        <View className="self-center w-full flex-row items-center gap-2 px-3 py-3 border-b border-border" style={{ maxWidth: MAX_CONTENT_WIDTH }}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Close product search" onPress={onClose} className="w-12 h-12 items-center justify-center"><Ionicons name="arrow-back" size={22} color={colors.icon} /></Pressable>
+          <View className="flex-1 flex-row items-center gap-2 bg-secondary rounded-xl px-3 min-h-12 border border-border">
+            <Ionicons name="search-outline" size={18} color={colors.muted} />
+            <TextInput autoFocus value={query} onChangeText={setQuery} maxLength={255} placeholder="Search products or brands" placeholderTextColor={colors.muted} accessibilityLabel="Search products or brands" autoCapitalize="none" returnKeyType="search" className="flex-1 text-foreground text-base py-2" />
+            {!!query && <Pressable accessibilityRole="button" accessibilityLabel="Clear product search" onPress={() => { setQuery(""); setTerm(""); }} className="w-12 h-12 items-center justify-center"><Ionicons name="close-circle" size={20} color={colors.icon} /></Pressable>}
           </View>
         </View>
-
         <FlashList
-          key={`product-search-${layout.productColumns}`}
-          data={filteredProducts}
+          ref={list}
+          key={"search-" + layout.productColumns}
+          data={waiting ? [] : results}
+          renderItem={renderItem}
           keyExtractor={(item) => item.id}
           numColumns={layout.productColumns}
-          masonry
-          optimizeItemArrangement={false}
+          onScroll={(event) => { scrollOffset.current = event.nativeEvent.contentOffset.y; }}
+          onLoad={() => list.current?.scrollToOffset({ offset: scrollOffset.current, animated: false })}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.4}
           contentContainerStyle={{ paddingHorizontal: 10, paddingVertical: 16, width: "100%", maxWidth: MAX_CONTENT_WIDTH, alignSelf: "center" }}
-          ListHeaderComponentStyle={{ marginHorizontal: -10, marginBottom: 18 }}
           keyboardShouldPersistTaps="handled"
-          ListHeaderComponent={
-            <View className="mb-3">
-              {normalizedQuery ? (
-                <Text className="text-muted-foreground text-xs mb-2">
-                  {filteredProducts.length} results for “{deferredQuery}”
-                </Text>
-              ) : (
-                <>
-                  <Text className="text-muted-foreground text-xs uppercase tracking-[0.14em] mb-2">
-                    Popular searches
-                  </Text>
-                  <View className="flex-row flex-wrap gap-2">
-                    {popularSuggestions.map((term) => (
-                      <Pressable
-                        key={term}
-                        onPress={() => setQuery(term)}
-                        className="rounded-full border border-border bg-card px-3 py-1.5"
-                        style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
-                      >
-                        <Text className="text-foreground text-xs font-medium capitalize">
-                          {term}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </>
-              )}
-            </View>
-          }
-          ListEmptyComponent={
-            <View className="items-center py-16">
-              <Ionicons name="search-outline" size={30} color="#9ca3af" />
-              <Text className="text-foreground text-sm font-semibold mt-3">No products found</Text>
-              <Text className="text-muted-foreground text-xs mt-1">Try another search term.</Text>
-            </View>
-          }
-          renderItem={({ item }) => (
-            <View style={{ paddingHorizontal: 6, marginBottom: 18 }}>
-              <ProductCard
-                product={item}
-                width={getGridCardWidth(width, layout.productColumns)}
-                onPress={handleSelectProduct}
-              />
-            </View>
-          )}
+          keyboardDismissMode="on-drag"
+          ListHeaderComponent={<View className="px-1.5 pb-4">
+            <Text accessibilityLiveRegion="polite" className="text-muted-foreground text-sm">{waiting ? "Searching…" : term.length < 2 ? (query ? "Enter at least 2 characters to search the full catalog." : "Browse products or search the full catalog.") : searching ? "Loading matches…" : snapshot.complete ? snapshot.rows.length + " results for “" + term + "”" : snapshot.rows.length + " matches loaded · scroll for more"}</Text>
+            {snapshot.error && term.length >= 2 && !waiting && <View className="mt-3"><Text accessibilityRole="alert" className="text-danger text-sm">{snapshot.error.message}</Text><Pressable accessibilityRole="button" onPress={() => void cache.next().catch(() => undefined)} className="min-h-12 justify-center"><Text className="text-primary font-semibold">Retry search</Text></Pressable></View>}
+          </View>}
+          ListEmptyComponent={searching ? <View className="py-12"><ActivityIndicator color={colors.primary} accessibilityLabel="Searching products" /></View> : snapshot.error ? null : <View className="items-center px-6 py-12"><Text className="text-foreground text-base font-semibold">{term.length >= 2 ? "No matching products" : "Find your next upgrade"}</Text><Text className="text-muted-foreground text-sm mt-2 text-center">Try a product name or brand.</Text></View>}
+          ListFooterComponent={snapshot.loading && results.length && !waiting ? <LoadingMoreFooter /> : null}
         />
-      </View>
-    </Modal>
-  );
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  </Modal>;
 }

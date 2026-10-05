@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { checkoutRecipient, paymentForFulfillment, paymentProofError, formatCheckoutAmount } from "../src/lib/checkoutForm.ts";
+import { checkoutRecipient, paymentForFulfillment, paymentProofError, formatCheckoutAmount, checkoutDetailsError } from "../src/lib/checkoutForm.ts";
 
 const methods = [
   { value: "cash", available_for: ["pickup"] },
@@ -57,4 +57,21 @@ test("checkout with no saved contact details starts with the customer name and e
   assert.deepEqual(checkoutRecipient({ name: "Customer", default_delivery_address: null }, []), {
     name: "Customer", phone: "", address: "",
   });
+});
+
+
+test("pickup requires contact details but never requires a delivery address", () => {
+  const details = { name: "Customer", phone: "09171234567", fulfillment: "pickup", address: "", editingAddress: true, requiresProof: false, hasProof: false };
+  assert.equal(checkoutDetailsError(details), null);
+  assert.match(checkoutDetailsError({ ...details, name: " " }), /recipient name/);
+  assert.match(checkoutDetailsError({ ...details, phone: " " }), /contact number/);
+  assert.match(checkoutDetailsError({ ...details, requiresProof: true }), /payment proof/);
+});
+
+test("delivery requires a saved address and wallet proof when selected", () => {
+  const details = { name: "Customer", phone: "09171234567", fulfillment: "delivery", address: "Saved address", editingAddress: false, requiresProof: true, hasProof: true };
+  assert.equal(checkoutDetailsError(details), null);
+  assert.match(checkoutDetailsError({ ...details, address: " " }), /delivery address/);
+  assert.match(checkoutDetailsError({ ...details, editingAddress: true }), /delivery address/);
+  assert.match(checkoutDetailsError({ ...details, hasProof: false }), /payment proof/);
 });

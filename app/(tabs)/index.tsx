@@ -1,372 +1,123 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { FlashList } from "@shopify/flash-list";
 import { useRouter, useFocusEffect } from "expo-router";
-import { Alert, Image as RNImage, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
-import {
-  getBanners,
-  getBrands,
-  getCategories,
-  getHomeCatalog,
-  invalidateCatalog,
-  subscribeCatalog,
-  homeCatalogFromProducts,
-  getCatalogPreview,
-} from "@/lib/api";
+import { Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
+import { getBanners, getBrands, getCategories, getCatalogPreview, getCatalogSnapshot, invalidateCatalog, loadNextCatalogPage, subscribeCatalog, homeCatalogFromProducts } from "@/lib/api";
 import type { Banner, Brand, Category, Product } from "@/lib/data";
 import { Header } from "@/components/layout/Header";
 import { PromoBanners } from "@/components/sections/PromoBanners";
 import { Categories } from "@/components/sections/Categories";
 import { FlashDeals } from "@/components/sections/FlashDeals";
 import { SulitPicks } from "@/components/sections/SulitPicks";
-import { NewArrivals } from "@/components/sections/NewArrivals";
 import { Brands } from "@/components/sections/Brands";
 import { Chatbot } from "@/components/support/Chatbot";
 import { ProductSearch } from "@/components/search/ProductSearch";
 import { useCart } from "@/hooks/useCart";
 import { useRecentlyViewedProducts } from "@/hooks/useRecentlyViewed";
 import { ProductCard } from "@/components/sections/ProductCard";
+import { ProductImage } from "@/components/products/ProductImage";
 import { BuilderEntryCard } from "@/components/builder/BuilderEntryCard";
 import { LoadingMoreFooter } from "@/components/layout/LoadingMoreFooter";
 import { getGridCardWidth, getResponsiveLayout, MAX_CONTENT_WIDTH } from "@/lib/responsive";
 import { getProductImageSource } from "@/lib/data";
 
-const PRODUCTS_PER_PAGE = 24;
-const PAGE_LOAD_DELAY_MS = 0;
+type HomeRow = { id: string; kind: "products"; products: Product[] } | { id: string; kind: "recent" | "brands" | "builder" | "promo" };
 
 export default function HomeScreen() {
   const router = useRouter();
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const returnToSearch = useRef(false);
+  useFocusEffect(useCallback(() => {
+    if (returnToSearch.current) { returnToSearch.current = false; setIsSearchOpen(true); }
+  }, []));
   const [banners, setBanners] = useState<Banner[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [flashDeals, setFlashDeals] = useState<Product[]>([]);
-  const [sulitPicks, setSulitPicks] = useState<Product[]>([]);
-  const [newArrivals, setNewArrivals] = useState<Product[]>([]);
-  const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
-  const [visibleProductCount, setVisibleProductCount] = useState(PRODUCTS_PER_PAGE);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const isLoadingMoreRef = useRef(false);
-  const loadMoreTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [brands, setBrands] = useState<Brand[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [catalog, setCatalog] = useState(getCatalogSnapshot);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const hasCatalogRef = useRef(false);
-  const [hasLoadError, setHasLoadError] = useState(false);
-  const [loadErrorMessage, setLoadErrorMessage] = useState("");
-  const [isCatalogLoading, setIsCatalogLoading] = useState(false);
+  const [metadataError, setMetadataError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
-  const { addItem, itemCount, items: cartItems, subtotal: cartSubtotal } = useCart();
+  const { itemCount, items: cartItems, subtotal } = useCart();
   const { products: recentlyViewedProducts, refresh: refreshRecentlyViewed } = useRecentlyViewedProducts();
-  const { width } = useWindowDimensions();
-  const layout = getResponsiveLayout(width);
+  const { width, fontScale } = useWindowDimensions();
+  const layout = getResponsiveLayout(width, fontScale);
+  const cardWidth = getGridCardWidth(width, layout.productColumns);
+  const featured = useMemo(() => homeCatalogFromProducts(catalog.rows.slice(0, 12)), [catalog.rows]);
 
-  const searchableProducts = useMemo(
-    () => catalogProducts.length > 0 ? catalogProducts : [...flashDeals, ...sulitPicks, ...newArrivals],
-    [catalogProducts, flashDeals, newArrivals, sulitPicks]
-  );
-  const visibleCatalogProducts = useMemo(
-    () => catalogProducts.slice(0, visibleProductCount),
-    [catalogProducts, visibleProductCount]
-  );
-  const recentProductIds = useMemo(
-    () => new Set(recentlyViewedProducts.map((product) => product.id)),
-    [recentlyViewedProducts]
-  );
-  const recommendedProducts = useMemo(() => {
-    if (!catalogProducts.length) return [];
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    const unsubscribe = subscribeCatalog(setCatalog);
+    void getCatalogPreview().catch(() => undefined).finally(() => { if (active) setIsRefreshing(false); });
+    void refreshRecentlyViewed();
+    Promise.all([getBanners(), getCategories(), getBrands()]).then(([nextBanners, nextCategories, nextBrands]) => {
+      if (!active) return;
+      setBanners(nextBanners); setCategories(nextCategories); setBrands(nextBrands); setMetadataError(false);
+    }).catch(() => { if (active) setMetadataError(true); });
+    return () => { active = false; unsubscribe(); };
+  }, [retryCount, refreshRecentlyViewed]));
 
-    return [...catalogProducts]
-      .filter((product) => !recentProductIds.has(product.id))
-      .sort((left, right) => {
-        const leftScore = (left.rating ?? 4.8) * (left.reviewCount ?? 1) + (left.stockQuantity ?? 0) * 0.1;
-        const rightScore = (right.rating ?? 4.8) * (right.reviewCount ?? 1) + (right.stockQuantity ?? 0) * 0.1;
-        return rightScore - leftScore;
-      })
-      .slice(0, 6);
-  }, [catalogProducts, recentProductIds]);
-  const setupBundles = useMemo(() => {
-    if (!catalogProducts.length) return [];
-
-    const categoryLookup = new Map<string, Product[]>();
-    catalogProducts.forEach((product) => {
-      const existing = categoryLookup.get(product.categoryId) ?? [];
-      categoryLookup.set(product.categoryId, [...existing, product]);
-    });
-
-    const pickProducts = (...categoryIds: string[]) =>
-      categoryIds
-        .map((categoryId) => categoryLookup.get(categoryId)?.[0])
-        .filter((product): product is Product => Boolean(product))
-        .slice(0, 3);
-
-    const bundles = [
-      {
-        title: "Gaming setup",
-        subtitle: "Pair the essentials for smooth play",
-        products: pickProducts(
-          "category-graphics-card",
-          "category-processor",
-          "category-monitor",
-          "category-ram"
-        ),
-      },
-      {
-        title: "Workstation",
-        subtitle: "Built for focused productivity",
-        products: pickProducts(
-          "category-laptops-desktops",
-          "category-monitor",
-          "category-peripherals",
-          "category-power-accessories"
-        ),
-      },
-      {
-        title: "Upgrade bundle",
-        subtitle: "Fast performance additions",
-        products: pickProducts(
-          "category-storage",
-          "category-cooling-components",
-          "category-power-supply",
-          "category-motherboard"
-        ),
-      },
-    ].filter((bundle) => bundle.products.length >= 2);
-
-    return bundles;
-  }, [catalogProducts]);
-
-  function loadMoreProducts() {
-    if (isLoadingMoreRef.current || visibleProductCount >= catalogProducts.length) return;
-    isLoadingMoreRef.current = true;
-    setIsLoadingMore(true);
-    loadMoreTimerRef.current = setTimeout(() => {
-      setVisibleProductCount((current) => Math.min(current + PRODUCTS_PER_PAGE, catalogProducts.length));
-      setIsLoadingMore(false);
-      isLoadingMoreRef.current = false;
-      loadMoreTimerRef.current = null;
-    }, PAGE_LOAD_DELAY_MS);
-  }
-
-  useEffect(() => () => {
-    if (loadMoreTimerRef.current) clearTimeout(loadMoreTimerRef.current);
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      void refreshRecentlyViewed();
-    }, [refreshRecentlyViewed])
-  );
-
-  const handleProductSelect = useCallback((product: Product) => {
+  const openProduct = useCallback((product: Product) => {
     setIsSearchOpen(false);
     router.push({ pathname: "/product/[id]", params: { id: product.id } });
   }, [router]);
-
-  useFocusEffect(useCallback(() => {
-    let isActive = true;
-    setIsLoading(!hasCatalogRef.current);
-    setHasLoadError(false);
-    setLoadErrorMessage("");
-    const unsubscribe = subscribeCatalog((snapshot) => {
-      if (!isActive) return;
-      setIsCatalogLoading(snapshot.loading);
-      if (!snapshot.error) setHasLoadError(false);
-      if (snapshot.rows.length || snapshot.complete) {
-        const home = homeCatalogFromProducts(snapshot.rows);
-        setCatalogProducts(home.catalogProducts);
-        setFlashDeals(home.flashDeals);
-        setSulitPicks(home.sulitPicks);
-        setNewArrivals(home.newArrivals);
-        hasCatalogRef.current = true;
-        setIsLoading(false);
+  const loadMore = useCallback(() => {
+    const current = getCatalogSnapshot();
+    if (!current.loading && !current.complete && !current.error) void loadNextCatalogPage().catch(() => undefined);
+  }, []);
+  const retry = () => {
+    if (catalog.error && catalog.rows.length) void loadNextCatalogPage().catch(() => undefined);
+    setRetryCount((count) => count + 1);
+  };
+  const rows = useMemo<HomeRow[]>(() => {
+    const result: HomeRow[] = [];
+    for (let index = 0; index < catalog.rows.length; index += layout.productColumns) {
+      result.push({ id: "products-" + catalog.rows[index].id, kind: "products", products: catalog.rows.slice(index, index + layout.productColumns) });
+      if (index < 12 && index + layout.productColumns >= Math.min(12, catalog.rows.length)) {
+        if (recentlyViewedProducts.length) result.push({ id: "recent", kind: "recent" });
+        result.push({ id: "builder", kind: "builder" }, { id: "brands", kind: "brands" }, { id: "promo", kind: "promo" });
       }
-      if (snapshot.error) {
-        setHasLoadError(true);
-        setLoadErrorMessage(snapshot.error.message);
-      }
-    });
-    void getCatalogPreview().then(
-      () => { if (isActive) setIsRefreshing(false); },
-      () => { if (isActive) setIsRefreshing(false); },
-    );
+    }
+    return result;
+  }, [catalog.rows, layout.productColumns, recentlyViewedProducts.length]);
+  const renderRow = useCallback(({ item }: { item: HomeRow }) => {
+    if (item.kind === "recent") return <RecentlyViewedSection products={recentlyViewedProducts} onSelectProduct={openProduct} />;
+    if (item.kind === "builder") return <BuilderEntryCard onPress={() => router.push("/builder")} />;
+    if (item.kind === "brands") return <Brands brands={brands} onSelect={(brand) => router.push({ pathname: "/categories", params: { brandId: brand.id } })} />;
+    if (item.kind === "promo") return <View className="my-5"><PromoBanners banners={banners} onSelect={() => router.push("/categories")} /></View>;
+    if (item.kind === "products") return <View className="flex-row px-2.5 pb-3">{item.products.map((product) => <View key={product.id} style={{ paddingHorizontal: 6 }}><ProductCard product={product} width={cardWidth} onPress={openProduct} /></View>)}</View>;
+    return null;
+  }, [banners, brands, cardWidth, openProduct, recentlyViewedProducts, router]);
 
-    Promise.all([getBanners(), getCategories(), getHomeCatalog(), getBrands()])
-      .then(([loadedBanners, loadedCategories, , loadedBrands]) => {
-        if (!isActive) return;
-        setBanners(loadedBanners);
-        setCategories(loadedCategories);
-        setBrands(loadedBrands);
-      })
-      .catch((error) => {
-        if (isActive) {
-          setHasLoadError(true);
-          setLoadErrorMessage(error instanceof Error ? error.message : "Could not reach Battlefront. Check your Wi-Fi connection and try again.");
-        }
-      })
-      .finally(() => {
-        if (isActive) { setIsLoading(false); setIsRefreshing(false); }
-      });
-
-    return () => {
-      isActive = false;
-      unsubscribe();
-    };
-  }, [retryCount]));
-
-  if (isLoading) {
-    return (
-      <View className="flex-1 bg-background">
-        <Header
-          cartCount={itemCount}
-          onCartPress={() => router.navigate("/cart")}
-          onNotificationPress={() =>
-            Alert.alert("Notifications", "Your deals and order updates will appear here.")
-          }
-          onSearchPress={() => setIsSearchOpen(true)}
-          searchDisabled
-        />
-        <ScrollView showsVerticalScrollIndicator={false} removeClippedSubviews contentContainerStyle={{ paddingBottom: 112 }}>
-          <LoadingHero width={width} />
-          <LoadingCategories />
-          <LoadingProductRail />
-          <LoadingProductRail />
-        </ScrollView>
-      </View>
-    );
-  }
-
-  if (hasLoadError && !hasCatalogRef.current) {
-    return (
-      <View className="flex-1 bg-background">
-        <Header
-          cartCount={itemCount}
-          onCartPress={() => router.navigate("/cart")}
-          onNotificationPress={() => router.push("/notifications")}
-          onSearchPress={() => setIsSearchOpen(true)}
-          searchDisabled
-        />
-        <View className="flex-1 items-center justify-center px-6">
-          <Ionicons name="cloud-offline-outline" size={32} color="#9ca3af" />
-          <Text className="mt-3 text-foreground text-base font-semibold">Could not load the catalog</Text>
-          <Text className="mt-1 text-center text-muted-foreground text-sm">{loadErrorMessage}</Text>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => setRetryCount((count) => count + 1)}
-            className="mt-5 rounded-xl bg-primary px-5 py-3"
-          >
-            <Text className="text-primary-foreground text-sm font-semibold">Try again</Text>
-          </Pressable>
-        </View>
-      </View>
-    );
-  }
-
-  return (
-    <View className="flex-1 bg-background">
-      <Header
-        cartCount={itemCount}
-        onCartPress={() => router.navigate("/cart")}
-        onNotificationPress={() => router.push("/notifications")}
-        onSearchPress={() => setIsSearchOpen(true)}
-      />
-      <FlashList
-        data={visibleCatalogProducts}
-        refreshing={isRefreshing}
-        onRefresh={() => {
-          if (isRefreshing) return;
-          invalidateCatalog();
-          setIsRefreshing(true);
-          setRetryCount((current) => current + 1);
-        }}
-        key={`home-products-${layout.productColumns}`}
-        numColumns={layout.productColumns}
-        keyExtractor={(item) => item.id}
-        onEndReached={loadMoreProducts}
-        onEndReachedThreshold={0.4}
-        ListFooterComponent={isLoadingMore || isCatalogLoading ? <LoadingMoreFooter /> : null}
-        contentContainerStyle={{ paddingBottom: 28, paddingTop: 16, paddingHorizontal: 10, width: "100%", maxWidth: MAX_CONTENT_WIDTH, alignSelf: "center" }}
-        ListHeaderComponentStyle={{ marginHorizontal: -10 }}
-        ListHeaderComponent={
-          <View>
-            {hasLoadError && <View className="border border-border bg-card mx-4 mb-4 p-4"><Text className="text-danger text-sm">Some products could not be refreshed. {loadErrorMessage}</Text><Pressable onPress={() => setRetryCount((current) => current + 1)}><Text className="text-primary font-semibold mt-2">Retry refresh</Text></Pressable></View>}
-            <PromoBanners banners={banners} onSelect={() => router.push("/categories")} />
-        <BuilderEntryCard onPress={() => router.push("/builder")} />
-        {cartItems.length > 0 && (
-          <ContinueCartBanner
-            itemCount={itemCount}
-            subtotal={cartSubtotal}
-            onPress={() => router.navigate("/cart")}
-          />
-        )}
-        {recentlyViewedProducts.length > 0 && (
-          <RecentlyViewedSection
-            products={recentlyViewedProducts}
-            onSelectProduct={handleProductSelect}
-          />
-        )}
-        {recommendedProducts.length > 0 && (
-          <RecommendedProductsSection
-            products={recommendedProducts}
-            onSelectProduct={handleProductSelect}
-          />
-        )}
-        {setupBundles.length > 0 && (
-          <SetupBundleSection
-            bundles={setupBundles}
-            onSelectProduct={handleProductSelect}
-          />
-        )}
-        <Categories
-          categories={categories}
-          onBrowseAll={() => router.push("/categories")}
-          onSelect={(category) =>
-            router.push({
-              pathname: "/categories",
-              params: { categoryId: category.id },
-            })
-          }
-        />
-        <FlashDeals
-          products={flashDeals}
-          onSelectProduct={handleProductSelect}
-        />
-        <SulitPicks products={sulitPicks} onSelectProduct={handleProductSelect} />
-        <NewArrivals products={newArrivals} onSelectProduct={handleProductSelect} />
-        <Brands brands={brands} onSelect={(brand) => router.push({ pathname: "/categories", params: { brandId: brand.id } })} />
-        <View className="px-4 mt-7 mb-3">
-          <Text className="text-foreground text-base font-bold">All products</Text>
-        </View>
-          </View>
-        }
-        ListEmptyComponent={!isLoading ? <View className="items-center px-6 py-12"><Text className="text-foreground text-sm font-semibold">No products available</Text><Text className="text-muted-foreground text-xs mt-1">Try refreshing the catalog.</Text></View> : null}
-        renderItem={({ item }) => (
-          <View style={{ flex: 1, paddingHorizontal: 6, paddingBottom: 12 }}>
-            <ProductCard
-              product={item}
-              width={getGridCardWidth(width, layout.productColumns)}
-              onPress={handleProductSelect}
-            />
-          </View>
-        )}
-      />
-      <Pressable
-        accessibilityLabel="Open Battlefront Support chat"
-        onPress={() => setIsChatOpen(true)}
-        className="absolute right-4 bottom-5 w-14 h-14 rounded-full bg-primary items-center justify-center"
-        style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
-      >
-        <Ionicons name="chatbubble-ellipses" size={24} color="#f8fafc" />
-      </Pressable>
-      <Chatbot visible={isChatOpen} onClose={() => setIsChatOpen(false)} />
-      <ProductSearch
-        visible={isSearchOpen}
-        products={searchableProducts}
-        onClose={() => setIsSearchOpen(false)}
-        onSelectProduct={handleProductSelect}
-      />
-    </View>
-  );
+  return <View className="flex-1 bg-background">
+    <Header cartCount={itemCount} onCartPress={() => router.navigate("/cart")} onNotificationPress={() => router.push("/notifications")} onSearchPress={() => setIsSearchOpen(true)} />
+    <FlashList
+      data={rows}
+      keyExtractor={(item) => item.id}
+      getItemType={(item) => item.kind}
+      renderItem={renderRow}
+      refreshing={isRefreshing}
+      onRefresh={() => { if (isRefreshing) return; setIsRefreshing(true); invalidateCatalog(); setRetryCount((count) => count + 1); }}
+      onEndReached={loadMore}
+      onEndReachedThreshold={0.4}
+      contentContainerStyle={{ paddingBottom: 88, width: "100%", maxWidth: MAX_CONTENT_WIDTH, alignSelf: "center" }}
+      ListHeaderComponent={<View>
+        {(catalog.error || metadataError) && <View className="mx-4 mt-4 border border-border bg-card p-4"><Text accessibilityLiveRegion="polite" className="text-danger text-sm">{catalog.error?.message ?? "Some browsing options could not be refreshed."}</Text><Pressable accessibilityRole="button" onPress={retry} className="min-h-12 justify-center"><Text className="text-primary font-semibold">Try again</Text></Pressable></View>}
+        <Categories categories={categories} onBrowseAll={() => router.navigate("/categories")} onSelect={(category) => router.push({ pathname: "/categories", params: { categoryId: category.id } })} />
+        {cartItems.length > 0 && <ContinueCartBanner itemCount={itemCount} subtotal={subtotal} onPress={() => router.navigate("/cart")} />}
+        {featured.flashDeals.length ? <FlashDeals products={featured.flashDeals.slice(0, 6)} onSelectProduct={openProduct} /> : <SulitPicks products={featured.sulitPicks.slice(0, 6)} onSelectProduct={openProduct} />}
+        <View className="px-4 mt-6 mb-3"><Text accessibilityRole="header" className="text-foreground text-lg font-bold">Browse products</Text></View>
+      </View>}
+      ListEmptyComponent={catalog.loading ? <View><LoadingCategories /><LoadingProductRail /></View> : !catalog.error ? <View className="px-6 py-12"><Text className="text-foreground text-base">No products available</Text><Text className="text-muted-foreground mt-2">Pull down to refresh the catalog.</Text></View> : null}
+      ListFooterComponent={catalog.loading && catalog.rows.length ? <LoadingMoreFooter /> : catalog.error && catalog.rows.length ? <Pressable accessibilityRole="button" onPress={retry} className="p-4"><Text className="text-primary text-center">Retry loading products</Text></Pressable> : null}
+    />
+    <Pressable accessibilityRole="button" accessibilityLabel="Open Battlefront Support chat" onPress={() => setIsChatOpen(true)} className="absolute right-4 bottom-5 w-14 h-14 rounded-full bg-primary items-center justify-center" style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}>
+      <Ionicons name="chatbubble-ellipses" size={24} color="#f8fafc" />
+    </Pressable>
+    {isChatOpen && <Chatbot visible onClose={() => setIsChatOpen(false)} />}
+    <ProductSearch visible={isSearchOpen} products={catalog.rows} onClose={() => setIsSearchOpen(false)} onSelectProduct={(product) => { returnToSearch.current = true; openProduct(product); }} />
+  </View>;
 }
 
 function ContinueCartBanner({
@@ -421,7 +172,7 @@ function RecentlyViewedSection({
             onPress={() => onSelectProduct(product)}
             className="w-[150px] overflow-hidden rounded-2xl border border-border bg-card"
           >
-            <RNImage source={getProductImageSource(product.image)} className="w-[150px] h-[120px] bg-secondary" resizeMode="cover" />
+            <ProductImage source={getProductImageSource(product.image)} className="w-[150px] h-[120px] bg-secondary" resizeMode="cover" />
             <View className="px-2.5 py-2.5">
               <Text className="text-foreground text-[12px] font-semibold" numberOfLines={2}>
                 {product.name}
@@ -433,106 +184,6 @@ function RecentlyViewedSection({
           </Pressable>
         ))}
       </ScrollView>
-    </View>
-  );
-}
-
-function RecommendedProductsSection({
-  products,
-  onSelectProduct,
-}: {
-  products: Product[];
-  onSelectProduct: (product: Product) => void;
-}) {
-  return (
-    <View className="mt-7">
-      <View className="mb-3 px-4 flex-row items-center justify-between">
-        <Text className="text-foreground text-base font-bold">Recommended for you</Text>
-      </View>
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 6, gap: 10 }}>
-        {products.map((product) => (
-          <Pressable
-            key={product.id}
-            accessibilityRole="button"
-            onPress={() => onSelectProduct(product)}
-            className="w-[150px] overflow-hidden rounded-2xl border border-border bg-card"
-          >
-            <RNImage source={getProductImageSource(product.image)} className="w-[150px] h-[120px] bg-secondary" resizeMode="cover" />
-            <View className="px-2.5 py-2.5">
-              <Text className="text-foreground text-[12px] font-semibold" numberOfLines={2}>
-                {product.name}
-              </Text>
-              <Text className="text-primary text-[12px] font-bold mt-1">
-                ₱{product.price.toLocaleString("en-PH")}
-              </Text>
-            </View>
-          </Pressable>
-        ))}
-      </ScrollView>
-    </View>
-  );
-}
-
-function SetupBundleSection({
-  bundles,
-  onSelectProduct,
-}: {
-  bundles: Array<{
-    title: string;
-    subtitle: string;
-    products: Product[];
-  }>;
-  onSelectProduct: (product: Product) => void;
-}) {
-  return (
-    <View className="mt-7">
-      <View className="mb-3 px-4 flex-row items-center justify-between">
-        <Text className="text-foreground text-base font-bold">Complete your setup</Text>
-      </View>
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 6, gap: 10 }}>
-        {bundles.map((bundle) => (
-          <View key={bundle.title} className="w-[210px] rounded-2xl border border-border bg-card p-3">
-            <Text className="text-foreground text-sm font-bold">{bundle.title}</Text>
-            <Text className="text-muted-foreground text-[10px] mt-0.5">{bundle.subtitle}</Text>
-            <View className="mt-3 gap-2">
-              {bundle.products.map((product) => (
-                <Pressable
-                  key={product.id}
-                  accessibilityRole="button"
-                  onPress={() => onSelectProduct(product)}
-                  className="flex-row items-center gap-2 rounded-xl bg-secondary px-2 py-1.5"
-                >
-                  <RNImage source={getProductImageSource(product.image)} className="w-10 h-10 rounded-lg bg-background" resizeMode="cover" />
-                  <View className="flex-1">
-                    <Text className="text-foreground text-[11px] font-semibold" numberOfLines={1}>{product.name}</Text>
-                    <Text className="text-primary text-[10px] font-bold mt-0.5">₱{product.price.toLocaleString("en-PH")}</Text>
-                  </View>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        ))}
-      </ScrollView>
-    </View>
-  );
-}
-
-function LoadingHero({ width }: { width: number }) {
-  return (
-    <View className="mt-4">
-      <View style={{ width: width - 32, height: 172 }} className="mx-4 rounded-xl overflow-hidden bg-card border border-border">
-        <View className="absolute bottom-0 left-0 right-0 px-4 py-3.5">
-          <View className="h-4 w-40 rounded-full bg-secondary" />
-          <View className="mt-2 h-3 w-56 rounded-full bg-secondary" />
-        </View>
-      </View>
-      <View className="flex-row justify-center gap-2 mt-2.5">
-        <View className="h-1.5 w-4 rounded-full bg-secondary" />
-        <View className="h-1.5 w-1.5 rounded-full bg-secondary" />
-        <View className="h-1.5 w-1.5 rounded-full bg-secondary" />
-      </View>
     </View>
   );
 }

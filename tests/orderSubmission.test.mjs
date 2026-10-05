@@ -80,3 +80,31 @@ test("an unreadable browser proof prevents submission", async (t) => {
   await assert.rejects(orders.placeOrder({ ...pickup, payment_method: "maya", payment_proof: { uri: "blob:missing", name: "proof.png", type: "image/png" } }), /Choose the image again/);
   assert.equal(fetch.mock.callCount(), 1);
 });
+
+
+test("repeated placement taps cannot start another request while submission is pending", async () => {
+  let finish;
+  let calls = 0;
+  const orders = createOrderSubmission(async () => {
+    calls++;
+    return new Promise((resolve) => { finish = resolve; });
+  }, "native");
+  const first = orders.placeOrder(pickup);
+  await assert.rejects(orders.placeOrder(pickup), /still being submitted/);
+  assert.equal(calls, 1);
+  finish({ data: { id: 12 } });
+  assert.deepEqual(await first, { id: 12 });
+});
+
+test("failed placements unlock for an explicit retry but never retry themselves", async () => {
+  let calls = 0;
+  const orders = createOrderSubmission(async () => {
+    calls++;
+    if (calls === 1) throw new Error("Offline");
+    return { data: { id: 13 } };
+  }, "native");
+  await assert.rejects(orders.placeOrder(pickup), /Offline/);
+  assert.equal(calls, 1);
+  assert.deepEqual(await orders.placeOrder(pickup), { id: 13 });
+  assert.equal(calls, 2);
+});
