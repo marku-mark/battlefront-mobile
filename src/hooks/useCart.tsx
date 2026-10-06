@@ -4,9 +4,10 @@ import type { Product } from "@/lib/data";
 import { addCartItem, changeCartItem, deleteCartItem, getCart, type ApiCart } from "@/lib/api";
 import { createOptimisticCart, createCartQueue, type CartItem } from "@/lib/cartState";
 import { useSession } from "@/hooks/useSession";
+import { createPendingActions } from "@/lib/pendingActions";
 
 export type { CartItem } from "@/lib/cartState";
-type CartActions = { addItem: (product: Product, quantity?: number, variant?: string | null) => Promise<boolean>; updateQuantity: (id: string, quantity: number, variant?: string | null) => Promise<boolean>; removeItem: (id: string, variant?: string | null) => Promise<boolean>; clearCart: () => Promise<boolean>; refreshCart: () => Promise<void>; promoteGuestCartToMock: () => void };
+type CartActions = { addItem: (product: Product, quantity?: number, variant?: string | null) => Promise<boolean>; updateQuantity: (id: string, quantity: number, variant?: string | null) => Promise<boolean>; removeItem: (id: string, variant?: string | null) => Promise<boolean>; clearCart: () => Promise<boolean>; refreshCart: (force?: boolean) => Promise<void>; promoteGuestCartToMock: () => void };
 type CartValue = CartActions & { items: CartItem[]; itemCount: number; subtotal: number; isLoading: boolean; isUpdating: boolean; error: string | null; conflictCount: number };
 const CartActionsContext = createContext<CartActions | null>(null);
 const CartContext = createContext<CartValue | null>(null);
@@ -23,6 +24,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
   identityRef.current = identity;
   const enqueue = useRef(createCartQueue()).current;
   const optimistic = useRef(createOptimisticCart());
+  const pendingAdds = useRef(createPendingActions<boolean>()).current;
+  const pendingRefresh = useRef(createPendingActions<void>()).current;
   function publish() {
     const snapshot = optimistic.current.snapshot();
     setItems(snapshot.items); setSubtotal(snapshot.subtotal); setConflictCount(snapshot.conflictCount);
@@ -32,14 +35,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
     optimistic.current.confirm(cart);
     publish(); setError(null);
   }
-  async function refreshCart() {
+  async function refreshCart(force = true) {
     if (identity === null) return;
     const owner = identity;
     setPendingUpdates((count) => count + 1);
     try {
       await enqueue(async () => {
         if (identityRef.current !== owner) return;
-        apply(await getCart(), owner);
+        apply(await getCart(force), owner);
       });
     } catch (reason) {
       if (identityRef.current === owner) setError(reason instanceof Error ? reason.message : "Cannot load cart.");
@@ -60,6 +63,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     return () => { active = false; };
   }, [identity]);
   function mutate(action: () => Promise<ApiCart>, change?: { productId: string; quantity: number }): Promise<boolean> {
+    if (identityRef.current !== identity) return Promise.resolve(false);
     if (identity === null) { Alert.alert("Sign in required", "Sign in from Account before adding products to your cart."); return Promise.resolve(false); }
     const owner = identity;
     const state = optimistic.current;
@@ -80,7 +84,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
           if (operation) state.settle(operation);
           publish();
           try {
-            const cart = await getCart();
+            const cart = await getCart(true);
             if (identityRef.current !== owner || optimistic.current !== state) return false;
             apply(cart, owner);
           } catch { /* Keep checkout blocked until the cart can be reconciled. */ }
@@ -96,7 +100,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }
   const value: CartValue = {
     items, subtotal, itemCount: items.reduce((sum, item) => sum + item.quantity, 0), isLoading, isUpdating: pendingUpdates > 0, error, conflictCount, refreshCart,
-    addItem: (product, quantity = 1) => mutate(() => addCartItem(product.id, quantity)),
+    addItem: (product, quantity = 1) => pendingAdds.run(`${identity}:${product.id}`, () => mutate(() => addCartItem(product.id, quantity))),
     updateQuantity: (id, quantity) => mutate(async () => {
       const item = optimistic.current.find(id);
       if (!item?.serverId) throw new Error("Refresh the cart and try again.");
@@ -124,7 +128,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     updateQuantity: (...args) => currentActions.current.updateQuantity(...args),
     removeItem: (...args) => currentActions.current.removeItem(...args),
     clearCart: () => currentActions.current.clearCart(),
-    refreshCart: () => currentActions.current.refreshCart(),
+    refreshCart: (force) => pendingRefresh.run(String(identityRef.current), () => currentActions.current.refreshCart(force)),
     promoteGuestCartToMock: () => currentActions.current.promoteGuestCartToMock(),
   }), []);
   return <CartActionsContext.Provider value={actions}><CartContext.Provider value={value}>{children}</CartContext.Provider></CartActionsContext.Provider>;

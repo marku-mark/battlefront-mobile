@@ -10,10 +10,13 @@ import { getGridCardWidth, getResponsiveLayout, MAX_CONTENT_WIDTH } from "@/lib/
 import { searchProductPage } from "@/lib/api";
 import { createProgressiveCatalog } from "@/lib/catalogCache";
 import { useTheme } from "@/theme/ThemeProvider";
+import { useActiveFocusEffect, useScreenActive } from "@/hooks/useActiveScreen";
+import { CACHE_AGE } from "@/lib/cachePolicy";
 
 type ProductSearchProps = { visible: boolean; products: Product[]; onClose: () => void; onSelectProduct: (product: Product) => void };
 
 export function ProductSearch({ visible, products, onClose, onSelectProduct }: ProductSearchProps) {
+  const isScreenActive = useScreenActive();
   const [query, setQuery] = useState("");
   const [term, setTerm] = useState("");
   const { colors, reducedMotion } = useTheme();
@@ -21,29 +24,29 @@ export function ProductSearch({ visible, products, onClose, onSelectProduct }: P
   const layout = getResponsiveLayout(width, fontScale);
   const list = useRef<FlashListRef<Product>>(null);
   const scrollOffset = useRef(0);
-  const cache = useMemo(() => createProgressiveCatalog((page) => searchProductPage(term, page), 30_000), [term]);
+  const cache = useMemo(() => createProgressiveCatalog((page) => searchProductPage(term, page), CACHE_AGE.search), [term]);
   const [snapshot, setSnapshot] = useState(cache.snapshot);
   const [resultTerm, setResultTerm] = useState(term);
   const waiting = query.trim() !== term || resultTerm !== term;
 
-  useEffect(() => {
+  useActiveFocusEffect(useCallback(() => {
     if (!visible) return;
     const timer = setTimeout(() => { setTerm(query.trim()); }, 300);
     return () => clearTimeout(timer);
-  }, [query, visible]);
+  }, [query, visible]));
   useEffect(() => {
     setSnapshot(cache.snapshot()); setResultTerm(term); scrollOffset.current = 0;
   }, [cache, term]);
-  useEffect(() => {
+  useActiveFocusEffect(useCallback(() => {
     if (!visible || term.length < 2) return;
     const unsubscribe = cache.subscribe(setSnapshot);
     void cache.resume().catch(() => undefined);
     return unsubscribe;
-  }, [cache, term, visible]);
+  }, [cache, term, visible]));
   const loadMore = useCallback(() => {
     const current = cache.snapshot();
-    if (visible && !waiting && term.length >= 2 && !current.loading && !current.complete && !current.error) void cache.next().catch(() => undefined);
-  }, [cache, term, waiting, visible]);
+    if (isScreenActive() && visible && !waiting && term.length >= 2 && !current.loading && !current.complete && !current.error) void cache.next().catch(() => undefined);
+  }, [cache, term, waiting, visible, isScreenActive]);
   const select = useCallback((product: Product) => { onSelectProduct(product); }, [onSelectProduct]);
   const renderItem = useCallback(({ item }: { item: Product }) => <View style={{ paddingHorizontal: 6, marginBottom: 16 }}><ProductCard product={item} width={getGridCardWidth(width, layout.productColumns)} onPress={select} /></View>, [width, layout.productColumns, select]);
   const searching = waiting || snapshot.loading;

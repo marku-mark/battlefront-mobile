@@ -7,7 +7,8 @@ export class ApiError extends Error {
   }
 }
 
-export function createApiClient(baseUrl: string, getToken: () => string | null = () => null, onUnauthorized: () => void = () => {}, now: () => number = Date.now) {
+type Transport = (url: string, options: RequestInit) => Promise<Pick<Response, "status" | "ok" | "headers" | "text">>;
+export function createApiClient(baseUrl: string, getToken: () => string | null = () => null, onUnauthorized: () => void = () => {}, now: () => number = Date.now, send: Transport = (url, options) => fetch(url, options)) {
   const root = baseUrl.replace(/\/+$/, "");
   let blockedUntil = 0;
   return async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -22,7 +23,7 @@ export function createApiClient(baseUrl: string, getToken: () => string | null =
     if (options.body && !(options.body instanceof FormData)) headers.set("Content-Type", "application/json");
     if (token) headers.set("Authorization", `Bearer ${token}`);
     try {
-      const response = await fetch(`${root}/${path.replace(/^\//, "")}`, { ...options, headers, signal: controller.signal });
+      const response = await send(`${root}/${path.replace(/^\//, "")}`, { ...options, headers, signal: controller.signal });
       if (response.status === 204) return undefined as T;
       let payload: { message?: string; errors?: Record<string, string[]> } = {};
       let validJson = false;

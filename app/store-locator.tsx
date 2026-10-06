@@ -1,7 +1,8 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
-import { Alert, Linking, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { useCallback, useMemo, useState } from "react";
+import { useActiveFocusEffect } from "@/hooks/useActiveScreen";
+import { Alert, Linking, Pressable, RefreshControl, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { Store } from "@/lib/data";
 import { getBranches } from "@/lib/api";
@@ -15,7 +16,19 @@ export default function StoreLocatorScreen() {
   const layout = getResponsiveLayout(width);
   const [query, setQuery] = useState("");
   const [stores, setStores] = useState<Store[]>([]);
-  useEffect(() => { getBranches().then(setStores).catch((error) => Alert.alert("Cannot load branches", error.message)); }, []);
+  const [refreshing, setRefreshing] = useState(false);
+  useActiveFocusEffect(useCallback(() => {
+    let active = true;
+    getBranches().then((rows) => { if (active) setStores(rows); }).catch((error) => { if (active) Alert.alert("Cannot load branches", error.message); });
+    return () => { active = false; };
+  }, []));
+  async function refreshBranches() {
+    if (refreshing) return;
+    setRefreshing(true);
+    try { setStores(await getBranches(true)); }
+    catch (error) { Alert.alert("Cannot load branches", error instanceof Error ? error.message : "Please try again."); }
+    finally { setRefreshing(false); }
+  }
 
   const filteredStores = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -46,6 +59,7 @@ export default function StoreLocatorScreen() {
       </View>
 
       <ScrollView
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refreshBranches()} />}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ padding: layout.horizontalPadding, paddingBottom: 28, width: "100%", maxWidth: 900, alignSelf: "center" }}

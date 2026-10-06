@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import { useActiveFocusEffect } from "@/hooks/useActiveScreen";
 import { useRouter } from "expo-router";
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -13,12 +14,22 @@ export default function RecommendationsScreen() {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [error, setError] = useState("");
-  useEffect(() => { getRecommendationOptions().then((value) => { setOptions(value); setUse(value.intended_uses[0]?.value ?? ""); }).catch((reason) => setError(reason.message)); }, []);
+  const pendingSearch = useRef(false);
+  useActiveFocusEffect(useCallback(() => {
+    let active = true;
+    getRecommendationOptions().then((value) => {
+      if (!active) return;
+      setOptions(value); setUse((current) => current || value.intended_uses[0]?.value || "");
+    }).catch((reason) => { if (active) setError(reason.message); });
+    return () => { active = false; };
+  }, []));
   async function search() {
+    if (pendingSearch.current || !options) return;
+    pendingSearch.current = true;
     setLoading(true); setError("");
     try { setResults(await getRecommendations({ budget, intended_use: use })); setSearched(true); }
     catch (reason) { setError(reason instanceof Error ? reason.message : "Could not load recommendations."); }
-    finally { setLoading(false); }
+    finally { pendingSearch.current = false; setLoading(false); }
   }
   return <SafeAreaView className="flex-1 bg-background">
     <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>

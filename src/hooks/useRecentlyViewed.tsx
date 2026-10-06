@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { getSelectedProducts } from "@/lib/api";
 import type { Product } from "@/lib/data";
 
@@ -37,27 +37,24 @@ export function useRecentlyViewedProducts() {
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (shouldContinue: () => boolean = () => true) => {
     try {
       setIsLoading(true);
       const recentIds = await getRecentlyViewedIds();
+      if (!shouldContinue()) return;
       if (recentIds.length === 0) {
         setProducts([]);
         return;
       }
 
-      const loadedProducts = await getSelectedProducts(recentIds);
-      setProducts(loadedProducts.filter((product): product is Product => Boolean(product)));
+      const loadedProducts = await getSelectedProducts(recentIds, shouldContinue);
+      if (shouldContinue()) setProducts(loadedProducts.filter((product): product is Product => Boolean(product)));
     } catch {
       // Preserve the visible products if a background refresh fails.
     } finally {
-      setIsLoading(false);
+      if (shouldContinue()) setIsLoading(false);
     }
   }, []);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
 
   return { products, isLoading, refresh };
 }

@@ -1,6 +1,30 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createReadCache, loadSelectedProducts } from "../src/lib/readCache.ts";
+import { CACHE_AGE } from "../src/lib/cachePolicy.ts";
+
+test("reference data is reused until its policy expires and explicit refresh bypasses the cache", async () => {
+  for (const lifetime of [CACHE_AGE.branches, CACHE_AGE.filters, CACHE_AGE.products, CACHE_AGE.search]) {
+    let now = 0;
+    let calls = 0;
+    const cache = createReadCache(lifetime, () => now);
+    const load = async () => ++calls;
+    assert.equal(await cache.read("reference", load), 1);
+    now = lifetime - 1;
+    assert.equal(await cache.read("reference", load), 1);
+    now = lifetime;
+    assert.equal(await cache.read("reference", load), 2);
+    assert.equal(await cache.read("reference", load, true), 3);
+  }
+});
+
+test("leaving a saved-products screen stops remaining detail requests", async () => {
+  let active = true;
+  const calls = [];
+  const rows = await loadSelectedProducts(["1", "2", "3"], async (id) => { calls.push(id); active = false; return { id }; }, 1, () => active);
+  assert.deepEqual(calls, ["1"]);
+  assert.deepEqual(rows, [{ id: "1" }]);
+});
 
 test("reopening a fresh product uses its existing data without another request", async () => {
   let calls = 0;

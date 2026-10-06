@@ -1,8 +1,9 @@
+import { useActiveFocusEffect, useScreenActive } from "@/hooks/useActiveScreen";
 import { ProductImage } from "@/components/products/ProductImage";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
 import { FlatList, Pressable, Text, View, useWindowDimensions } from "react-native";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getProductImageSource, getProductVariants, type Product } from "@/lib/data";
 import { getSelectedProducts, getProductSnapshot } from "@/lib/api";
@@ -18,10 +19,11 @@ function formatPrice(value: number): string {
 
 export default function WishlistScreen() {
   const router = useRouter();
+  const isScreenActive = useScreenActive();
   const { width } = useWindowDimensions();
   const layout = getResponsiveLayout(width);
   const { items: wishlistIds, toggleWishlist, isLoading: isWishlistLoading } = useWishlist();
-  const { addItem, items: cartItems } = useCart();
+  const { addItem, items: cartItems, isUpdating } = useCart();
   const [removedProduct, setRemovedProduct] = useState<Product | null>(null);
   const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
   const [isCatalogLoading, setIsCatalogLoading] = useState(true);
@@ -34,17 +36,17 @@ export default function WishlistScreen() {
   const idsKey = wishlistIds.slice(0, visibleCount).join(",");
 
   useEffect(() => { setVisibleCount(12); setRemovedProduct(null); }, [owner]);
-  useEffect(() => {
+  useActiveFocusEffect(useCallback(() => {
     if (!isHydrated || isWishlistLoading) return;
     let active = true;
     const ids = idsKey ? idsKey.split(",") : [];
     const cached = ids.map(getProductSnapshot).filter((product): product is Product => Boolean(product));
-    setCatalogProducts(cached); setIsCatalogLoading(true); setHasCatalogError(false);
-    getSelectedProducts(ids).then((rows) => { if (active) setCatalogProducts(rows); })
+    setCatalogProducts(cached); setIsCatalogLoading(cached.length < ids.length); setHasCatalogError(false);
+    getSelectedProducts(ids, () => active && isScreenActive()).then((rows) => { if (active) setCatalogProducts(rows); })
       .catch(() => { if (active) { setCatalogProducts(ids.map(getProductSnapshot).filter((product): product is Product => Boolean(product))); setHasCatalogError(true); } })
       .finally(() => { if (active) { setIsCatalogLoading(false); loadingMore.current = false; } });
     return () => { active = false; };
-  }, [idsKey, owner, isHydrated, isWishlistLoading, retryCount]);
+  }, [idsKey, owner, isHydrated, isWishlistLoading, retryCount, isScreenActive]));
   function loadCatalog() { setRetryCount((current) => current + 1); }
   const isLoading = !isHydrated || isWishlistLoading || (isCatalogLoading && catalogProducts.length === 0);
   const products = catalogProducts.filter((product) => wishlistIds.includes(product.id));
@@ -112,7 +114,7 @@ export default function WishlistScreen() {
           </Pressable>
         </View>
       ) : (
-        <FlatList data={products} keyExtractor={(product) => product.id} initialNumToRender={8} maxToRenderPerBatch={6} windowSize={5} onEndReached={() => { if (!isCatalogLoading && !loadingMore.current && visibleCount < wishlistIds.length) { loadingMore.current = true; setVisibleCount((count) => count + 12); } }} onEndReachedThreshold={0.4} ListFooterComponent={<Text className="text-muted-foreground text-center py-3">{isCatalogLoading ? "Loading saved products…" : hasCatalogError ? "Some products could not be updated." : visibleCount < wishlistIds.length ? "Scroll for more saved products" : ""}</Text>} showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: layout.horizontalPadding, paddingBottom: 28, width: "100%", maxWidth: 860, alignSelf: "center" }} ListHeaderComponent={removedProduct ? (
+        <FlatList data={products} keyExtractor={(product) => product.id} initialNumToRender={8} maxToRenderPerBatch={6} windowSize={5} onEndReached={() => { if (isScreenActive() && !isCatalogLoading && !loadingMore.current && visibleCount < wishlistIds.length) { loadingMore.current = true; setVisibleCount((count) => count + 12); } }} onEndReachedThreshold={0.4} ListFooterComponent={<Text className="text-muted-foreground text-center py-3">{isCatalogLoading ? "Loading saved products…" : hasCatalogError ? "Some products could not be updated." : visibleCount < wishlistIds.length ? "Scroll for more saved products" : ""}</Text>} showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: layout.horizontalPadding, paddingBottom: 28, width: "100%", maxWidth: 860, alignSelf: "center" }} ListHeaderComponent={removedProduct ? (
             <View className="flex-row items-center justify-between rounded-xl border border-primary/30 bg-primary/10 px-3 py-3 mb-3">
               <Text className="flex-1 text-foreground text-xs">{removedProduct.name} removed</Text>
               <Pressable
@@ -164,6 +166,8 @@ export default function WishlistScreen() {
                   <Pressable
                     accessibilityLabel={`${cartItems.some((item) => item.product.id === product.id) ? "Add another" : "Add"} ${product.name} to cart`}
                     accessibilityHint="Adds one unit to your cart"
+                    disabled={isUpdating}
+                    accessibilityState={{ disabled: isUpdating, busy: isUpdating }}
                     onPress={() => {
                       addItem(product, 1, getProductVariants(product)[0] ?? null);
                     }}

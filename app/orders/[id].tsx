@@ -1,9 +1,12 @@
+import { useActiveFocusEffect } from "@/hooks/useActiveScreen";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCart } from "@/hooks/useCart";
+import { useSession } from "@/hooks/useSession";
+import { getSessionRevision } from "@/lib/api";
 import { getProductById } from "@/lib/api";
 import { getOrderReturnRequests, saveOrderReturnRequest, type OrderReturnRequest } from "@/lib/orderSupport";
 import { cancelPlacedOrder, getOrderById, getOrderSnapshot, resubmitPaymentProof, type OrderRecord } from "@/lib/orders";
@@ -22,6 +25,9 @@ export default function OrderDetailScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { addItem } = useCart();
+  const { session } = useSession();
+  const owner = session.mode === "customer" ? session.user.id : null;
+  const [loadedOwner, setLoadedOwner] = useState(owner);
   const { id } = useLocalSearchParams<{ id?: string }>();
   const [order, setOrder] = useState<OrderRecord | null>(() => id ? getOrderSnapshot(id) ?? null : null);
   const [isLoadingOrder, setIsLoadingOrder] = useState(() => !id || !getOrderSnapshot(id));
@@ -35,22 +41,28 @@ export default function OrderDetailScreen() {
   const [isCancellingOrder, setIsCancellingOrder] = useState(false);
   const [isReordering, setIsReordering] = useState(false);
   const [isUploadingProof, setIsUploadingProof] = useState(false);
+  const uploadingProof = useRef(false);
   async function replaceProof() {
-    if (!order || isUploadingProof) return;
+    if (!order || uploadingProof.current) return;
+    uploadingProof.current = true;
+    const revision = getSessionRevision();
     setIsUploadingProof(true);
     try {
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 1 });
       if (!result.canceled) {
         const proof = result.assets[0];
-        setOrder(await resubmitPaymentProof(order.id, { uri: proof.uri, name: proof.fileName ?? "payment-proof.jpg", type: proof.mimeType ?? "image/jpeg" }));
+        if (revision !== getSessionRevision()) return;
+        const updated = await resubmitPaymentProof(order.id, { uri: proof.uri, name: proof.fileName ?? "payment-proof.jpg", type: proof.mimeType ?? "image/jpeg" });
+        if (revision === getSessionRevision()) setOrder(updated);
       }
     } catch (reason) { Alert.alert("Could not replace proof", reason instanceof Error ? reason.message : "Please try again."); }
-    finally { setIsUploadingProof(false); }
+    finally { uploadingProof.current = false; setIsUploadingProof(false); }
   }
 
-  useEffect(() => {
+  useActiveFocusEffect(useCallback(() => {
     let isActive = true;
-    if (!id) {
+    setLoadedOwner(owner);
+    if (!id || owner === null) {
       setOrder(null);
       setIsLoadingOrder(false);
       return () => { isActive = false; };
@@ -72,7 +84,7 @@ export default function OrderDetailScreen() {
     return () => {
       isActive = false;
     };
-  }, [id]);
+  }, [id, owner]));
 
   const currentStepIndex = order ? statusSteps.findIndex((step) => step.key === order.statusValue) : -1;
 
@@ -161,7 +173,7 @@ export default function OrderDetailScreen() {
     );
   }
 
-  if (!order) {
+  if (!order || owner === null || loadedOwner !== owner) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-background px-6">
         <Text className="text-foreground text-base font-semibold">{loadError ? "Could not load this order" : "Order not found"}</Text>

@@ -1,7 +1,8 @@
+import { useActiveFocusEffect, useScreenActive } from "@/hooks/useActiveScreen";
 import { useCallback, useMemo, useRef, useState } from "react";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { FlashList } from "@shopify/flash-list";
-import { useRouter, useFocusEffect } from "expo-router";
+import { useRouter } from "expo-router";
 import { Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { getBanners, getBrands, getCategories, getCatalogPreview, getCatalogSnapshot, invalidateCatalog, loadNextCatalogPage, subscribeCatalog, homeCatalogFromProducts } from "@/lib/api";
 import type { Banner, Brand, Category, Product } from "@/lib/data";
@@ -26,10 +27,11 @@ type HomeRow = { id: string; kind: "products"; products: Product[] } | { id: str
 
 export default function HomeScreen() {
   const router = useRouter();
+  const isScreenActive = useScreenActive();
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const returnToSearch = useRef(false);
-  useFocusEffect(useCallback(() => {
+  useActiveFocusEffect(useCallback(() => {
     if (returnToSearch.current) { returnToSearch.current = false; setIsSearchOpen(true); }
   }, []));
   const [banners, setBanners] = useState<Banner[]>([]);
@@ -46,26 +48,27 @@ export default function HomeScreen() {
   const cardWidth = getGridCardWidth(width, layout.productColumns);
   const featured = useMemo(() => homeCatalogFromProducts(catalog.rows.slice(0, 12)), [catalog.rows]);
 
-  useFocusEffect(useCallback(() => {
+  useActiveFocusEffect(useCallback(() => {
     let active = true;
     const unsubscribe = subscribeCatalog(setCatalog);
     void getCatalogPreview().catch(() => undefined).finally(() => { if (active) setIsRefreshing(false); });
-    void refreshRecentlyViewed();
+    void refreshRecentlyViewed(() => active && isScreenActive());
     Promise.all([getBanners(), getCategories(), getBrands()]).then(([nextBanners, nextCategories, nextBrands]) => {
       if (!active) return;
       setBanners(nextBanners); setCategories(nextCategories); setBrands(nextBrands); setMetadataError(false);
     }).catch(() => { if (active) setMetadataError(true); });
     return () => { active = false; unsubscribe(); };
-  }, [retryCount, refreshRecentlyViewed]));
+  }, [retryCount, refreshRecentlyViewed, isScreenActive]));
 
   const openProduct = useCallback((product: Product) => {
     setIsSearchOpen(false);
     router.push({ pathname: "/product/[id]", params: { id: product.id } });
   }, [router]);
   const loadMore = useCallback(() => {
+    if (!isScreenActive()) return;
     const current = getCatalogSnapshot();
     if (!current.loading && !current.complete && !current.error) void loadNextCatalogPage().catch(() => undefined);
-  }, []);
+  }, [isScreenActive]);
   const retry = () => {
     if (catalog.error && catalog.rows.length) void loadNextCatalogPage().catch(() => undefined);
     setRetryCount((count) => count + 1);
@@ -98,7 +101,7 @@ export default function HomeScreen() {
       getItemType={(item) => item.kind}
       renderItem={renderRow}
       refreshing={isRefreshing}
-      onRefresh={() => { if (isRefreshing) return; setIsRefreshing(true); invalidateCatalog(); setRetryCount((count) => count + 1); }}
+      onRefresh={() => { if (isRefreshing) return; setIsRefreshing(true); invalidateCatalog(true); setRetryCount((count) => count + 1); }}
       onEndReached={loadMore}
       onEndReachedThreshold={0.4}
       contentContainerStyle={{ paddingBottom: 88, width: "100%", maxWidth: MAX_CONTENT_WIDTH, alignSelf: "center" }}

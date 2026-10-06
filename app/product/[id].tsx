@@ -1,6 +1,7 @@
+import { useActiveFocusEffect } from "@/hooks/useActiveScreen";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ProductDetails } from "@/components/products/ProductDetails";
@@ -19,7 +20,7 @@ export default function ProductRoute() {
   const [retryCount, setRetryCount] = useState(0);
   const [quantity, setQuantity] = useState(1);
 
-  useEffect(() => {
+  useActiveFocusEffect(useCallback(() => {
     let isActive = true;
     const cached = id ? getProductSnapshot(id) : null;
     setProduct(cached ?? null);
@@ -55,7 +56,7 @@ export default function ProductRoute() {
     return () => {
       isActive = false;
     };
-  }, [id, retryCount]);
+  }, [id, retryCount]));
 
   if (isLoading) {
     return <ProductRouteState label="Loading product" showSpinner />;

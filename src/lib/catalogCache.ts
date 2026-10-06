@@ -40,7 +40,7 @@ export function createProgressiveCatalog<T>(loadPage: (page: number) => Promise<
   }
   return {
     first,
-    resume() { return nextPage > 1 ? Promise.resolve(snapshot.rows) : first(); },
+    resume: first,
     next: loadNext,
     async all(shouldContinue: () => boolean = () => true) {
       const current = generation;
@@ -50,6 +50,6 @@ export function createProgressiveCatalog<T>(loadPage: (page: number) => Promise<
     },
     snapshot() { return snapshot; },
     subscribe(listener: (value: CatalogSnapshot<T>) => void) { listeners.add(listener); listener(snapshot); return () => { listeners.delete(listener); }; },
-    invalidate() { generation++; pending = null; expiresAt = 0; nextPage = 1; publish({ ...snapshot, loading: false, complete: false, error: null }); },
+    invalidate(clearRows = false) { generation++; pending = null; expiresAt = 0; nextPage = 1; publish({ ...snapshot, rows: clearRows ? [] : snapshot.rows, loading: false, complete: false, error: null }); },
   };
 }

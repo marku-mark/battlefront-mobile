@@ -1,7 +1,8 @@
+import { useActiveFocusEffect } from "@/hooks/useActiveScreen";
 import { ProductImage } from "@/components/products/ProductImage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -79,6 +80,8 @@ export default function BuilderScreen() {
   const [buildToDelete, setBuildToDelete] = useState<SavedBuild | null>(null);
   const [builderNotice, setBuilderNotice] = useState<BuilderNotice | null>(null);
   const isSavingBuildRef = useRef(false);
+  const addingBuild = useRef(false);
+  const [isAddingBuild, setIsAddingBuild] = useState(false);
   const builderNoticeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [activeSlot, setActiveSlot] = useState<BuilderSlot | null>(null);
   const [isSavedBuildsOpen, setIsSavedBuildsOpen] = useState(false);
@@ -89,7 +92,7 @@ export default function BuilderScreen() {
   const [hasLoadError, setHasLoadError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
 
-  useFocusEffect(useCallback(() => {
+  useActiveFocusEffect(useCallback(() => {
     let isActive = true;
     setIsLoading(getCatalogSnapshot().rows.length === 0);
     setHasLoadError(false);
@@ -279,14 +282,17 @@ export default function BuilderScreen() {
   }
 
   async function addBuildToCart() {
-    if (selectedProducts.length === 0) return;
+    if (selectedProducts.length === 0 || addingBuild.current) return;
+    addingBuild.current = true; setIsAddingBuild(true);
     let count = 0;
     let addedSubtotal = 0;
-    for (const product of selectedProducts) {
-      if (!await addItem(product)) break;
-      count++; addedSubtotal += product.price;
-    }
-    if (count > 0) setPartsAddedSummary({ count, subtotal: addedSubtotal });
+    try {
+      for (const product of selectedProducts) {
+        if (!await addItem(product)) break;
+        count++; addedSubtotal += product.price;
+      }
+      if (count > 0) setPartsAddedSummary({ count, subtotal: addedSubtotal });
+    } finally { addingBuild.current = false; setIsAddingBuild(false); }
   }
 
   return (
@@ -393,9 +399,9 @@ export default function BuilderScreen() {
               <Pressable accessibilityRole="button" accessibilityLabel="Share build" onPress={() => void shareBuild()} disabled={selectedProducts.length === 0} className="h-12 w-12 items-center justify-center rounded-lg border border-border bg-secondary disabled:opacity-40">
                 <Ionicons name="share-outline" size={19} color={isDark ? "#f8fafc" : "#30343b"} />
               </Pressable>
-              <Pressable accessibilityRole="button" onPress={addBuildToCart} disabled={selectedProducts.length === 0} className="h-12 flex-1 flex-row items-center justify-center gap-2 rounded-lg bg-primary disabled:opacity-40">
+              <Pressable accessibilityRole="button" onPress={addBuildToCart} disabled={selectedProducts.length === 0 || isAddingBuild} accessibilityState={{ disabled: selectedProducts.length === 0 || isAddingBuild, busy: isAddingBuild }} className="h-12 flex-1 flex-row items-center justify-center gap-2 rounded-lg bg-primary disabled:opacity-40">
                 <Ionicons name="cart-outline" size={18} color="#fff" />
-                <Text className="text-primary-foreground text-sm font-bold">Add selected parts to cart</Text>
+                <Text className="text-primary-foreground text-sm font-bold">{isAddingBuild ? "Adding parts..." : "Add selected parts to cart"}</Text>
               </Pressable>
             </View>
           </ScrollView>

@@ -1,6 +1,7 @@
+import { useActiveFocusEffect, useScreenActive } from "@/hooks/useActiveScreen";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
-import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -20,6 +21,7 @@ type SortOrder = "featured" | "price-low" | "price-high";
 
 export default function CategoriesScreen() {
   const router = useRouter();
+  const isScreenActive = useScreenActive();
   const openProduct = useCallback((product: Product) => router.push({ pathname: "/product/[id]", params: { id: product.id } }), [router]);
   const { width, fontScale } = useWindowDimensions();
   const layout = getResponsiveLayout(width, fontScale);
@@ -58,23 +60,23 @@ export default function CategoriesScreen() {
     setSelectedBrandId(brandId ?? null);
   }, [brandId, categoryId]);
 
-  useFocusEffect(useCallback(() => {
+  useActiveFocusEffect(useCallback(() => {
     const unsubscribe = catalog.pager.subscribe((value) => setObserved({ catalog, snapshot: value }));
     void catalog.pager.resume().catch(() => undefined);
     return unsubscribe;
   }, [catalog]));
 
-  useEffect(() => {
+  useActiveFocusEffect(useCallback(() => {
     let active = true;
     setMetadataError(false);
     Promise.all([getCategories(), getBrands()]).then(([loadedCategories, loadedBrands]) => {
       if (active) { setCategories(loadedCategories); setBrands(loadedBrands); }
     }).catch(() => { if (active) setMetadataError(true); });
     return () => { active = false; };
-  }, [retryCount]);
+  }, [retryCount]));
 
   function refreshProducts() {
-    if (isRefreshing) return;
+    if (!isScreenActive() || isRefreshing) return;
     setIsRefreshing(true);
     catalog.pager.invalidate();
     void catalog.pager.first().catch(() => undefined).finally(() => setIsRefreshing(false));
@@ -83,6 +85,11 @@ export default function CategoriesScreen() {
   const selectedCategories = useMemo(() => categories.filter((category) => selectedCategoryIds.includes(category.id)), [categories, selectedCategoryIds]);
 
   const cardWidth = getGridCardWidth(width, layout.productColumns);
+  const renderProduct = useCallback(({ item }: { item: Product }) => (
+    <View style={{ flex: 1, paddingHorizontal: 6, paddingBottom: 12 }}>
+      <ProductCard product={item} width={cardWidth} onPress={openProduct} />
+    </View>
+  ), [cardWidth, openProduct]);
   const hasActiveFilters = selectedCategoryIds.length > 0 || Boolean(selectedBrandId) || priceFilter !== "all" || sortOrder !== "featured";
   const activeFilterCount = selectedCategoryIds.length + Number(Boolean(selectedBrandId)) + Number(priceFilter !== "all") + Number(sortOrder !== "featured");
 
@@ -115,6 +122,7 @@ export default function CategoriesScreen() {
   }
 
   function loadMoreProducts() {
+    if (!isScreenActive() || productQuery.trim() !== debouncedQuery.trim()) return;
     const current = catalog.pager.snapshot();
     if (!current.complete && !current.loading && !current.error) void catalog.pager.next().catch(() => undefined);
   }
@@ -236,15 +244,7 @@ export default function CategoriesScreen() {
             <CatalogState icon="search-outline" title="No products match these filters" message="Remove a filter or reset the selection." actionLabel="Clear all" onAction={resetFilters} />
           )
         }
-        renderItem={({ item }) => (
-          <View style={{ flex: 1, paddingHorizontal: 6, paddingBottom: 12 }}>
-            <ProductCard
-              product={item}
-              width={cardWidth}
-              onPress={openProduct}
-            />
-          </View>
-        )}
+        renderItem={renderProduct}
       />
 
       <Modal

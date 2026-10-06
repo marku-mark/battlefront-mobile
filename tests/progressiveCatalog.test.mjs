@@ -107,6 +107,33 @@ test("subscribers receive progressive batches and can unsubscribe", async () => 
   assert.equal(updates.length, 5);
 });
 
+test("account changes clear private paginated rows immediately and ignore late pages", async () => {
+  let finish;
+  const cache = createProgressiveCatalog(async (number) => number === 1 ? page(["private order"], 1, 2) : new Promise((resolve) => { finish = resolve; }));
+  await cache.resume();
+  const pending = cache.next();
+  cache.invalidate(true);
+  assert.deepEqual(cache.snapshot().rows, []);
+  finish(page(["old account page"], 2, 2));
+  await pending;
+  assert.deepEqual(cache.snapshot().rows, []);
+});
+
+test("an expired screen keeps its cached rows visible during refresh and on failure", async () => {
+  let now = 0;
+  let fail;
+  let calls = 0;
+  const cache = createProgressiveCatalog(async () => ++calls === 1 ? page(["visible"], 1, 1) : new Promise((_resolve, reject) => { fail = reject; }), 100, () => now);
+  await cache.resume();
+  now = 100;
+  const refresh = cache.resume();
+  assert.deepEqual(cache.snapshot().rows, ["visible"]);
+  assert.equal(cache.snapshot().loading, true);
+  fail(new Error("Offline"));
+  await assert.rejects(refresh, /Offline/);
+  assert.deepEqual(cache.snapshot().rows, ["visible"]);
+});
+
 
 test("preview loads just one page and concurrent next-page requests are shared", async () => {
   const calls = [];
@@ -140,15 +167,15 @@ test("a failed demand-loaded page can be retried without losing earlier rows", a
 });
 
 
-test("returning to a screen retains loaded pages until an explicit refresh", async () => {
+test("returning reuses fresh pages but refreshes stale data without eagerly loading more", async () => {
   let now = 0;
   let calls = 0;
   const cache = createProgressiveCatalog(async (number) => { calls++; return page([number], number, 2); }, 60_000, () => now);
   await cache.first(); await cache.next();
-  now = 120_000;
+  now = 59_999;
   assert.deepEqual(await cache.resume(), [1, 2]);
   assert.equal(calls, 2);
-  cache.invalidate();
+  now = 60_000;
   assert.deepEqual(await cache.resume(), [1]);
   assert.equal(calls, 3);
 });

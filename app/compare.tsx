@@ -1,7 +1,8 @@
+import { useActiveFocusEffect } from "@/hooks/useActiveScreen";
 import { ProductImage } from "@/components/products/ProductImage";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LoadingState } from "@/components/layout/LoadingState";
@@ -30,7 +31,7 @@ export default function CompareScreen() {
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState(false);
 
-  useEffect(() => {
+  useActiveFocusEffect(useCallback(() => {
     let active = true;
     if (!productId) { setIsLoading(false); return; }
     getProductById(productId).then((product) => {
@@ -39,9 +40,9 @@ export default function CompareScreen() {
       setSelectedIds((current) => current.includes(product.id) ? current : [product.id, ...current].slice(0, MAX_COMPARE_ITEMS));
     }).catch(() => { if (active) setHasError(true); }).finally(() => { if (active) setIsLoading(false); });
     return () => { active = false; };
-  }, [productId]);
+  }, [productId]));
 
-  useEffect(() => {
+  useActiveFocusEffect(useCallback(() => {
     let active = true;
     setSearchError(false); setQueryResults([]);
     if (query.trim().length < 2) { setIsSearching(false); return; }
@@ -54,7 +55,7 @@ export default function CompareScreen() {
       }).catch(() => { if (active) setSearchError(true); }).finally(() => { if (active) setIsSearching(false); });
     }, 400);
     return () => { active = false; clearTimeout(timer); };
-  }, [query]);
+  }, [query]));
   const selectedProducts = selectedIds
     .map((selectedId) => products.find((product) => product.id === selectedId))
     .filter((product): product is Product => Boolean(product));

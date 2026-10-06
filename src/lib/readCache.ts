@@ -13,10 +13,10 @@ export function createReadCache<T>(maxAgeMs: number, now = Date.now, maxEntries 
       if (!entries.get(key)?.pending) entries.set(key, { value, expiresAt: now() + maxAgeMs });
       trim(key);
     },
-    read(key: string, load: () => Promise<T>): Promise<T> {
+    read(key: string, load: () => Promise<T>, force = false): Promise<T> {
       let entry = entries.get(key);
       if (entry?.pending) return entry.pending;
-      if (entry && entry.value !== undefined && now() < entry.expiresAt) return Promise.resolve(entry.value);
+      if (!force && entry && entry.value !== undefined && now() < entry.expiresAt) return Promise.resolve(entry.value);
       if (!entry) {
         entry = { expiresAt: 0 };
         entries.set(key, entry);
@@ -41,12 +41,12 @@ export function createReadCache<T>(maxAgeMs: number, now = Date.now, maxEntries 
   };
 }
 
-export async function loadSelectedProducts<T>(ids: string[], load: (id: string) => Promise<T | null>, concurrency = 3): Promise<T[]> {
+export async function loadSelectedProducts<T>(ids: string[], load: (id: string) => Promise<T | null>, concurrency = 3, shouldContinue: () => boolean = () => true): Promise<T[]> {
   const uniqueIds = [...new Set(ids)];
   const rows: (T | null)[] = new Array(uniqueIds.length).fill(null);
   let next = 0;
   await Promise.all(Array.from({ length: Math.min(concurrency, uniqueIds.length) }, async () => {
-    while (next < uniqueIds.length) {
+    while (next < uniqueIds.length && shouldContinue()) {
       const index = next++;
       rows[index] = await load(uniqueIds[index]);
     }

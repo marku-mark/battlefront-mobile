@@ -2,6 +2,21 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { ApiError, collectPages, createApiClient, retryRateLimitedRead, createPacedRead } from "../src/lib/apiClient.ts";
 
+test("requests use the selected transport with bearer authentication", async (t) => {
+  const globalFetch = t.mock.method(globalThis, "fetch", async () => { throw new Error("Wrong transport"); });
+  let calls = 0;
+  const send = async (url, options) => {
+    calls++;
+    assert.equal(url, "http://backend.test/api/v1/cart");
+    assert.equal(options.headers.get("Authorization"), "Bearer customer-token");
+    return Response.json({ data: { items: [] } });
+  };
+  const request = createApiClient("http://backend.test/api/v1", () => "customer-token", undefined, Date.now, send);
+  assert.deepEqual(await request("cart"), { data: { items: [] } });
+  assert.equal(calls, 1);
+  assert.equal(globalFetch.mock.callCount(), 0);
+});
+
 test("requests use the configured API root and bearer authentication", async (t) => {
   t.mock.method(globalThis, "fetch", async (url, options) => {
     assert.equal(url, "http://backend.test/api/v1/cart");

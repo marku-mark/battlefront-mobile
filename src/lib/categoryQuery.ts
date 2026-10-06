@@ -14,12 +14,12 @@ export function categoryQueryString(filters: CategoryQuery): string {
 
 export function createCategoryCachePool<T>(create: (key: string) => T, limit = 20) {
   const entries = new Map<string, T>();
-  return (key: string): T => {
+  return Object.assign((key: string): T => {
     const existing = entries.get(key);
     if (existing !== undefined) { entries.delete(key); entries.set(key, existing); return existing; }
     const value = create(key);
     entries.set(key, value);
     if (entries.size > limit) entries.delete(entries.keys().next().value!);
     return value;
-  };
+  }, { invalidate(invalidate: (entry: T) => void) { entries.forEach(invalidate); } });
 }

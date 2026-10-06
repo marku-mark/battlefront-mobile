@@ -1,6 +1,7 @@
 import { createReadCache } from "./readCache";
 import { apiRequest, ApiError, invalidateCatalog, onSessionChange, getSessionRevision } from "./api";
-import { collectPages } from "./apiClient";
+import type { Page } from "./apiClient";
+import { createProgressiveCatalog } from "./catalogCache";
 import { Platform } from "react-native";
 import { File } from "expo-file-system";
 import { createOrderSubmission, type OrderInput } from "./orderSubmission";
@@ -16,21 +17,23 @@ function mapOrder(row: BackendOrder): OrderRecord {
     productLines: row.items?.map((item) => ({ productId: String(item.product.id), quantity: item.quantity, variant: null })),
     canCancel: false, canReturn: false, canResubmitProof: row.payment.can_resubmit_proof ?? false, paymentNotice: row.payment.notice };
 }
-const ordersCache = createReadCache<OrderRecord[]>(30_000, Date.now, 1);
 const orderCache = createReadCache<OrderRecord | null>(30_000);
-function clearOrders() { ordersCache.clear(); orderCache.clear(); }
-onSessionChange(clearOrders);
-export function getOrdersSnapshot() { return ordersCache.peek("orders"); }
-export function getOrderSnapshot(id: string) { return orderCache.peek(id); }
-export function getOrders(): Promise<OrderRecord[]> {
+const ordersCache = createProgressiveCatalog(async (page) => {
   const revision = getSessionRevision();
-  return ordersCache.read("orders", async () => {
-    const request = <T>(path: string): Promise<T> => {
-      if (revision !== getSessionRevision()) return Promise.reject(new Error("Your account changed. Reopen orders."));
-      return apiRequest<T>(path);
-    };
-    return (await collectPages<BackendOrder>(request, "orders")).map(mapOrder);
-  });
+  const result = await apiRequest<Page<BackendOrder>>(`orders?page=${page}`);
+  if (revision !== getSessionRevision()) throw new Error("Your account changed. Reopen orders.");
+  return { ...result, data: result.data.map(mapOrder) };
+}, 30_000);
+function clearOrders() { ordersCache.invalidate(true); orderCache.clear(); }
+onSessionChange(clearOrders);
+export function getOrdersSnapshot() { const snapshot = ordersCache.snapshot(); return snapshot.rows.length || snapshot.complete ? snapshot.rows : undefined; }
+export const subscribeOrders = ordersCache.subscribe;
+export const getOrdersPageSnapshot = ordersCache.snapshot;
+export const loadNextOrdersPage = ordersCache.next;
+export function getOrderSnapshot(id: string) { return orderCache.peek(id); }
+export function getOrders(force = false): Promise<OrderRecord[]> {
+  if (force && !ordersCache.snapshot().loading) ordersCache.invalidate();
+  return ordersCache.resume();
 }
 export function getOrderById(id: string): Promise<OrderRecord | null> {
   return orderCache.read(id, async () => {
@@ -44,10 +47,12 @@ const orderSubmission = createOrderSubmission<BackendOrder>(apiRequest, Platform
   return file;
 });
 export async function placeOrder(input: OrderInput): Promise<OrderRecord> {
+  const revision = getSessionRevision();
   const row = await orderSubmission.placeOrder(input);
-  clearOrders();
+  const order = mapOrder(row);
+  if (revision === getSessionRevision()) { clearOrders(); orderCache.seed(order.id, order); }
   invalidateCatalog();
-  return mapOrder(row);
+  return order;
 }
 export async function resubmitPaymentProof(id: string, proof: { uri: string; name: string; type: string }): Promise<OrderRecord> {
   const revision = getSessionRevision();

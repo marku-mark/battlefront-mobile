@@ -2,10 +2,11 @@ import { ProductImage } from "@/components/products/ProductImage";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View, useWindowDimensions } from "react-native";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useActiveFocusEffect } from "@/hooks/useActiveScreen";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MockSignInSheet } from "@/components/account/MockSignInSheet";
-import { useCart, type CartItem } from "@/hooks/useCart";
+import { useCart, useCartActions, type CartItem } from "@/hooks/useCart";
 import { useSession } from "@/hooks/useSession";
 import { useWishlist } from "@/hooks/useWishlist";
 import { ScreenHeader } from "@/components/layout/ScreenHeader";
@@ -23,7 +24,8 @@ export default function CartScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const layout = getResponsiveLayout(width);
-  const { items, itemCount, subtotal, addItem, updateQuantity, removeItem, clearCart, refreshCart, conflictCount, error, isUpdating, isLoading: isCartLoading } = useCart();
+  const { items, itemCount, subtotal, addItem, updateQuantity, removeItem, clearCart, conflictCount, error, isUpdating, isLoading: isCartLoading } = useCart();
+  const { refreshCart } = useCartActions();
   const { session, isHydrated } = useSession();
   const { isWishlisted, toggleWishlist } = useWishlist();
   const [removedItem, setRemovedItem] = useState<CartItem | null>(null);
@@ -33,6 +35,9 @@ export default function CartScreen() {
   const total = subtotal;
   const actionPending = useRef(false);
   const customerId = session.mode === "customer" ? session.user.id : null;
+  useActiveFocusEffect(useCallback(() => {
+    if (customerId !== null) void refreshCart(false).catch(() => undefined);
+  }, [customerId, refreshCart]));
   const customerRef = useRef(customerId);
   customerRef.current = customerId;
   useEffect(() => { setRemovedItem(null); setIsClearConfirmOpen(false); }, [customerId]);

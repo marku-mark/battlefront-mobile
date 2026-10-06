@@ -16,6 +16,19 @@ test('filter cache keeps recently visited selections and evicts oldest entries',
   const a=pool('a'); a.scrollOffset=240; pool('b'); assert.equal(pool('a'),a); pool('c');
   assert.equal(pool('a').scrollOffset,240); assert.notEqual(pool('b'),pool('c'));
 });
+
+test('catalog invalidation refreshes every retained filter while preserving scroll positions', async () => {
+  let revision = 0;
+  const pool = createCategoryCachePool(key => ({ pager: createProgressiveCatalog(async () => ({ data: [key + revision], meta: { last_page: 1 } })), scrollOffset: 240 }));
+  const first = pool('first');
+  const second = pool('second');
+  await first.pager.resume(); await second.pager.resume();
+  revision++;
+  pool.invalidate(entry => entry.pager.invalidate());
+  assert.deepEqual(await first.pager.resume(), ['first1']);
+  assert.deepEqual(await second.pager.resume(), ['second1']);
+  assert.equal(pool('first').scrollOffset, 240);
+});
 test('rapid switches isolate late responses and cached revisits avoid extra requests', async () => {
   const resolvers={}; let requests=0;
   const pool=createCategoryCachePool(key=>createProgressiveCatalog(page=>{requests++;return new Promise(resolve=>{resolvers[key]=()=>resolve({data:[key+page],meta:{last_page:2}});});}));
