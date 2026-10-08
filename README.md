@@ -1,101 +1,93 @@
-# Battlefront Mobile — Home Screen
+# Battlefront Mobile
 
-React Native (Expo + Expo Router + NativeWind) rebuild of the Battlefront
-Computer Trading storefront, starting with the Home screen. Structured like
-a Shopee-style shopping app: sticky header, promo carousel, category chips,
-flash deals with a countdown, trust bar, recommended picks, product grid,
-brand strip, and a bottom tab bar (Home / Categories / Cart / Account).
+React Native customer app built with Expo, Expo Router, and NativeWind. Laravel
+is the source of truth for customer accounts, catalog, cart, checkout, orders,
+branches, chatbot, and product recommendations. The app consumes Laravel's
+`/api/v1` JSON API.
 
 ## Requirements
 
-- Node.js 18+ (LTS recommended)
-- npm (or yarn/pnpm if you prefer — adjust commands accordingly)
-- The **Expo Go** app on your phone (iOS App Store / Google Play), *or*
-  Xcode (iOS simulator) / Android Studio (Android emulator) if you want to
-  run on a simulator instead of a physical device
+- Node.js 18 or newer and npm
+- Expo Go, or an iOS/Android development environment
+- A reachable Battlefront Laravel backend
 
-## 1. Install dependencies
+## Setup
 
-From the project root:
+Install dependencies from the project root:
 
 ```bash
 npm install
 ```
 
-## 2. Start the dev server
+Set `EXPO_PUBLIC_API_URL` in a local `.env` file to the Laravel API root,
+including `/api/v1`:
+
+```dotenv
+EXPO_PUBLIC_API_URL=http://<backend-computer-address>:8000/api/v1
+```
+
+When using a phone, use the backend computer's reachable LAN address. Do not
+use `localhost` or a computer-only `.test` hostname. The backend must accept
+connections from the phone on the same network. The setup and device validation
+steps are documented in `docs/MOBILE_API_HANDOFF.md` and
+`docs/MOBILE_INTEGRATION_VALIDATION.md` in the `battlefront-capstone` project.
+Keep `.env` local and do not ship a development server address in a production
+build.
+
+Start Expo:
 
 ```bash
 npx expo start
 ```
 
-This opens the Expo Dev Tools in your terminal with a QR code.
+Scan the QR code with Expo Go, or use the Expo terminal shortcuts to launch an
+available simulator. Press `w` for a web preview; native-device validation is
+still required for mobile integration.
 
-## 3. Open the app
+## App structure
 
-Pick whichever is easiest:
-
-- **Physical phone (fastest way to see it):** Install **Expo Go** from the
-  App Store/Play Store, then scan the QR code shown in the terminal
-  (Camera app on iOS, or the Expo Go app's scanner on Android).
-- **iOS Simulator (Mac only):** press `i` in the terminal after `expo start`
-  (requires Xcode installed).
-- **Android Emulator:** press `a` in the terminal after `expo start`
-  (requires Android Studio with an emulator configured).
-- **Web preview (quick sanity check, not the real target):** press `w`.
-
-## Project structure
-
-```
+```text
 app/
-  _layout.tsx            ← root layout (SafeAreaProvider, status bar)
-  (tabs)/
-    _layout.tsx           ← bottom tab navigator (Home/Categories/Cart/Account)
-    index.tsx             ← Home screen (what we just built)
-    categories.tsx         ← placeholder
-    cart.tsx                ← placeholder
-    account.tsx              ← placeholder
+  (tabs)/              Home, catalog, cart, account
+  checkout.tsx         Checkout and order placement
+  orders.tsx           Order history
+  orders/[id].tsx      Order details and payment-proof resubmission
+  product/[id].tsx     Product details
+  recommendations.tsx  Behavior-based recommendation feed
 src/
-  components/
-    layout/Header.tsx      ← logo, search bar, cart badge
-    sections/               ← PromoBanners, Categories, FlashDeals, TrustBar,
-                               SulitPicks, ProductCard, ProductGrid, NewArrivals, Brands
-  hooks/useCountdown.ts     ← flash-deal countdown timer
-  lib/
-    data.ts                 ← hardcoded sample data
-    api.ts                   ← async stub functions — swap these for real
-                               fetch calls later without touching any screen
-  theme/theme.ts             ← shadow/spacing constants (colors live in
-                               tailwind.config.js as NativeWind tokens)
-tailwind.config.js            ← Battlefront color tokens (background, primary, etc.)
-global.css                     ← NativeWind entry point
+  hooks/               Session, cart, wishlist, and screen state
+  lib/backend.ts       Laravel API requests and response mapping
+  lib/accountApi.ts    Registration, login, and profile requests
+  lib/orders.ts        Order and payment-proof API requests
+  components/          Shared UI and feature components
+  theme/               App theme
 ```
 
-## Notes on this build
+## Backend and local-only features
 
-- **Styling:** NativeWind (Tailwind classes) throughout — `bg-background`,
-  `text-foreground`, `bg-primary`, `border-border`, etc. All resolve to the
-  Battlefront dark palette defined once in `tailwind.config.js`. No hardcoded
-  hex values in components.
-- **Data:** hardcoded in `src/lib/data.ts`, accessed only through the async
-  functions in `src/lib/api.ts` (`getCategories()`, `getFlashDeals()`, etc.).
-  When a real backend is ready, only `api.ts` needs to change.
-- **Only the Home tab is fully built.** Categories/Cart/Account are minimal
-  placeholder screens so the tab bar is navigable — each will get its own
-  full build in a later pass, per the skill's one-screen-at-a-time workflow.
-- **Product images** use placeholder Unsplash URLs — swap for real product
-  photography when available.
+- Product, category, branch, account, recommendation, cart, checkout, order,
+  and chatbot data come from the backend. Backend prices and cart totals are
+  authoritative.
+- Signed-in catalog searches and product detail requests provide the backend
+  with recommendation activity when the customer's profile preferences allow
+  it. Account settings expose those recommendation privacy preferences.
+- The mobile API is customer-facing. Inventory administration, payment
+  verification, reports, forecasting, and chatbot knowledge management remain
+  in the web application.
+- Wishlist items, extra saved addresses, recently viewed display, and
+  notification read state are stored locally. The backend does not provide
+  mobile endpoints for syncing those features or for push notifications.
 
 ## Troubleshooting
 
-- If Metro complains about NativeWind/CSS not resolving, stop the server and
-  restart with a clean cache: `npx expo start -c`
-- If icons don't render, confirm `@expo/vector-icons` installed correctly
-  (`npm ls @expo/vector-icons`).
+- If the app cannot reach Laravel, first check the configured URL from the
+  device. It must include `/api/v1`, and the phone must be able to reach the
+  backend computer over the network.
+- If Metro has stale NativeWind output, restart with `npx expo start -c`.
+- If icons do not render, check `npm ls @expo/vector-icons`.
 
-## Philippine Address Data
+## Philippine address data
 
-The address selectors use the Philippine Standard Geographic Code (PSGC) data
-from 30 June 2026, distributed by `@ianlabicani/geoph-lite`. PSGC data is
-published by the Philippine Statistics Authority and licensed under
-[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Source:
-[Philippine Statistics Authority PSGC](https://psa.gov.ph/classification/psgc/index).
+Address selectors use Philippine Standard Geographic Code data distributed by
+`@aivangogh/ph-address`. Refer to that package's license and source for its
+data provenance.

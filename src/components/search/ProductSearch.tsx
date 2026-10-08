@@ -7,7 +7,7 @@ import type { Product } from "@/lib/data";
 import { ProductCard } from "@/components/sections/ProductCard";
 import { LoadingMoreFooter } from "@/components/layout/LoadingMoreFooter";
 import { getGridCardWidth, getResponsiveLayout, MAX_CONTENT_WIDTH } from "@/lib/responsive";
-import { searchProductPage } from "@/lib/api";
+import { cancelPendingProductSearches, searchProductPage } from "@/lib/api";
 import { createProgressiveCatalog } from "@/lib/catalogCache";
 import { useTheme } from "@/theme/ThemeProvider";
 import { useActiveFocusEffect, useScreenActive } from "@/hooks/useActiveScreen";
@@ -28,6 +28,7 @@ export function ProductSearch({ visible, products, onClose, onSelectProduct }: P
   const [snapshot, setSnapshot] = useState(cache.snapshot);
   const [resultTerm, setResultTerm] = useState(term);
   const waiting = query.trim() !== term || resultTerm !== term;
+  const close = useCallback(() => { cancelPendingProductSearches(); onClose(); }, [onClose]);
 
   useActiveFocusEffect(useCallback(() => {
     if (!visible) return;
@@ -52,11 +53,11 @@ export function ProductSearch({ visible, products, onClose, onSelectProduct }: P
   const searching = waiting || snapshot.loading;
   const results = term.length >= 2 ? (resultTerm === term ? snapshot.rows : []) : products.slice(0, 12);
 
-  return <Modal visible={visible} animationType={reducedMotion ? "none" : "slide"} onRequestClose={onClose}>
+  return <Modal visible={visible} animationType={reducedMotion ? "none" : "slide"} onRequestClose={close}>
     <SafeAreaView className="flex-1 bg-background">
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <View className="self-center w-full flex-row items-center gap-2 px-3 py-3 border-b border-border" style={{ maxWidth: MAX_CONTENT_WIDTH }}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Close product search" onPress={onClose} className="w-12 h-12 items-center justify-center"><Ionicons name="arrow-back" size={22} color={colors.icon} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="Close product search" onPress={close} className="w-12 h-12 items-center justify-center"><Ionicons name="arrow-back" size={22} color={colors.icon} /></Pressable>
           <View className="flex-1 flex-row items-center gap-2 bg-secondary rounded-xl px-3 min-h-12 border border-border">
             <Ionicons name="search-outline" size={18} color={colors.muted} />
             <TextInput autoFocus value={query} onChangeText={setQuery} maxLength={255} placeholder="Search products or brands" placeholderTextColor={colors.muted} accessibilityLabel="Search products or brands" autoCapitalize="none" returnKeyType="search" className="flex-1 text-foreground text-base py-2" />

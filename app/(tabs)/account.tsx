@@ -1,6 +1,6 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
-import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Modal, Pressable, ScrollView, Switch, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { useEffect, useRef, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MockSignInSheet } from "@/components/account/MockSignInSheet";
@@ -42,6 +42,9 @@ export default function AccountScreen() {
   const [profileName, setProfileName] = useState("");
   const [profileEmail, setProfileEmail] = useState("");
   const [profileAddress, setProfileAddress] = useState("");
+  const [personalizedRecommendationsEnabled, setPersonalizedRecommendationsEnabled] = useState(true);
+  const [searchRecommendationsEnabled, setSearchRecommendationsEnabled] = useState(true);
+  const [productViewRecommendationsEnabled, setProductViewRecommendationsEnabled] = useState(true);
   const [profileError, setProfileError] = useState("");
   const [isProfileLoading, setIsProfileLoading] = useState(false);
   const [isProfileLoaded, setIsProfileLoaded] = useState(false);
@@ -65,6 +68,9 @@ export default function AccountScreen() {
       const user = await refreshProfile();
       if (getLocalUserId() !== owner) return;
       setProfileName(user.name); setProfileEmail(user.email); setProfileAddress(user.default_delivery_address ?? "");
+      setPersonalizedRecommendationsEnabled(user.personalized_recommendations_enabled);
+      setSearchRecommendationsEnabled(user.search_recommendations_enabled);
+      setProductViewRecommendationsEnabled(user.product_view_recommendations_enabled);
       setIsProfileLoaded(true);
     } catch (reason) { if (getLocalUserId() === owner) setProfileError(reason instanceof Error ? reason.message : "Could not load your profile."); }
     finally { if (getLocalUserId() === owner) setIsProfileLoading(false); }
@@ -75,7 +81,14 @@ export default function AccountScreen() {
     if (!profileName.trim() || !profileEmail.trim()) { setProfileError("Enter your name and email address."); return; }
     setIsSavingProfile(true); setProfileError("");
     try {
-      await saveProfile({ name: profileName, email: profileEmail, default_delivery_address: profileAddress.trim() || null }, customerId);
+      await saveProfile({
+        name: profileName,
+        email: profileEmail,
+        default_delivery_address: profileAddress.trim() || null,
+        personalized_recommendations_enabled: personalizedRecommendationsEnabled,
+        search_recommendations_enabled: searchRecommendationsEnabled,
+        product_view_recommendations_enabled: productViewRecommendationsEnabled,
+      }, customerId);
       if (getLocalUserId() === customerId) setSelectedUtility(null);
     } catch (reason) { if (getLocalUserId() === customerId) setProfileError(reason instanceof Error ? reason.message : "Could not save your profile."); }
     finally { if (getLocalUserId() === customerId) setIsSavingProfile(false); }
@@ -481,6 +494,22 @@ export default function AccountScreen() {
                   <Text className="text-foreground text-sm font-semibold mt-4">Default delivery address</Text>
                   <TextInput accessibilityLabel="Default delivery address" value={profileAddress} onChangeText={setProfileAddress} editable={!isSavingProfile} multiline maxLength={255} className="mt-2 rounded-lg border border-border bg-secondary px-3 py-3 text-foreground text-sm" />
                   <Text className="text-muted-foreground text-xs mt-2">Used to pre-fill delivery checkout. Leave empty to clear it.</Text>
+                  <View className="mt-5 rounded-xl border border-border bg-background p-3">
+                    <Text className="text-foreground text-sm font-semibold">Recommendation privacy</Text>
+                    <Text className="text-muted-foreground text-xs leading-5 mt-1">Choose which activity Battlefront may use to personalize product suggestions. Turning off a source deletes its saved recommendation history.</Text>
+                    <View className="mt-3 flex-row items-center justify-between gap-3">
+                      <View className="flex-1"><Text className="text-foreground text-sm">Personalized recommendations</Text><Text className="text-muted-foreground text-xs mt-1">Use your available shopping activity for suggestions.</Text></View>
+                      <Switch accessibilityRole="switch" accessibilityLabel="Personalized recommendations" value={personalizedRecommendationsEnabled} onValueChange={setPersonalizedRecommendationsEnabled} disabled={isSavingProfile} />
+                    </View>
+                    <View className="mt-3 flex-row items-center justify-between gap-3">
+                      <View className="flex-1"><Text className="text-foreground text-sm">Use catalog searches</Text><Text className="text-muted-foreground text-xs mt-1">Search activity can inform suggestions.</Text></View>
+                      <Switch accessibilityRole="switch" accessibilityLabel="Use catalog searches for recommendations" value={searchRecommendationsEnabled} onValueChange={setSearchRecommendationsEnabled} disabled={isSavingProfile} />
+                    </View>
+                    <View className="mt-3 flex-row items-center justify-between gap-3">
+                      <View className="flex-1"><Text className="text-foreground text-sm">Use product views</Text><Text className="text-muted-foreground text-xs mt-1">Viewed products can inform suggestions.</Text></View>
+                      <Switch accessibilityRole="switch" accessibilityLabel="Use product views for recommendations" value={productViewRecommendationsEnabled} onValueChange={setProductViewRecommendationsEnabled} disabled={isSavingProfile} />
+                    </View>
+                  </View>
                   <Pressable disabled={isSavingProfile || !isProfileLoaded} onPress={() => void submitProfile()} className="mt-4 rounded-xl bg-primary items-center py-3"><Text className="text-primary-foreground text-sm font-semibold">{isSavingProfile ? "Saving..." : "Save changes"}</Text></Pressable>
                 </>}
                 {profileError ? <Text accessibilityRole="alert" className="text-danger text-xs mt-3">{profileError}</Text> : null}

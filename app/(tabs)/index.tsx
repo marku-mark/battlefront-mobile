@@ -4,8 +4,9 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { FlashList } from "@shopify/flash-list";
 import { useRouter } from "expo-router";
 import { Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
-import { getBanners, getBrands, getCategories, getCatalogPreview, getCatalogSnapshot, invalidateCatalog, loadNextCatalogPage, subscribeCatalog, homeCatalogFromProducts } from "@/lib/api";
+import { getBanners, getBrands, getCategories, getCatalogPreview, getCatalogSnapshot, getBehavioralRecommendations, getSessionRevision, invalidateCatalog, loadNextCatalogPage, recordRecommendationInteraction, subscribeCatalog, homeCatalogFromProducts } from "@/lib/api";
 import type { Banner, Brand, Category, Product } from "@/lib/data";
+import type { BehavioralRecommendation } from "@/lib/api";
 import { Header } from "@/components/layout/Header";
 import { PromoBanners } from "@/components/sections/PromoBanners";
 import { Categories } from "@/components/sections/Categories";
@@ -38,6 +39,8 @@ export default function HomeScreen() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [catalog, setCatalog] = useState(getCatalogSnapshot);
+  const [recommendations, setRecommendations] = useState<BehavioralRecommendation[]>([]);
+  const recommendationOwnerRevision = useRef(getSessionRevision());
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [metadataError, setMetadataError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
@@ -52,6 +55,16 @@ export default function HomeScreen() {
     let active = true;
     const unsubscribe = subscribeCatalog(setCatalog);
     void getCatalogPreview().catch(() => undefined).finally(() => { if (active) setIsRefreshing(false); });
+    const ownerRevision = getSessionRevision();
+    void getBehavioralRecommendations().then((rows) => {
+      if (!active) return;
+      recommendationOwnerRevision.current = ownerRevision;
+      const visibleRows = rows.slice(0, 6);
+      setRecommendations(visibleRows);
+      visibleRows.slice(0, 3).forEach((row, index) => {
+        void recordRecommendationInteraction({ productId: row.product.id, eventType: "impression", placement: "home", position: index + 1, reasonCode: row.reasons[0]?.code, sessionRevision: ownerRevision }).catch(() => undefined);
+      });
+    }).catch(() => { if (active) setRecommendations([]); });
     void refreshRecentlyViewed(() => active && isScreenActive());
     Promise.all([getBanners(), getCategories(), getBrands()]).then(([nextBanners, nextCategories, nextBrands]) => {
       if (!active) return;
@@ -64,6 +77,11 @@ export default function HomeScreen() {
     setIsSearchOpen(false);
     router.push({ pathname: "/product/[id]", params: { id: product.id } });
   }, [router]);
+  const openRecommendedProduct = useCallback((product: Product, position: number) => {
+    const recommendation = recommendations.find((row) => row.product.id === product.id);
+    void recordRecommendationInteraction({ productId: product.id, eventType: "click", placement: "home", position, reasonCode: recommendation?.reasons[0]?.code, sessionRevision: recommendationOwnerRevision.current }).catch(() => undefined);
+    openProduct(product);
+  }, [openProduct, recommendations]);
   const loadMore = useCallback(() => {
     if (!isScreenActive()) return;
     const current = getCatalogSnapshot();
@@ -109,7 +127,8 @@ export default function HomeScreen() {
         {(catalog.error || metadataError) && <View className="mx-4 mt-4 border border-border bg-card p-4"><Text accessibilityLiveRegion="polite" className="text-danger text-sm">{catalog.error?.message ?? "Some browsing options could not be refreshed."}</Text><Pressable accessibilityRole="button" onPress={retry} className="min-h-12 justify-center"><Text className="text-primary font-semibold">Try again</Text></Pressable></View>}
         <Categories categories={categories} onBrowseAll={() => router.navigate("/categories")} onSelect={(category) => router.push({ pathname: "/categories", params: { categoryId: category.id } })} />
         {cartItems.length > 0 && <ContinueCartBanner itemCount={itemCount} subtotal={subtotal} onPress={() => router.navigate("/cart")} />}
-        {featured.flashDeals.length ? <FlashDeals products={featured.flashDeals.slice(0, 6)} onSelectProduct={openProduct} /> : <SulitPicks products={featured.sulitPicks.slice(0, 6)} onSelectProduct={openProduct} />}
+        {featured.flashDeals.length ? <FlashDeals products={featured.flashDeals.slice(0, 6)} onSelectProduct={openProduct} /> : null}
+        {recommendations.length > 0 && <SulitPicks products={recommendations.map((row) => row.product)} title="Recommended for you" onSelectRecommendedProduct={openRecommendedProduct} />}
         <View className="px-4 mt-6 mb-3"><Text accessibilityRole="header" className="text-foreground text-lg font-bold">Browse products</Text></View>
       </View>}
       ListEmptyComponent={catalog.loading ? <View><LoadingCategories /><LoadingProductRail /></View> : !catalog.error ? <View className="px-6 py-12"><Text className="text-foreground text-base">No products available</Text><Text className="text-muted-foreground mt-2">Pull down to refresh the catalog.</Text></View> : null}

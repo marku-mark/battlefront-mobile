@@ -57,15 +57,17 @@ export function createApiClient(baseUrl: string, getToken: () => string | null =
 
 export type Page<T> = { data: T[]; meta: { current_page: number; last_page: number; total: number } };
 
-export function createPacedRead(request: <T>(path: string) => Promise<T>, intervalMs = 2500, now: () => number = Date.now, wait: (milliseconds: number) => Promise<void> = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))) {
+export function createPacedRead(request: <T>(path: string, options?: RequestInit) => Promise<T>, intervalMs = 2500, now: () => number = Date.now, wait: (milliseconds: number) => Promise<void> = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))) {
   let tail = Promise.resolve();
   let nextRequestAt = 0;
-  return function read<T>(path: string): Promise<T> {
+  return function read<T>(path: string, options?: RequestInit, shouldContinue: () => boolean = () => true): Promise<T> {
     const result = tail.then(async () => {
+      if (!shouldContinue()) return undefined as T;
       const delay = nextRequestAt - now();
       if (delay > 0) await wait(delay);
+      if (!shouldContinue()) return undefined as T;
       nextRequestAt = now() + intervalMs;
-      return request<T>(path);
+      return request<T>(path, options);
     });
     tail = result.then(() => undefined, () => undefined);
     return result;

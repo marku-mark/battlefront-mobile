@@ -45,7 +45,7 @@ export function getProfile() { return profileCache.read("profile", account.getPr
 export async function updateProfile(fields: ProfileInput) {
   const owner = sessionRevision;
   const user = await account.updateProfile(fields);
-  if (owner === sessionRevision) { profileCache.clear(); profileCache.seed("profile", user); }
+  if (owner === sessionRevision) { profileCache.clear(); profileCache.seed("profile", user); invalidateBehavioralRecommendations(); }
   return user;
 }
 type Filters = { categories: { id: number; name: string }[]; brands: string[] };
@@ -57,16 +57,18 @@ export async function getBrands(): Promise<Brand[]> { return (await getFilters()
 const productCache = createReadCache<Product | null>(CACHE_AGE.products);
 const searchCache = createReadCache<Page<Product>>(CACHE_AGE.search, Date.now, 40);
 let productRevision = 0;
-const catalogCache = createProgressiveCatalog(async (page) => {
+let activeSearchTerm = "";
+let searchRequestRevision = 0;
+const catalogCache = createProgressiveCatalog(async (page, shouldContinue) => {
   const revision = productRevision;
-  const result = await readCatalog<Page<ApiProduct>>(`products?page=${page}`);
+  const result = await readCatalog<Page<ApiProduct>>(`products?page=${page}`, undefined, shouldContinue);
   const products = result.data.map(mapProduct);
   if (revision === productRevision) products.forEach((product) => productCache.seed(product.id, product));
   return { ...result, data: products };
 }, CACHE_AGE.products);
 export const getCategoryCatalog = createCategoryCachePool((key: string) => ({
-  pager: createProgressiveCatalog(async (page) => {
-    const result = await apiRequest<Page<ApiProduct>>("products?" + key + "&page=" + page);
+  pager: createProgressiveCatalog(async (page, shouldContinue) => {
+    const result = await readCatalog<Page<ApiProduct>>("products?" + key + "&page=" + page, undefined, shouldContinue);
     return { ...result, data: result.data.map(mapProduct) };
   }, CACHE_AGE.products),
   scrollOffset: 0,
@@ -74,6 +76,7 @@ export const getCategoryCatalog = createCategoryCachePool((key: string) => ({
 export function invalidateCatalog(refreshFilters = false) {
   productRevision++; catalogCache.invalidate(); productCache.clear(); searchCache.clear();
   getCategoryCatalog.invalidate((entry) => entry.pager.invalidate());
+  invalidateBehavioralRecommendations();
   if (refreshFilters) filterCache.invalidate();
 }
 export function getProducts(shouldContinue?: () => boolean): Promise<Product[]> { return catalogCache.all(shouldContinue); }
@@ -87,7 +90,11 @@ export function getProductSnapshot(id: string) {
 }
 export function getProductById(id: string): Promise<Product | null> {
   return productCache.read(id, async () => {
-    try { return mapProduct((await apiRequest<Envelope<ApiProduct>>("products/" + encodeURIComponent(id))).data); }
+    try {
+      const product = mapProduct((await apiRequest<Envelope<ApiProduct>>("products/" + encodeURIComponent(id))).data);
+      invalidateBehavioralRecommendations();
+      return product;
+    }
     catch (error) { if (error instanceof ApiError && error.status === 404) return null; throw error; }
   });
 }
@@ -95,14 +102,19 @@ export function getSelectedProducts(ids: string[], shouldContinue?: () => boolea
 export function searchProductPage(query: string, page = 1): Promise<Page<Product>> {
   const term = query.trim();
   if (term.length < 2) return Promise.resolve({ data: [], meta: { current_page: 1, last_page: 1, total: 0 } });
+  if (term !== activeSearchTerm) { activeSearchTerm = term; searchRequestRevision++; }
+  const ownerRevision = searchRequestRevision;
   return searchCache.read(JSON.stringify([term, page]), async () => {
     const revision = productRevision;
-    const result = await loadProductSearchPage(apiRequest, term, page);
+    const requestSearchPage = <T,>(path: string) => readCatalog<T>(path, undefined, () => ownerRevision === searchRequestRevision);
+    const result = await loadProductSearchPage(requestSearchPage, term, page);
+    if (page === 1) invalidateBehavioralRecommendations();
     const products = result.data;
     if (revision === productRevision) products.forEach((product) => productCache.seed(product.id, product));
     return { ...result, data: products };
   });
 }
+export function cancelPendingProductSearches() { activeSearchTerm = ""; searchRequestRevision++; }
 export async function searchProducts(query: string): Promise<Product[]> {
   return (await searchProductPage(query)).data;
 }
@@ -133,13 +145,88 @@ export function getBranches(force = false): Promise<Store[]> {
   }, force);
 }
 const cartCache = createReadCache<ApiCart>(CACHE_AGE.private, Date.now, 1);
-export const { getCart, addCartItem, changeCartItem, deleteCartItem } = createCartApi(apiRequest, cartCache, getSessionRevision);
+const cart = createCartApi(apiRequest, cartCache, getSessionRevision);
+export const getCart = cart.getCart;
+export async function addCartItem(productId: string, quantity: number) {
+  const result = await cart.addCartItem(productId, quantity);
+  invalidateBehavioralRecommendations();
+  return result;
+}
+export async function changeCartItem(id: number, quantity: number) {
+  const result = await cart.changeCartItem(id, quantity);
+  invalidateBehavioralRecommendations();
+  return result;
+}
+export async function deleteCartItem(id: number) {
+  const result = await cart.deleteCartItem(id);
+  invalidateBehavioralRecommendations();
+  return result;
+}
 export type Checkout = { cart: { items: { id: number; quantity: number; product: { id: number; name: string; brand: string | null; image_url: string | null }; unit_price: string; line_total: string }[]; item_count: number; total_quantity: number; total: string }; pickup_location: { name: string; address: string; contact_number: string | null; operating_hours: string }; customer: { name: string; default_delivery_address: string | null }; fulfillment_methods: { value: string; label: string }[]; payment_methods: { value: string; label: string; requires_proof: boolean; available_for: string[]; payment_account: { account_name: string; account_number: string; is_demo: boolean } | null }[] };
 export async function getCheckout() { return (await apiRequest<Envelope<Checkout>>("checkout")).data; }
 export type RecommendationOptions = { intended_uses: { value: string; label: string }[]; filter_options: Filters };
 export type Recommendation = { product: ApiProduct; effective_price: string; reasons: string[] };
+export type BehavioralRecommendationReason = { code: string; value: string };
+export type BehavioralRecommendation = { product: Product; effective_price: string; reasons: BehavioralRecommendationReason[] };
 const recommendationOptionsCache = createReadCache<RecommendationOptions>(CACHE_AGE.filters, Date.now, 1);
 export function getRecommendationOptions() { return recommendationOptionsCache.read("options", async () => (await apiRequest<Envelope<RecommendationOptions>>("recommendations/options")).data); }
 export async function getRecommendations(criteria: { budget: string; intended_use: string; category_id?: number; preferred_brand?: string; tag_ids?: number[] }) {
   return (await apiRequest<Envelope<Recommendation[]>>("recommendations", { method: "POST", body: JSON.stringify(criteria) })).data;
+}
+const behavioralRecommendationCache = createReadCache<BehavioralRecommendation[]>(CACHE_AGE.private, Date.now, 4);
+const recommendationInteractionRequest = createPacedRead(apiRequest, 3000);
+const recentRecommendationImpressions = new Map<string, number>();
+onSessionChange(() => behavioralRecommendationCache.clear());
+export function invalidateBehavioralRecommendations() { behavioralRecommendationCache.clear(); }
+export function getBehavioralRecommendations(force = false): Promise<BehavioralRecommendation[]> {
+  const ownerRevision = sessionRevision;
+  return behavioralRecommendationCache.read(String(ownerRevision), async () => {
+    const result = await apiRequest<Envelope<{ product: ApiProduct; effective_price: string; reasons: BehavioralRecommendationReason[] }[]>>("recommendations");
+    if (ownerRevision !== sessionRevision) throw new Error("Your account changed. Reload recommendations.");
+    return result.data.map((recommendation) => ({ ...recommendation, product: mapProduct(recommendation.product) }));
+  }, force);
+}
+export type RecommendationInteractionType = "impression" | "click" | "dismiss" | "report_wrong";
+export type RecommendationPlacement = "home" | "product" | "cart" | "recommendations";
+export async function recordRecommendationInteraction(input: {
+  productId: string;
+  eventType: RecommendationInteractionType;
+  placement: RecommendationPlacement;
+  position: number;
+  reasonCode?: string;
+  sessionRevision?: number;
+}): Promise<void> {
+  const ownerRevision = input.sessionRevision ?? sessionRevision;
+  if (ownerRevision !== sessionRevision) return;
+  const now = Date.now();
+  for (const [key, expiresAt] of recentRecommendationImpressions) {
+    if (expiresAt <= now) recentRecommendationImpressions.delete(key);
+  }
+  const impressionKey = `${ownerRevision}:${input.placement}:${input.productId}`;
+  if (input.eventType === "impression") {
+    if ((recentRecommendationImpressions.get(impressionKey) ?? 0) > now) return;
+    recentRecommendationImpressions.set(impressionKey, now + 5 * 60_000);
+  }
+  const eventId = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (character) => {
+    const random = Math.floor(Math.random() * 16);
+    return (character === "x" ? random : (random & 0x3) | 0x8).toString(16);
+  });
+  try {
+    await recommendationInteractionRequest<void>("recommendations/interactions", {
+      method: "POST",
+      body: JSON.stringify({
+        event_id: eventId,
+        product_id: Number(input.productId),
+        event_type: input.eventType,
+        placement: input.placement,
+        position: Math.min(Math.max(Math.trunc(input.position), 1), 12),
+        reason_code: input.reasonCode,
+      }),
+    }, () => ownerRevision === sessionRevision);
+  } catch (error) {
+    if (input.eventType === "impression" && recentRecommendationImpressions.get(impressionKey) === now + 5 * 60_000) {
+      recentRecommendationImpressions.delete(impressionKey);
+    }
+    throw error;
+  }
 }

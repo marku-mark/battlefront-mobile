@@ -1,5 +1,20 @@
-export type ApiUser = { id: number; name: string; email: string; default_delivery_address: string | null };
-export type ProfileInput = { name: string; email: string; default_delivery_address?: string | null };
+export type ApiUser = {
+  id: number;
+  name: string;
+  email: string;
+  default_delivery_address: string | null;
+  search_recommendations_enabled: boolean;
+  product_view_recommendations_enabled: boolean;
+  personalized_recommendations_enabled: boolean;
+};
+export type ProfileInput = {
+  name: string;
+  email: string;
+  default_delivery_address?: string | null;
+  search_recommendations_enabled?: boolean;
+  product_view_recommendations_enabled?: boolean;
+  personalized_recommendations_enabled?: boolean;
+};
 export type RegistrationInput = { name: string; email: string; password: string; password_confirmation: string };
 export type AuthResult = { user: ApiUser; token: string; expires_at: string };
 type Request = <T>(path: string, options?: RequestInit) => Promise<T>;

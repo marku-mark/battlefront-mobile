@@ -2,7 +2,7 @@ import type { Page } from "./apiClient";
 
 export type CatalogSnapshot<T> = { rows: T[]; loading: boolean; error: Error | null; complete: boolean };
 
-export function createProgressiveCatalog<T>(loadPage: (page: number) => Promise<Page<T>>, maxAgeMs = 60_000, now = Date.now) {
+export function createProgressiveCatalog<T>(loadPage: (page: number, shouldContinue: () => boolean) => Promise<Page<T>>, maxAgeMs = 60_000, now = Date.now) {
   let snapshot: CatalogSnapshot<T> = { rows: [], loading: false, error: null, complete: false };
   let pending: Promise<T[]> | null = null;
   let expiresAt = 0;
@@ -19,7 +19,7 @@ export function createProgressiveCatalog<T>(loadPage: (page: number) => Promise<
     const current = generation;
     const page = nextPage;
     publish({ ...snapshot, loading: true, error: null });
-    const request = loadPage(page).then((result) => {
+    const request = loadPage(page, () => current === generation).then((result) => {
       if (current !== generation) return snapshot.rows;
       nextPage = page + 1;
       expiresAt = now() + maxAgeMs;
