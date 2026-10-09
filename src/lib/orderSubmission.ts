@@ -1,5 +1,5 @@
 export type PaymentProof = { uri: string; name: string; type: string };
-export type OrderInput = { recipient_name: string; contact_number: string; fulfillment_method: string; payment_method: string; delivery_address?: string; payment_proof?: PaymentProof };
+export type OrderInput = { cart_item_ids: number[]; recipient_name: string; contact_number: string; fulfillment_method: string; payment_method: string; delivery_destination?: string; delivery_address?: string; payment_proof?: PaymentProof };
 type Request = <T>(path: string, options?: RequestInit) => Promise<T>;
 type NativeProofFile = { bytes: () => Promise<Uint8Array> };
 
@@ -24,11 +24,14 @@ export function createOrderSubmission<T>(request: Request, platform: "web" | "na
     if (!input.payment_proof) {
       body = JSON.stringify(input);
     } else {
-      body = new FormData();
+      const formData = new FormData();
       for (const [key, value] of Object.entries(input)) {
-        if (value !== undefined && key !== "payment_proof") body.append(key, String(value));
+        if (value === undefined || key === "payment_proof") continue;
+        if (Array.isArray(value)) value.forEach((entry) => formData.append(`${key}[]`, String(entry)));
+        else formData.append(key, String(value));
       }
-      await appendProof(body, input.payment_proof);
+      await appendProof(formData, input.payment_proof);
+      body = formData;
     }
     return (await request<{ data: T }>("orders", { method: "POST", body })).data;
   }

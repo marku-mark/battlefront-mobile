@@ -162,8 +162,13 @@ export async function deleteCartItem(id: number) {
   invalidateBehavioralRecommendations();
   return result;
 }
-export type Checkout = { cart: { items: { id: number; quantity: number; product: { id: number; name: string; brand: string | null; image_url: string | null }; unit_price: string; line_total: string }[]; item_count: number; total_quantity: number; total: string }; pickup_location: { name: string; address: string; contact_number: string | null; operating_hours: string }; customer: { name: string; default_delivery_address: string | null }; fulfillment_methods: { value: string; label: string }[]; payment_methods: { value: string; label: string; requires_proof: boolean; available_for: string[]; payment_account: { account_name: string; account_number: string; is_demo: boolean } | null }[] };
-export async function getCheckout() { return (await apiRequest<Envelope<Checkout>>("checkout")).data; }
+export type CheckoutQuote = { product_subtotal: string; delivery_fee: string; total: string };
+export type DeliveryQuote = CheckoutQuote & { destination: string; carrier: string; packing_expectation: string; base_fee: string; handling_surcharge: string; preparation_days: number; estimated_delivery_start: string; estimated_delivery_end: string; notice: string; is_demo: boolean; assumption_label: string };
+export type Checkout = { cart: { items: { id: number; quantity: number; product: { id: number; name: string; brand: string | null; image_url: string | null }; unit_price: string; line_total: string }[]; item_count: number; total_quantity: number; total: string }; pickup_quote: CheckoutQuote; delivery_quotes: DeliveryQuote[]; pickup_location: { name: string; address: string; contact_number: string | null; operating_hours: string }; customer: { name: string; default_delivery_address: string | null }; fulfillment_methods: { value: string; label: string }[]; payment_methods: { value: string; label: string; requires_proof: boolean; available_for: string[]; payment_account: { account_name: string; account_number: string; is_demo: boolean } | null }[] };
+export async function getCheckout(cartItemIds: number[]) {
+  const query = cartItemIds.map((id) => `cart_item_ids[]=${encodeURIComponent(id)}`).join("&");
+  return (await apiRequest<Envelope<Checkout>>(`checkout?${query}`)).data;
+}
 export type RecommendationOptions = { intended_uses: { value: string; label: string }[]; filter_options: Filters };
 export type Recommendation = { product: ApiProduct; effective_price: string; reasons: string[] };
 export type BehavioralRecommendationReason = { code: string; value: string };

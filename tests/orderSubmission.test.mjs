@@ -5,7 +5,7 @@ import { createRequire } from "node:module";
 import { createOrderSubmission } from "../src/lib/orderSubmission.ts";
 import { createApiClient, ApiError } from "../src/lib/apiClient.ts";
 
-const pickup = { recipient_name: "Test User", contact_number: "09171234567", fulfillment_method: "pickup", payment_method: "cash" };
+const pickup = { cart_item_ids: [2], recipient_name: "Test User", contact_number: "09171234567", fulfillment_method: "pickup", payment_method: "cash" };
 const require = createRequire(import.meta.url);
 const { transformSync } = require("@babel/core");
 const { code } = transformSync(readFileSync(require.resolve("react-native/Libraries/Network/FormData"), "utf8"), {
@@ -104,6 +104,8 @@ test("native wallet checkout encodes proof bytes and delivery details without se
   useNativeFormData(t);
   const proof = { uri: "file:///phone/payment.png", name: "payment.png", type: "image/png" };
   t.mock.method(globalThis, "fetch", async (_url, options) => {
+    assert.deepEqual(options.body.getAll("cart_item_ids[]"), ["2"]);
+    assert.equal(options.body.getAll("delivery_destination")[0], "Sagay City");
     assert.equal(options.body.getAll("delivery_address")[0], "Sagay delivery address");
     assert.equal(options.body.getAll("payment_method")[0], "gcash");
     assert.equal(options.headers.has("Content-Type"), false);
@@ -111,7 +113,7 @@ test("native wallet checkout encodes proof bytes and delivery details without se
     return Response.json({ data: { id: 8 } }, { status: 201 });
   });
   const orders = createOrderSubmission(createApiClient("http://backend.test/api/v1"), "native", (selected) => { assert.deepEqual(selected, proof); return readNativeProof(); });
-  assert.deepEqual(await orders.placeOrder({ ...pickup, fulfillment_method: "delivery", delivery_address: "Sagay delivery address", payment_method: "gcash", payment_proof: proof }), { id: 8 });
+  assert.deepEqual(await orders.placeOrder({ ...pickup, fulfillment_method: "delivery", delivery_destination: "Sagay City", delivery_address: "Sagay delivery address", payment_method: "gcash", payment_proof: proof }), { id: 8 });
 });
 
 test("a missing native image stops placement before contacting the order endpoint", async () => {

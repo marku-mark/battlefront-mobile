@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { checkoutRecipient, paymentForFulfillment, paymentProofError, formatCheckoutAmount, checkoutDetailsError } from "../src/lib/checkoutForm.ts";
+import { checkoutRecipient, paymentForFulfillment, paymentProofError, formatCheckoutAmount, checkoutDetailsError, quoteForFulfillment } from "../src/lib/checkoutForm.ts";
 
 const methods = [
   { value: "cash", available_for: ["pickup"] },
@@ -29,6 +29,15 @@ test("wallet proof accepts supported images up to 5 MB and rejects missing, over
 test("checkout formats server prices without adding shipping or discounts", () => {
   assert.equal(formatCheckoutAmount("1234.50"), "₱1,234.50");
   assert.equal(formatCheckoutAmount("0.00"), "₱0.00");
+});
+
+test("checkout selects only the server quote for the chosen fulfillment and destination", () => {
+  const pickup = { total: "1000.00", delivery_fee: "0.00" };
+  const quotes = [{ destination: "Sagay City", total: "1100.00" }, { destination: "Bacolod City", total: "1250.00" }];
+  assert.equal(quoteForFulfillment("pickup", "", quotes, pickup), pickup);
+  assert.equal(quoteForFulfillment("delivery", "Bacolod City", quotes, pickup), quotes[1]);
+  assert.equal(quoteForFulfillment("delivery", "", quotes, pickup), undefined);
+  assert.equal(quoteForFulfillment("delivery", "Unknown", quotes, pickup), undefined);
 });
 
 test("checkout selects the recipient and phone belonging to the profile default address", () => {
@@ -61,7 +70,7 @@ test("checkout with no saved contact details starts with the customer name and e
 
 
 test("pickup requires contact details but never requires a delivery address", () => {
-  const details = { name: "Customer", phone: "09171234567", fulfillment: "pickup", address: "", editingAddress: true, requiresProof: false, hasProof: false };
+  const details = { name: "Customer", phone: "09171234567", fulfillment: "pickup", destination: "", address: "", editingAddress: true, requiresProof: false, hasProof: false };
   assert.equal(checkoutDetailsError(details), null);
   assert.match(checkoutDetailsError({ ...details, name: " " }), /recipient name/);
   assert.match(checkoutDetailsError({ ...details, phone: " " }), /contact number/);
@@ -69,8 +78,9 @@ test("pickup requires contact details but never requires a delivery address", ()
 });
 
 test("delivery requires a saved address and wallet proof when selected", () => {
-  const details = { name: "Customer", phone: "09171234567", fulfillment: "delivery", address: "Saved address", editingAddress: false, requiresProof: true, hasProof: true };
+  const details = { name: "Customer", phone: "09171234567", fulfillment: "delivery", destination: "Sagay City", address: "Saved address", editingAddress: false, requiresProof: true, hasProof: true };
   assert.equal(checkoutDetailsError(details), null);
+  assert.match(checkoutDetailsError({ ...details, destination: "" }), /delivery destination/);
   assert.match(checkoutDetailsError({ ...details, address: " " }), /delivery address/);
   assert.match(checkoutDetailsError({ ...details, editingAddress: true }), /delivery address/);
   assert.match(checkoutDetailsError({ ...details, hasProof: false }), /payment proof/);

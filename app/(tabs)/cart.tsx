@@ -24,17 +24,36 @@ export default function CartScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const layout = getResponsiveLayout(width);
-  const { items, itemCount, subtotal, addItem, updateQuantity, removeItem, clearCart, conflictCount, error, isUpdating, isLoading: isCartLoading } = useCart();
+  const { items, addItem, updateQuantity, removeItem, clearCart, conflictCount, error, isUpdating, isLoading: isCartLoading } = useCart();
   const { refreshCart } = useCartActions();
   const { session, isHydrated } = useSession();
   const { isWishlisted, toggleWishlist } = useWishlist();
   const [removedItem, setRemovedItem] = useState<CartItem | null>(null);
+  const [selectedCartItemIds, setSelectedCartItemIds] = useState<number[]>([]);
   const [removedItemAction, setRemovedItemAction] = useState<"removed" | "saved">("removed");
   const [isSignInOpen, setIsSignInOpen] = useState(false);
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
-  const total = subtotal;
   const actionPending = useRef(false);
+  const selectionInitialized = useRef(false);
   const customerId = session.mode === "customer" ? session.user.id : null;
+  useEffect(() => { selectionInitialized.current = false; setSelectedCartItemIds([]); }, [customerId]);
+  useEffect(() => {
+    const ids = items.flatMap((item) => item.serverId ? [item.serverId] : []);
+    if (!selectionInitialized.current && ids.length > 0) {
+      selectionInitialized.current = true;
+      setSelectedCartItemIds(ids);
+    } else if (selectionInitialized.current) {
+      setSelectedCartItemIds((current) => current.filter((id) => ids.includes(id)));
+    }
+  }, [items]);
+  const selectedItems = items.filter((item) => item.serverId && selectedCartItemIds.includes(item.serverId));
+  const selectedSubtotal = selectedItems.reduce((sum, item) => sum + item.lineTotal, 0);
+  const selectedUnits = selectedItems.reduce((sum, item) => sum + item.quantity, 0);
+  const selectedConflict = selectedItems.some((item) => item.product.availability !== "available");
+  const allSelected = items.length > 0 && selectedItems.length === items.length;
+  function toggleSelectedItem(id: number) {
+    setSelectedCartItemIds((current) => current.includes(id) ? current.filter((itemId) => itemId !== id) : [...current, id]);
+  }
   useActiveFocusEffect(useCallback(() => {
     if (customerId !== null) void refreshCart(false).catch(() => undefined);
   }, [customerId, refreshCart]));
@@ -125,11 +144,18 @@ export default function CartScreen() {
         {error && <View className="mb-3"><Text accessibilityRole="alert" className="text-danger">{error}</Text><Pressable accessibilityRole="button" disabled={isUpdating} onPress={() => void refreshCart().catch(() => undefined)} className="min-h-12 justify-center"><Text className="text-primary font-semibold">Refresh cart</Text></Pressable></View>}
         {isUpdating && <View className="flex-row items-center gap-2 mb-3"><ActivityIndicator size="small" color="#ef1b1b" /><Text className="text-muted-foreground text-xs">Updating cart…</Text></View>}
         {conflictCount > 0 && <Text className="text-danger mb-3">Some items are unavailable or exceed current stock. Update or remove them before checkout.</Text>}
+        <View className="flex-row items-center justify-between mb-3 rounded-xl border border-border bg-card px-3 py-2">
+          <Pressable accessibilityRole="checkbox" accessibilityLabel="Select all cart items" accessibilityState={{ checked: allSelected }} onPress={() => setSelectedCartItemIds(allSelected ? [] : items.flatMap((item) => item.serverId ? [item.serverId] : []))} className="min-h-11 flex-row items-center gap-2 px-1">
+            <Ionicons name={allSelected ? "checkbox" : "square-outline"} size={20} color={allSelected ? "#ef1b1b" : "#94a3b8"} />
+            <Text className="text-foreground text-sm font-semibold">Select all</Text>
+          </Pressable>
+          <Text className="text-muted-foreground text-xs">{selectedItems.length} selected</Text>
+        </View>
         <View className="mb-4 rounded-2xl border border-border bg-card p-3 shadow-soft">
           <View className="flex-row items-center justify-between">
             <Text className="text-foreground text-sm font-semibold">Order summary</Text>
             <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.12em]">
-              {itemCount} {itemCount === 1 ? "item" : "items"}
+              {items.length} {items.length === 1 ? "product" : "products"}
             </Text>
           </View>
           <View className="mt-2 flex-row items-center gap-2">
@@ -140,8 +166,11 @@ export default function CartScreen() {
           </View>
         </View>
 
-        {items.map(({ product, quantity, variant, lineTotal }) => (
+        {items.map(({ product, quantity, variant, lineTotal, serverId }) => (
           <View key={product.id} className="flex-row bg-card border border-border rounded-2xl p-3 mb-3 shadow-soft">
+            <Pressable accessibilityRole="checkbox" accessibilityLabel={`Select ${product.name} for checkout`} accessibilityState={{ checked: serverId ? selectedCartItemIds.includes(serverId) : false }} disabled={!serverId} onPress={() => serverId && toggleSelectedItem(serverId)} className="w-9 items-center justify-center mr-1">
+              <Ionicons name={serverId && selectedCartItemIds.includes(serverId) ? "checkbox" : "square-outline"} size={20} color={serverId && selectedCartItemIds.includes(serverId) ? "#ef1b1b" : "#94a3b8"} />
+            </Pressable>
             <Pressable
               accessibilityLabel={`View details for ${product.name}`}
               onPress={() => router.push({ pathname: "/product/[id]", params: { id: product.id } })}
@@ -235,24 +264,26 @@ export default function CartScreen() {
 
         <View className="bg-card border border-border rounded-2xl p-4 mt-4 shadow-soft">
           <View className="flex-row justify-between mb-2">
-            <Text className="text-muted-foreground text-sm">{isUpdating ? "Estimated subtotal" : "Subtotal"}</Text>
-            <Text className="text-foreground text-base font-bold">{formatPrice(subtotal)}</Text>
+            <Text className="text-muted-foreground text-sm">Products</Text>
+            <Text className="text-foreground text-base font-bold">{selectedItems.length}</Text>
           </View>
+          <View className="flex-row justify-between mb-2"><Text className="text-muted-foreground text-sm">Units</Text><Text className="text-foreground text-base font-bold">{selectedUnits}</Text></View>
           <View className="border-t border-border pt-3 mt-1 flex-row justify-between">
-            <Text className="text-foreground text-base font-bold">Total</Text>
-            <Text className="text-primary text-base font-bold">{formatPrice(total)}</Text>
+            <Text className="text-foreground text-base font-bold">Selected subtotal</Text>
+            <Text className="text-primary text-base font-bold">{formatPrice(selectedSubtotal)}</Text>
           </View>
-          <Text className="text-muted-foreground text-xs mt-3">Your order is submitted to Battlefront when you confirm checkout.</Text>
+          <Text className="text-muted-foreground text-xs mt-3">Only selected items will be purchased. Review delivery fees at checkout.</Text>
+          {selectedConflict && <Text className="text-danger text-xs mt-3">Resolve stock issues or deselect unavailable items before checkout.</Text>}
           <Pressable
             onPress={() => session.mode === "customer"
-              ? router.push("/checkout")
+              ? router.push({ pathname: "/checkout", params: { cart_item_ids: selectedCartItemIds.join(",") } })
               : setIsSignInOpen(true)}
-            disabled={items.length === 0 || isUpdating || conflictCount > 0 || !!error}
+            disabled={selectedItems.length === 0 || isUpdating || selectedConflict || !!error}
             className="bg-primary rounded-xl items-center py-3.5 mt-5"
             style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
           >
             <Text className="text-primary-foreground text-sm font-bold">
-              {session.mode === "customer" ? "Continue to checkout" : "Sign in to continue"}
+              {session.mode !== "customer" ? "Sign in to continue" : selectedConflict ? "Resolve selected item issues" : selectedItems.length === 0 ? "Select items to checkout" : "Proceed to checkout"}
             </Text>
           </Pressable>
         </View>

@@ -14,6 +14,10 @@ export function paymentForFulfillment(methods: PaymentMethod[], fulfillment: str
   return available.some((method) => method.value === current) ? current : available[0]?.value ?? "";
 }
 
+export function quoteForFulfillment<T extends { destination: string }, P>(fulfillment: string, destination: string, deliveryQuotes: T[], pickupQuote: P): T | P | undefined {
+  return fulfillment === "pickup" ? pickupQuote : deliveryQuotes.find((quote) => quote.destination === destination);
+}
+
 export function paymentProofError(proof: { mimeType?: string | null; fileSize?: number } | null): string | null {
   if (!proof) return "Choose payment proof before placing your order.";
   if (proof.mimeType && !["image/jpeg", "image/png", "image/webp"].includes(proof.mimeType)) return "Choose a JPEG, PNG, or WebP image.";
@@ -25,9 +29,10 @@ export function formatCheckoutAmount(value: string): string {
   return `₱${Number(value).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-export function checkoutDetailsError(details: { name: string; phone: string; fulfillment: string; address: string; editingAddress: boolean; requiresProof: boolean; hasProof: boolean }): string | null {
+export function checkoutDetailsError(details: { name: string; phone: string; fulfillment: string; destination: string; address: string; editingAddress: boolean; requiresProof: boolean; hasProof: boolean }): string | null {
   if (!details.name.trim()) return "Enter the recipient name.";
   if (!details.phone.trim()) return "Enter a contact number.";
+  if (details.fulfillment === "delivery" && !details.destination) return "Select a delivery destination.";
   if (details.fulfillment === "delivery" && (details.editingAddress || !details.address.trim())) return "Save a complete delivery address before placing your order.";
   if (details.requiresProof && !details.hasProof) return "Choose payment proof before placing your order.";
   return null;

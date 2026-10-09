@@ -1,4 +1,4 @@
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useActiveFocusEffect } from "@/hooks/useActiveScreen";
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
@@ -7,19 +7,21 @@ import * as ImagePicker from "expo-image-picker";
 import { MockSignInSheet } from "@/components/account/MockSignInSheet";
 import { useCart } from "@/hooks/useCart";
 import { useSession } from "@/hooks/useSession";
-import { getCheckout, type Checkout } from "@/lib/api";
+import { getCart, getCheckout, type Checkout } from "@/lib/api";
 import { placeOrder } from "@/lib/orders";
 import { loadSavedAddresses, persistSavedAddresses, type SavedAddress } from "@/lib/savedAddresses";
-import { checkoutRecipient, paymentForFulfillment, paymentProofError, formatCheckoutAmount, checkoutDetailsError } from "@/lib/checkoutForm";
+import { checkoutRecipient, paymentForFulfillment, paymentProofError, formatCheckoutAmount, checkoutDetailsError, quoteForFulfillment } from "@/lib/checkoutForm";
 import { PhilippineAddressFields } from "@/components/addresses/PhilippineAddressFields";
 import { EMPTY_PHILIPPINE_ADDRESS, isCompletePhilippineAddress, formatPhilippineAddress } from "@/lib/philippineAddress";
 import { getLocalUserId } from "@/lib/api";
 
 export default function CheckoutScreen() {
   const router = useRouter();
+  const { cart_item_ids: selectedIdsParam } = useLocalSearchParams<{ cart_item_ids?: string }>();
   const { session } = useSession();
   const { refreshCart } = useCart();
   const [preview, setPreview] = useState<Checkout | null>(null);
+  const [selectedCartItemIds, setSelectedCartItemIds] = useState<number[]>([]);
   const [error, setError] = useState("");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
@@ -32,6 +34,7 @@ export default function CheckoutScreen() {
   const [addressError, setAddressError] = useState("");
   const [checkoutRetry, setCheckoutRetry] = useState(0);
   const [fulfillment, setFulfillment] = useState("pickup");
+  const [deliveryDestination, setDeliveryDestination] = useState("");
   const [payment, setPayment] = useState("cash");
   const [proof, setProof] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -42,18 +45,27 @@ export default function CheckoutScreen() {
   useEffect(() => { setCreatedOrderId(null); }, [customerId]);
   const initializedCustomer = useRef<number | null>(null);
   const lastPreviewAt = useRef(0);
+  const lastSelectedIdsParam = useRef<string | undefined>(undefined);
   useEffect(() => {
-    initializedCustomer.current = null; lastPreviewAt.current = 0;
+    initializedCustomer.current = null; lastPreviewAt.current = 0; lastSelectedIdsParam.current = undefined;
     setPreview(null); setError("");
+    setSelectedCartItemIds([]);
     setSavedAddresses([]);
     setIsAddingAddress(false); setAddressLabel(""); setLocation(EMPTY_PHILIPPINE_ADDRESS); setAddressError(""); setIsSavingAddress(false);
-    setFullName(""); setPhone(""); setAddress(""); setProof(null); setFulfillment("pickup"); setPayment("cash");
+    setFullName(""); setPhone(""); setAddress(""); setProof(null); setFulfillment("pickup"); setDeliveryDestination(""); setPayment("cash");
   }, [customerId, createdOrderId, checkoutRetry]);
   useActiveFocusEffect(useCallback(() => {
     let active = true;
     if (customerId === null || createdOrderId) return;
-    if (initializedCustomer.current === customerId && Date.now() - lastPreviewAt.current < 30_000) return;
-    Promise.all([getCheckout(), loadSavedAddresses()]).then(([result, addresses]) => {
+    if (initializedCustomer.current === customerId && lastSelectedIdsParam.current === selectedIdsParam && Date.now() - lastPreviewAt.current < 30_000) return;
+    Promise.all([getCart(true), loadSavedAddresses()]).then(async ([cart, addresses]) => {
+      if (!active) return;
+      const requestedIds = typeof selectedIdsParam === "string" ? selectedIdsParam.split(",").map(Number).filter((id) => Number.isInteger(id) && id > 0) : [];
+      const ids = requestedIds.length > 0 ? cart.items.filter((item) => requestedIds.includes(item.id)).map((item) => item.id) : cart.items.map((item) => item.id);
+      if (requestedIds.length > 0 && ids.length !== new Set(requestedIds).size) throw new Error("Your selected cart items changed. Return to cart and review your selection.");
+      setSelectedCartItemIds(ids);
+      if (ids.length === 0) { setError("Your cart is empty."); return; }
+      const result = await getCheckout(ids);
       if (!active) return;
       const recipient = checkoutRecipient(result.customer, addresses);
       setPreview(result); setSavedAddresses(addresses);
@@ -63,12 +75,16 @@ export default function CheckoutScreen() {
         initializedCustomer.current = customerId;
       }
       lastPreviewAt.current = Date.now();
+      lastSelectedIdsParam.current = selectedIdsParam;
     }).catch((reason) => { if (active) setError(reason.message); });
     return () => { active = false; };
-  }, [customerId, createdOrderId, checkoutRetry]));
-  const visiblePreview = initializedCustomer.current === customerId ? preview : null;
+  }, [customerId, createdOrderId, checkoutRetry, selectedIdsParam]));
+  const visiblePreview = initializedCustomer.current === customerId && lastSelectedIdsParam.current === selectedIdsParam ? preview : null;
   const paymentOptions = visiblePreview?.payment_methods.filter((method) => method.available_for.includes(fulfillment)) ?? [];
   const selectedPayment = paymentOptions.find((method) => method.value === payment);
+  const selectedQuote = visiblePreview ? quoteForFulfillment(fulfillment, deliveryDestination, visiblePreview.delivery_quotes, visiblePreview.pickup_quote) : undefined;
+  const deliveryQuote = fulfillment === "delivery" ? visiblePreview?.delivery_quotes.find((quote) => quote.destination === deliveryDestination) : undefined;
+  const cannotSubmit = isSubmitting || isSavingAddress || selectedCartItemIds.length === 0 || !visiblePreview || !selectedQuote || (fulfillment === "delivery" && isAddingAddress);
   async function saveAddress() {
     if (isSavingAddress || customerId === null) return;
     if (!addressLabel.trim() || !fullName.trim() || !phone.trim() || !isCompletePhilippineAddress(location)) {
@@ -99,14 +115,15 @@ export default function CheckoutScreen() {
     } catch (reason) { Alert.alert("Cannot select proof", reason instanceof Error ? reason.message : "Please try again."); }
   }
   async function submit() {
-    if (submitting.current || createdOrderId || isSavingAddress || (fulfillment === "delivery" && isAddingAddress) || !visiblePreview || !selectedPayment) return;
-    const validation = checkoutDetailsError({ name: fullName, phone, fulfillment, address, editingAddress: isAddingAddress, requiresProof: selectedPayment.requires_proof, hasProof: Boolean(proof) });
+    if (submitting.current || createdOrderId || isSavingAddress || selectedCartItemIds.length === 0 || !visiblePreview || !selectedPayment) return;
+    const validation = checkoutDetailsError({ name: fullName, phone, fulfillment, destination: deliveryDestination, address, editingAddress: isAddingAddress, requiresProof: selectedPayment.requires_proof, hasProof: Boolean(proof) });
     if (validation) { setError(validation); return; }
+    if (!selectedQuote) { setError("Select an available delivery destination."); return; }
     submitting.current = true;
     setIsSubmitting(true); setError("");
     try {
-      const order = await placeOrder({ recipient_name: fullName.trim(), contact_number: phone.trim(), fulfillment_method: fulfillment,
-        payment_method: payment, delivery_address: fulfillment === "delivery" ? address.trim() : undefined,
+      const order = await placeOrder({ cart_item_ids: selectedCartItemIds, recipient_name: fullName.trim(), contact_number: phone.trim(), fulfillment_method: fulfillment,
+        payment_method: payment, delivery_destination: fulfillment === "delivery" ? deliveryDestination : undefined, delivery_address: fulfillment === "delivery" ? address.trim() : undefined,
         payment_proof: selectedPayment.requires_proof && proof ? { uri: proof.uri, name: proof.fileName ?? "payment-proof.jpg", type: proof.mimeType ?? "image/jpeg" } : undefined });
       if (getLocalUserId() !== customerId) return;
       setCreatedOrderId(order.id);
@@ -130,7 +147,7 @@ export default function CheckoutScreen() {
           <Text className="text-foreground text-lg font-bold">Order placed</Text>
           <Pressable onPress={() => router.replace({ pathname: "/orders/[id]", params: { id: createdOrderId } })} className="mt-5 rounded-xl bg-primary px-5 py-3"><Text className="text-primary-foreground">View order</Text></Pressable>
         </View> : session.mode === "guest" ? <Pressable onPress={() => setIsSignInOpen(true)} className="rounded-xl bg-primary px-5 py-3"><Text className="text-primary-foreground">Sign in to continue</Text></Pressable> : !visiblePreview ? <View>
-          {error ? <Text className="text-danger">{error}</Text> : <ActivityIndicator />}
+          {error ? <Text accessibilityRole="alert" className="text-danger">{error}</Text> : <ActivityIndicator />}
           {error ? <Pressable onPress={() => setCheckoutRetry((current) => current + 1)}><Text className="text-primary mt-4">Retry</Text></Pressable> : null}
         </View> : <View>
           <View className="rounded-2xl border border-border bg-card p-5 mb-6"><Text className="text-primary text-xs font-bold uppercase">Customer checkout</Text><Text className="text-foreground text-xl font-bold mt-2">Confirm fulfillment and payment</Text><Text className="text-muted-foreground text-sm mt-2">Review your hardware selection and the details Battlefront needs for your order.</Text></View>
@@ -153,8 +170,19 @@ export default function CheckoutScreen() {
           </View> : <Pressable disabled={isSubmitting} onPress={() => { setAddressLabel(""); setLocation(EMPTY_PHILIPPINE_ADDRESS); setAddressError(""); setIsAddingAddress(true); }} className="mt-3 py-2"><Text className="text-primary font-semibold">Add another address</Text></Pressable>)}
           <Text className="text-primary text-xs font-semibold mt-6">STEP 2</Text>
           <Text className="text-foreground text-base font-bold mt-1">Fulfillment method</Text>
-          {visiblePreview.fulfillment_methods.map((method) => <Pressable key={method.value} disabled={isSubmitting} accessibilityRole="radio" accessibilityState={{ checked: fulfillment === method.value, disabled: isSubmitting }} onPress={() => { const next = paymentForFulfillment(visiblePreview.payment_methods, method.value, payment); setFulfillment(method.value); if (next !== payment) { setProof(null); setPayment(next); } }} className={`mt-3 rounded-xl border p-4 ${fulfillment === method.value ? "border-primary bg-primary/10" : "border-border bg-card"}`}><Text className="text-foreground font-semibold">{fulfillment === method.value ? "● " : "○ "}{method.label}</Text><Text className="text-muted-foreground text-xs mt-1">{method.value === "pickup" ? "Collect your order from Battlefront." : "Send the order to your supplied address."}</Text></Pressable>)}
+          {visiblePreview.fulfillment_methods.map((method) => <Pressable key={method.value} disabled={isSubmitting} accessibilityRole="radio" accessibilityState={{ checked: fulfillment === method.value, disabled: isSubmitting }} onPress={() => { const next = paymentForFulfillment(visiblePreview.payment_methods, method.value, payment); setFulfillment(method.value); if (method.value === "pickup") setDeliveryDestination(""); if (next !== payment) { setProof(null); setPayment(next); } }} className={`mt-3 rounded-xl border p-4 ${fulfillment === method.value ? "border-primary bg-primary/10" : "border-border bg-card"}`}><Text className="text-foreground font-semibold">{fulfillment === method.value ? "● " : "○ "}{method.label}</Text><Text className="text-muted-foreground text-xs mt-1">{method.value === "pickup" ? "Collect your order from Battlefront." : "Send the order to your supplied address."}</Text></Pressable>)}
           {fulfillment === "delivery" ? <View>
+            <Text className="text-foreground text-sm font-semibold mt-4">Delivery destination</Text>
+            <Text className="text-muted-foreground text-xs mt-1">Choose the destination for the delivery fee and estimate.</Text>
+            {visiblePreview.delivery_quotes.map((quote) => <Pressable key={quote.destination} disabled={isSubmitting} accessibilityRole="radio" accessibilityState={{ checked: deliveryDestination === quote.destination, disabled: isSubmitting }} onPress={() => setDeliveryDestination(quote.destination)} className={`mt-2 rounded-xl border p-3 ${deliveryDestination === quote.destination ? "border-primary bg-primary/10" : "border-border bg-card"}`}><Text className="text-foreground font-semibold">{deliveryDestination === quote.destination ? "● " : "○ "}{quote.destination}</Text><Text className="text-muted-foreground text-xs mt-1">Delivery fee {formatCheckoutAmount(quote.delivery_fee)}</Text></Pressable>)}
+            {deliveryQuote && <View className="mt-3 rounded-xl border border-border bg-secondary p-4">
+              <Text className="text-foreground font-semibold">{deliveryQuote.carrier.toUpperCase()} delivery estimate</Text>
+              <Text className="text-muted-foreground text-sm mt-2">{deliveryQuote.packing_expectation} · {deliveryQuote.preparation_days} day{deliveryQuote.preparation_days === 1 ? "" : "s"} preparation</Text>
+              <Text className="text-muted-foreground text-sm mt-1">Base fee {formatCheckoutAmount(deliveryQuote.base_fee)} + handling {formatCheckoutAmount(deliveryQuote.handling_surcharge)}</Text>
+              <Text className="text-foreground text-sm mt-2">Estimated delivery: {new Date(`${deliveryQuote.estimated_delivery_start}T00:00:00`).toLocaleDateString("en-PH", { dateStyle: "medium" })}{deliveryQuote.estimated_delivery_end !== deliveryQuote.estimated_delivery_start ? ` – ${new Date(`${deliveryQuote.estimated_delivery_end}T00:00:00`).toLocaleDateString("en-PH", { dateStyle: "medium" })}` : ""}</Text>
+              <Text className="text-muted-foreground text-xs mt-2">{deliveryQuote.notice}</Text>
+              {deliveryQuote.is_demo && <Text className="text-muted-foreground text-xs mt-2">{deliveryQuote.assumption_label}</Text>}
+            </View>}
             {savedAddresses.length > 0 && <View className="mt-3">
               <Text className="text-foreground text-sm font-semibold">Use a saved address</Text>
               {savedAddresses.map((saved) => <Pressable key={saved.id} disabled={isSubmitting || isSavingAddress} onPress={() => { setAddress(saved.address); setFullName(saved.recipient); setPhone(saved.phone); setIsAddingAddress(!saved.phone.trim() || !saved.address.trim()); }} className="mt-2 rounded-xl border border-border bg-card p-3"><Text className="text-foreground text-sm">{saved.label} · {saved.recipient}</Text><Text className="text-muted-foreground text-xs mt-1">{saved.address}</Text></Pressable>)}
@@ -183,22 +211,25 @@ export default function CheckoutScreen() {
           </View>}
           <View className="mt-6 rounded-2xl border border-border bg-card p-5">
             <Text className="text-primary text-xs font-semibold">CURRENT CART</Text>
-            <Text className="text-foreground text-lg font-bold mt-2">Hardware summary</Text>
+            <Text className="text-foreground text-lg font-bold mt-2">Selected items</Text>
+            <Text className="text-muted-foreground text-xs mt-1">Only the items selected in your cart are included.</Text>
             {visiblePreview.cart.items.map((item) => <View key={item.id} className="flex-row justify-between gap-3 border-b border-border py-4"><View className="flex-1"><Text className="text-foreground font-semibold">{item.product.name}</Text><Text className="text-muted-foreground text-xs mt-1">{item.product.brand ? `${item.product.brand} · ` : ""}Qty {item.quantity}</Text></View><Text className="text-foreground font-semibold">{formatCheckoutAmount(item.line_total)}</Text></View>)}
             <View className="flex-row justify-between mt-4"><Text className="text-muted-foreground text-sm">Products</Text><Text className="text-foreground font-semibold">{visiblePreview.cart.item_count}</Text></View>
             <View className="flex-row justify-between mt-3"><Text className="text-muted-foreground text-sm">Units</Text><Text className="text-foreground font-semibold">{visiblePreview.cart.total_quantity}</Text></View>
-            <View className="flex-row justify-between mt-4 border-t border-border pt-4"><Text className="text-foreground font-semibold">Cart total</Text><Text className="text-foreground text-xl font-bold">{formatCheckoutAmount(visiblePreview.cart.total)}</Text></View>
+            <View className="flex-row justify-between mt-4 border-t border-border pt-4"><Text className="text-muted-foreground text-sm">Product subtotal</Text><Text className="text-foreground font-semibold">{formatCheckoutAmount(visiblePreview.pickup_quote.product_subtotal)}</Text></View>
+            <View className="flex-row justify-between mt-3"><Text className="text-muted-foreground text-sm">Delivery fee</Text><Text className="text-foreground font-semibold">{selectedQuote ? formatCheckoutAmount(selectedQuote.delivery_fee) : "Select destination"}</Text></View>
+            <View className="flex-row justify-between mt-4 border-t border-border pt-4"><Text className="text-foreground font-semibold">Final total</Text><Text className="text-foreground text-xl font-bold">{selectedQuote ? formatCheckoutAmount(selectedQuote.total) : "—"}</Text></View>
           </View>
 
           <Text className="text-muted-foreground text-xs text-center mt-3">Review your details before placing your order.</Text>
           <Pressable disabled={isSubmitting} onPress={() => router.navigate("/cart")} className="mt-4 rounded-xl border border-border p-3"><Text className="text-foreground text-center font-semibold">Back to cart</Text></Pressable>
         </View>}
       </ScrollView>
-      {visiblePreview && !createdOrderId && session.mode === "customer" && <View className="rounded-t-2xl border-t border-border bg-card px-4 py-3">
-        <View className="flex-row flex-wrap items-center justify-between gap-2 mb-3"><Text className="text-muted-foreground text-sm">Cart total</Text><Text className="text-foreground text-xl font-bold">{formatCheckoutAmount(visiblePreview.cart.total)}</Text></View>
-        {error && <Text accessibilityRole="alert" className="text-danger text-sm mb-2">{error}</Text>}
-        {fulfillment === "delivery" && isAddingAddress && <Text className="text-muted-foreground text-sm mb-2">Save your delivery address above to continue.</Text>}
-        <Pressable accessibilityRole="button" accessibilityState={{ busy: isSubmitting, disabled: isSubmitting || isSavingAddress || (fulfillment === "delivery" && isAddingAddress) }} disabled={isSubmitting || isSavingAddress || (fulfillment === "delivery" && isAddingAddress)} onPress={() => void submit()} className="min-h-12 rounded-xl bg-primary px-5 py-3" style={({ pressed }) => ({ opacity: isSubmitting || isSavingAddress || (fulfillment === "delivery" && isAddingAddress) ? 0.5 : pressed ? 0.8 : 1 })}><Text className="text-primary-foreground text-center font-semibold">{isSubmitting ? "Placing order…" : "Place order"}</Text></Pressable>
+      {session.mode === "customer" && !createdOrderId && <View className="rounded-t-2xl border-t border-border bg-card px-4 py-3">
+        {visiblePreview && <View className="flex-row flex-wrap items-center justify-between gap-2 mb-3"><Text className="text-muted-foreground text-sm">Final total</Text><Text className="text-foreground text-xl font-bold">{selectedQuote ? formatCheckoutAmount(selectedQuote.total) : "Select destination"}</Text></View>}
+        {visiblePreview && error && <Text accessibilityRole="alert" className="text-danger text-sm mb-2">{error}</Text>}
+        {visiblePreview && fulfillment === "delivery" && isAddingAddress && <Text className="text-muted-foreground text-sm mb-2">Save your delivery address above to continue.</Text>}
+        <Pressable accessibilityRole="button" accessibilityState={{ busy: isSubmitting, disabled: cannotSubmit }} disabled={cannotSubmit} onPress={() => void submit()} className="min-h-12 rounded-xl bg-primary px-5 py-3" style={({ pressed }) => ({ opacity: cannotSubmit ? 0.5 : pressed ? 0.8 : 1 })}><Text className="text-primary-foreground text-center font-semibold">{isSubmitting ? "Placing order…" : "Place order"}</Text></Pressable>
       </View>}
       </KeyboardAvoidingView>
       <MockSignInSheet visible={isSignInOpen} onClose={() => setIsSignInOpen(false)} />
