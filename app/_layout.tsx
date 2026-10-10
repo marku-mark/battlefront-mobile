@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { CartProvider } from "@/hooks/useCart";
 import { WishlistProvider } from "@/hooks/useWishlist";
 import { SessionProvider } from "@/hooks/useSession";
+import { NotificationProvider } from "@/hooks/useNotifications";
 import { ThemeProvider } from "@/theme/ThemeProvider";
 import { useTheme } from "@/theme/ThemeProvider";
 
@@ -38,11 +39,13 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <ThemeProvider>
           <SessionProvider>
-            <CartProvider>
-              <WishlistProvider>
-                <AppStack />
-              </WishlistProvider>
-            </CartProvider>
+            <NotificationProvider>
+              <CartProvider>
+                <WishlistProvider>
+                  <AppStack />
+                </WishlistProvider>
+              </CartProvider>
+            </NotificationProvider>
           </SessionProvider>
         </ThemeProvider>
       </SafeAreaProvider>

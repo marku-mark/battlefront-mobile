@@ -23,7 +23,21 @@
         }
       ],
       "expo-secure-store",
-      ["expo-image-picker", { "photosPermission": "Choose a payment proof image for your Battlefront order.", "cameraPermission": false, "microphonePermission": false }]
+      [
+        "expo-notifications",
+        {
+          "defaultChannel": "default",
+          "color": "#ef1b1b"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Choose a payment proof image for your Battlefront order.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ]
     ],
     "ios": {
       "supportsTablet": true,
@@ -31,6 +45,7 @@
     },
     "android": {
       "package": "com.battlefront.mobile",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/battlefront-adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -44,6 +59,13 @@
         "resizeMode": "contain",
         "backgroundColor": "#090b10"
       }
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "f470ac29-4c52-4a08-932a-452f3810a3c6"
+      }
+    },
+    "owner": "ifnothing"
   }
 }

@@ -74,9 +74,28 @@ src/
 - The mobile API is customer-facing. Inventory administration, payment
   verification, reports, forecasting, and chatbot knowledge management remain
   in the web application.
-- Wishlist items, extra saved addresses, recently viewed display, and
-  notification read state are stored locally. The backend does not provide
-  mobile endpoints for syncing those features or for push notifications.
+- Wishlist items, extra saved addresses, and recently viewed display are stored
+  locally. Notification history and read state use Laravel's customer API.
+
+## Push notifications
+
+Push uses `expo-notifications` and Laravel's `/api/v1/push-devices/{device}` API.
+The app is linked to the `ifnothing` EAS project in `app.json`. Its Android app
+`com.battlefront.mobile` is registered in Firebase project
+`battlefront-mobile-ifnothing`; `google-services.json` is configured in `app.json`.
+The Firebase service account key is assigned to this Android app in EAS for
+FCM V1 push delivery.
+Build with the `development` profile
+in `eas.json` and install that binary to test push. Android Expo Go cannot
+receive remote push on this SDK. Set `EXPO_PUBLIC_API_URL` for the build to a
+backend address reachable from the device. Sign in on the device and allow
+notifications to register its Expo push token. The inbox works even if push
+permission is denied.
+
+On Laravel, run the notification migration and a database queue worker for the
+`notifications` queue, and set `EXPO_PUSH_ENABLED=true`. Keep
+`EXPO_PUSH_ACCESS_TOKEN`, if used, on the server only. See
+`docs/MOBILE_API_HANDOFF.md` in the backend project for the complete contract.
 
 ## Troubleshooting
 

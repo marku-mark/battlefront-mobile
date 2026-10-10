@@ -3,6 +3,7 @@ import { getLocalUserId, getProfile, login, logout, register, updateProfile, onS
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 import { createProfileActions } from "@/lib/accountApi";
+import { revokePushDevice } from "@/lib/pushDevice";
 
 export type Session = { mode: "guest" } | { mode: "customer"; user: ApiUser & { displayName: string } };
 type SessionContextValue = { session: Session; isHydrated: boolean; signIn: (email: string, password: string) => Promise<boolean>; signUp: (fields: RegistrationInput) => Promise<boolean>; signOut: () => Promise<void>; saveProfile: (fields: ProfileInput, owner?: number) => Promise<ApiUser>; refreshProfile: () => Promise<ApiUser> };
@@ -44,7 +45,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setSession((current) => current.mode === "customer" && current.user.id === user.id ? { mode: "customer", user: { ...user, displayName: user.name } } : current);
   }), []);
   const signOut = useCallback(async () => {
-    try { await logout(); }
+    try {
+      await revokePushDevice().catch(() => undefined);
+      await logout();
+    }
     finally {
       setAccessToken(null); setSession({ mode: "guest" });
       if (Platform.OS !== "web") await SecureStore.deleteItemAsync("battlefront-api-token");

@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
 import { LogoMark } from "@/components/layout/LogoMark";
 import { MAX_CONTENT_WIDTH } from "@/lib/responsive";
+import { useNotifications } from "@/hooks/useNotifications";
 
 type HeaderProps = {
   cartCount?: number;
@@ -16,6 +17,7 @@ type HeaderProps = {
 export function Header({ cartCount = 0, onCartPress, onNotificationPress, onSearchPress, searchDisabled = false }: HeaderProps) {
   const insets = useSafeAreaInsets();
   const { isDark } = useTheme();
+  const { unreadCount } = useNotifications();
 
   return (
     <View
@@ -30,11 +32,12 @@ export function Header({ cartCount = 0, onCartPress, onNotificationPress, onSear
         <Pressable
           onPress={onNotificationPress}
           accessibilityRole="button"
-          accessibilityLabel="Open notifications"
-          className="w-12 h-12 items-center justify-center rounded-xl bg-secondary border border-border shadow-soft"
+          accessibilityLabel={`Open notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ""}`}
+          className="relative w-12 h-12 items-center justify-center rounded-xl bg-secondary border border-border shadow-soft"
           style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
         >
           <Ionicons name="notifications-outline" size={20} color={isDark ? "#f8fafc" : "#30343b"} />
+          {unreadCount > 0 && <View className="absolute -top-1 -right-1 bg-ring rounded-full min-w-[18px] h-[18px] items-center justify-center px-1"><Text className="text-[9px] text-primary-foreground font-bold">{unreadCount > 99 ? "99+" : unreadCount}</Text></View>}
         </Pressable>
 
         <Pressable

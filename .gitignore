@@ -5,3 +5,5 @@ web-build/
 *.log
 .DS_Store
 .env
+*firebase-adminsdk*.json
+firebase-service-account*.json
