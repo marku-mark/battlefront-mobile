@@ -7,15 +7,16 @@ import { File } from "expo-file-system";
 import { createOrderSubmission, type OrderInput } from "./orderSubmission";
 export type { OrderInput } from "./orderSubmission";
 export type OrderProductLine = { productId: string; quantity: number; variant: string | null };
-export type OrderRecord = { id: string; reference: string; date: string; status: string; statusValue: string; items: string; total: string; address?: string; phone?: string; deliveryMethod?: string; paymentMethod?: string; productLines?: OrderProductLine[]; canReturn: boolean; canCancel: boolean; canResubmitProof: boolean; paymentNotice?: string };
-type BackendOrder = { id: number; reference: string; created_at: string; status: { value: string; label: string }; fulfillment: { label: string; delivery_address?: string | null }; payment: { method: { label: string }; notice?: string; can_resubmit_proof?: boolean }; recipient?: { contact_number: string }; total: string; total_quantity: number; items?: { product: { id: number; name: string }; quantity: number }[] };
+export type OrderRecord = { id: string; reference: string; date: string; status: string; statusValue: string; items: string; total: string; address?: string; phone?: string; deliveryMethod?: string; paymentMethod?: string; paymentStatus?: string; paymentStatusValue?: string; paymentRejection?: { reason: string; note?: string | null } | null; productSubtotal?: string; deliveryFee?: string; deliveryQuote?: BackendOrder["delivery_quote"]; shipment?: BackendOrder["shipment"]; productLines?: OrderProductLine[]; canCancel: boolean; canResubmitProof: boolean; paymentNotice?: string };
+type BackendOrder = { id: number; reference: string; created_at: string; status: { value: string; label: string }; can_cancel?: boolean; fulfillment: { label: string; delivery_address?: string | null; delivery_destination?: string | null }; payment: { method: { label: string }; status?: { value: string; label: string }; rejection?: { reason: string; note: string | null } | null; notice?: string; can_resubmit_proof?: boolean }; recipient?: { contact_number: string }; product_subtotal?: string; delivery_fee?: string; delivery_quote?: { carrier: string; destination: string; packing_expectation: string; eta_min_days: number; eta_max_days: number; notice: string; is_demo: boolean; assumption_label?: string | null } | null; shipment?: { carrier: string; status: { value: string; label: string }; tracking_reference: string | null; eta: { estimated_delivery_start: string | null; estimated_delivery_end: string | null; notice: string }; timeline: { status: string; label: string; occurred_at: string }[]; notice: string; history_notice: string | null } | null; total: string; total_quantity: number; items?: { id?: number; product: { id: number; name: string }; quantity: number; unit_price?: string }[] };
 function mapOrder(row: BackendOrder): OrderRecord {
   return { id: String(row.id), reference: row.reference, date: new Date(row.created_at).toLocaleDateString("en-PH"), status: row.status.label, statusValue: row.status.value,
     items: row.items?.map((item) => `${item.quantity} × ${item.product.name}`).join(", ") ?? `${row.total_quantity} item(s)`,
     total: `₱${Number(row.total).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`, address: row.fulfillment.delivery_address ?? undefined, phone: row.recipient?.contact_number,
     deliveryMethod: row.fulfillment.label, paymentMethod: row.payment.method.label,
     productLines: row.items?.map((item) => ({ productId: String(item.product.id), quantity: item.quantity, variant: null })),
-    canCancel: false, canReturn: false, canResubmitProof: row.payment.can_resubmit_proof ?? false, paymentNotice: row.payment.notice };
+    paymentStatus: row.payment.status?.label, paymentStatusValue: row.payment.status?.value, paymentRejection: row.payment.rejection, productSubtotal: row.product_subtotal, deliveryFee: row.delivery_fee, deliveryQuote: row.delivery_quote, shipment: row.shipment,
+    canCancel: row.can_cancel ?? false, canResubmitProof: row.payment.can_resubmit_proof ?? false, paymentNotice: row.payment.notice };
 }
 const orderCache = createReadCache<OrderRecord | null>(30_000);
 const ordersCache = createProgressiveCatalog(async (page) => {
@@ -60,4 +61,9 @@ export async function resubmitPaymentProof(id: string, proof: { uri: string; nam
   if (revision === getSessionRevision()) { clearOrders(); orderCache.seed(id, updated); }
   return updated;
 }
-export async function cancelPlacedOrder(_id: string): Promise<OrderRecord | null> { throw new Error("Customer cancellation is not supported. Contact Battlefront staff."); }
+export async function cancelPlacedOrder(id: string): Promise<OrderRecord> {
+  const revision = getSessionRevision();
+  const updated = mapOrder((await apiRequest<{ data: BackendOrder }>(`orders/${encodeURIComponent(id)}/cancel`, { method: "POST" })).data);
+  if (revision === getSessionRevision()) { clearOrders(); orderCache.seed(id, updated); }
+  return updated;
+}

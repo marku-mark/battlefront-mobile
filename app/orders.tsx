@@ -5,7 +5,6 @@ import { useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { FlatList, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getOrderReturnRequests } from "@/lib/orderSupport";
 import { getOrders, getOrdersSnapshot, subscribeOrders, getOrdersPageSnapshot, loadNextOrdersPage, type OrderRecord } from "@/lib/orders";
 
 export default function OrdersScreen() {
@@ -15,7 +14,6 @@ export default function OrdersScreen() {
   const owner = session.mode === "customer" ? session.user.id : null;
   const [loadedOwner, setLoadedOwner] = useState(owner);
   const [orders, setOrders] = useState<OrderRecord[]>(() => getOrdersSnapshot() ?? []);
-  const [returnRequestIds, setReturnRequestIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(() => !getOrdersSnapshot());
   const [refreshing, setRefreshing] = useState(false);
@@ -32,10 +30,7 @@ export default function OrdersScreen() {
         setOrders(snapshot.rows); setLoading(snapshot.loading);
         setError(snapshot.error?.message ?? null);
       });
-      Promise.all([getOrders(), getOrderReturnRequests()]).then(([, requests]) => {
-        if (!isActive) return;
-        setReturnRequestIds(requests.map((request) => request.orderId));
-      }).catch((failure) => { if (isActive) setError(failure instanceof Error ? failure.message : "Cannot load orders."); });
+      void getOrders().catch((failure) => { if (isActive) setError(failure instanceof Error ? failure.message : "Cannot load orders."); });
       return () => {
         isActive = false;
         unsubscribe();
@@ -78,7 +73,7 @@ export default function OrdersScreen() {
             <View className="flex-row items-center justify-between">
               <Text className="text-foreground text-sm font-bold">{order.reference}</Text>
               <View className="rounded-full bg-primary/10 px-2 py-1">
-                <Text className="text-primary text-[10px] font-bold uppercase tracking-[0.08em]">{returnRequestIds.includes(order.id) ? "Return requested" : order.status}</Text>
+                <Text className="text-primary text-[10px] font-bold uppercase tracking-[0.08em]">{order.status}</Text>
               </View>
             </View>
 

@@ -34,8 +34,38 @@ export function getProductVariants(product: Product): string[] {
 }
 
 export function getProductImageSource(image: Product["image"]): ImageSourcePropType | undefined {
-  if (!/^https?:\/\//i.test(image)) return undefined;
-  return { uri: image };
+  if (!image) return undefined;
+
+  const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+  let apiOrigin: string | undefined;
+  try {
+    if (apiUrl) apiOrigin = new URL(apiUrl).origin;
+  } catch {
+    // An invalid API URL is reported by the API client; keep image parsing safe.
+  }
+
+  try {
+    const url = /^https?:\/\//i.test(image)
+      ? new URL(image)
+      : apiOrigin
+        ? new URL(image.replace(/^\/+/, ""), `${apiOrigin}/`)
+        : undefined;
+    if (!url) return undefined;
+
+    // Product image URLs come from Laravel and can contain a stale APP_URL host.
+    // Use the configured API host for Laravel-managed image paths on phones.
+    const isLaravelImage = /^\/(storage|images)\//i.test(url.pathname);
+    const isLocalHost = /^(localhost|127\.0\.0\.1|0\.0\.0\.0)$/i.test(url.hostname) || url.hostname.endsWith(".test");
+    if (apiOrigin && (isLaravelImage || isLocalHost)) {
+      const api = new URL(apiOrigin);
+      url.protocol = api.protocol;
+      url.host = api.host;
+    }
+
+    return { uri: url.toString() };
+  } catch {
+    return undefined;
+  }
 }
 
 export type Banner = {

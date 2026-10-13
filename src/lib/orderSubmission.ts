@@ -1,5 +1,5 @@
 export type PaymentProof = { uri: string; name: string; type: string };
-export type OrderInput = { cart_item_ids: number[]; recipient_name: string; contact_number: string; fulfillment_method: string; payment_method: string; delivery_destination?: string; delivery_address?: string; payment_proof?: PaymentProof };
+export type OrderInput = { cart_item_ids: number[]; recipient_name: string; contact_number: string; fulfillment_method: string; payment_method: string; delivery_destination?: string; delivery_barangay_code?: string; delivery_address_details?: string; delivery_address?: string; payment_proof?: PaymentProof };
 type Request = <T>(path: string, options?: RequestInit) => Promise<T>;
 type NativeProofFile = { bytes: () => Promise<Uint8Array> };
 

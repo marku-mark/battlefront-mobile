@@ -11,8 +11,8 @@ import { getCart, getCheckout, type Checkout } from "@/lib/api";
 import { placeOrder } from "@/lib/orders";
 import { loadSavedAddresses, persistSavedAddresses, type SavedAddress } from "@/lib/savedAddresses";
 import { checkoutRecipient, paymentForFulfillment, paymentProofError, formatCheckoutAmount, checkoutDetailsError, quoteForFulfillment } from "@/lib/checkoutForm";
-import { PhilippineAddressFields } from "@/components/addresses/PhilippineAddressFields";
-import { EMPTY_PHILIPPINE_ADDRESS, isCompletePhilippineAddress, formatPhilippineAddress } from "@/lib/philippineAddress";
+import { DeliveryAddressFields } from "@/components/addresses/DeliveryAddressFields";
+import { EMPTY_DELIVERY_ADDRESS, isCompleteDeliveryAddress, formatDeliveryAddress } from "@/lib/deliveryAddress";
 import { getLocalUserId } from "@/lib/api";
 
 export default function CheckoutScreen() {
@@ -27,9 +27,8 @@ export default function CheckoutScreen() {
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
-  const [isAddingAddress, setIsAddingAddress] = useState(false);
   const [addressLabel, setAddressLabel] = useState("");
-  const [location, setLocation] = useState(EMPTY_PHILIPPINE_ADDRESS);
+  const [location, setLocation] = useState(EMPTY_DELIVERY_ADDRESS);
   const [isSavingAddress, setIsSavingAddress] = useState(false);
   const [addressError, setAddressError] = useState("");
   const [checkoutRetry, setCheckoutRetry] = useState(0);
@@ -51,7 +50,7 @@ export default function CheckoutScreen() {
     setPreview(null); setError("");
     setSelectedCartItemIds([]);
     setSavedAddresses([]);
-    setIsAddingAddress(false); setAddressLabel(""); setLocation(EMPTY_PHILIPPINE_ADDRESS); setAddressError(""); setIsSavingAddress(false);
+    setAddressLabel(""); setLocation(EMPTY_DELIVERY_ADDRESS); setAddressError(""); setIsSavingAddress(false);
     setFullName(""); setPhone(""); setAddress(""); setProof(null); setFulfillment("pickup"); setDeliveryDestination(""); setPayment("cash");
   }, [customerId, createdOrderId, checkoutRetry]);
   useActiveFocusEffect(useCallback(() => {
@@ -70,8 +69,13 @@ export default function CheckoutScreen() {
       const recipient = checkoutRecipient(result.customer, addresses);
       setPreview(result); setSavedAddresses(addresses);
       if (initializedCustomer.current !== customerId) {
-        setFullName(recipient.name); setPhone(recipient.phone); setAddress(recipient.address);
-        setIsAddingAddress(!recipient.phone.trim() || !recipient.address.trim());
+        const selectedSavedAddress = addresses.find((entry) => entry.address === recipient.address);
+        const prefill = selectedSavedAddress?.delivery_destination && selectedSavedAddress.delivery_barangay_code && selectedSavedAddress.delivery_address_details
+          ? { delivery_destination: selectedSavedAddress.delivery_destination, delivery_barangay_code: selectedSavedAddress.delivery_barangay_code, delivery_address_details: selectedSavedAddress.delivery_address_details }
+          : result.delivery_address_prefill;
+        const formattedAddress = formatDeliveryAddress(prefill, result.delivery_locations);
+        setFullName(recipient.name); setPhone(recipient.phone); setAddress(formattedAddress); setLocation(prefill);
+        setDeliveryDestination(prefill.delivery_destination);
         initializedCustomer.current = customerId;
       }
       lastPreviewAt.current = Date.now();
@@ -84,13 +88,14 @@ export default function CheckoutScreen() {
   const selectedPayment = paymentOptions.find((method) => method.value === payment);
   const selectedQuote = visiblePreview ? quoteForFulfillment(fulfillment, deliveryDestination, visiblePreview.delivery_quotes, visiblePreview.pickup_quote) : undefined;
   const deliveryQuote = fulfillment === "delivery" ? visiblePreview?.delivery_quotes.find((quote) => quote.destination === deliveryDestination) : undefined;
-  const cannotSubmit = isSubmitting || isSavingAddress || selectedCartItemIds.length === 0 || !visiblePreview || !selectedQuote || (fulfillment === "delivery" && isAddingAddress);
+  const addressIsComplete = Boolean(visiblePreview && isCompleteDeliveryAddress(location, visiblePreview.delivery_locations));
+  const cannotSubmit = isSubmitting || isSavingAddress || selectedCartItemIds.length === 0 || !visiblePreview || !selectedQuote || (fulfillment === "delivery" && !addressIsComplete);
   async function saveAddress() {
     if (isSavingAddress || customerId === null) return;
-    if (!addressLabel.trim() || !fullName.trim() || !phone.trim() || !isCompletePhilippineAddress(location)) {
-      setAddressError("Complete the label, recipient, phone, and every required Philippine address field."); return;
+    if (!addressLabel.trim() || !fullName.trim() || !phone.trim() || !visiblePreview || !isCompleteDeliveryAddress(location, visiblePreview.delivery_locations)) {
+      setAddressError("Complete the label, recipient, phone, destination, barangay, and street details."); return;
     }
-    const formatted = formatPhilippineAddress(location);
+    const formatted = formatDeliveryAddress(location, visiblePreview.delivery_locations);
     if (formatted.length > 255) { setAddressError("Keep the complete address within 255 characters."); return; }
     const existing = savedAddresses.find((entry) => entry.label.toLowerCase() === addressLabel.trim().toLowerCase());
     const entry: SavedAddress = { ...location, id: existing?.id ?? `address-${Date.now()}`, label: addressLabel.trim(), recipient: fullName.trim(), phone: phone.trim(), address: formatted };
@@ -99,7 +104,7 @@ export default function CheckoutScreen() {
     try {
       await persistSavedAddresses(next);
       if (getLocalUserId() !== customerId) return;
-      setSavedAddresses(next); setAddress(formatted); setIsAddingAddress(false);
+      setSavedAddresses(next); setAddress(formatted);
     } catch {
       if (getLocalUserId() === customerId) setAddressError("Couldn't save this address. Please try again.");
     } finally { if (getLocalUserId() === customerId) setIsSavingAddress(false); }
@@ -116,14 +121,18 @@ export default function CheckoutScreen() {
   }
   async function submit() {
     if (submitting.current || createdOrderId || isSavingAddress || selectedCartItemIds.length === 0 || !visiblePreview || !selectedPayment) return;
-    const validation = checkoutDetailsError({ name: fullName, phone, fulfillment, destination: deliveryDestination, address, editingAddress: isAddingAddress, requiresProof: selectedPayment.requires_proof, hasProof: Boolean(proof) });
+      const addressComplete = visiblePreview && isCompleteDeliveryAddress(location, visiblePreview.delivery_locations);
+      const validation = checkoutDetailsError({ name: fullName, phone, fulfillment, destination: deliveryDestination, address: addressComplete ? address : "", editingAddress: false, requiresProof: selectedPayment.requires_proof, hasProof: Boolean(proof) });
     if (validation) { setError(validation); return; }
     if (!selectedQuote) { setError("Select an available delivery destination."); return; }
     submitting.current = true;
     setIsSubmitting(true); setError("");
     try {
       const order = await placeOrder({ cart_item_ids: selectedCartItemIds, recipient_name: fullName.trim(), contact_number: phone.trim(), fulfillment_method: fulfillment,
-        payment_method: payment, delivery_destination: fulfillment === "delivery" ? deliveryDestination : undefined, delivery_address: fulfillment === "delivery" ? address.trim() : undefined,
+        payment_method: payment,
+        delivery_destination: fulfillment === "delivery" ? location.delivery_destination : undefined,
+        delivery_barangay_code: fulfillment === "delivery" ? location.delivery_barangay_code : undefined,
+        delivery_address_details: fulfillment === "delivery" ? location.delivery_address_details.trim() : undefined,
         payment_proof: selectedPayment.requires_proof && proof ? { uri: proof.uri, name: proof.fileName ?? "payment-proof.jpg", type: proof.mimeType ?? "image/jpeg" } : undefined });
       if (getLocalUserId() !== customerId) return;
       setCreatedOrderId(order.id);
@@ -157,24 +166,11 @@ export default function CheckoutScreen() {
           <TextInput accessibilityLabel="Recipient name" value={fullName} onChangeText={setFullName} editable={!isSubmitting && !isSavingAddress} maxLength={255} autoComplete="name" placeholder="Full name" className="mt-2 rounded-xl border border-border bg-secondary px-3 py-3 text-foreground" />
           <Text className="text-foreground text-sm mt-3">Contact number</Text>
           <TextInput accessibilityLabel="Contact number" value={phone} onChangeText={setPhone} editable={!isSubmitting && !isSavingAddress} maxLength={20} autoComplete="tel" placeholder="e.g. 0917 123 4567" keyboardType="phone-pad" className="mt-2 rounded-xl border border-border bg-secondary px-3 py-3 text-foreground" />
-          {fulfillment === "delivery" && (isAddingAddress ? <View className="mt-3 rounded-xl border border-border bg-secondary p-3">
-            <Text className="text-foreground text-sm font-semibold">Add delivery address</Text>
-            <Text className="text-muted-foreground text-xs mt-2">Save your recipient details and address for checkout and Account on this device.</Text>
-            <TextInput accessibilityLabel="Address label" value={addressLabel} onChangeText={setAddressLabel} editable={!isSavingAddress} placeholder="Label (Home, Work)" className="mt-3 h-11 rounded-lg border border-border bg-background px-3 text-foreground text-sm" />
-            <View pointerEvents={isSavingAddress ? "none" : "auto"}>
-              <PhilippineAddressFields value={location} onChange={(patch) => setLocation((current) => ({ ...current, ...patch }))} />
-            </View>
-            {addressError ? <Text className="text-danger mt-2">{addressError}</Text> : null}
-            <Pressable disabled={isSavingAddress} onPress={() => void saveAddress()} className="mt-3 rounded-xl bg-primary px-5 py-3"><Text className="text-primary-foreground text-center">{isSavingAddress ? "Saving..." : "Save address and use for checkout"}</Text></Pressable>
-            {!!address.trim() && !!phone.trim() && <Pressable disabled={isSavingAddress} onPress={() => setIsAddingAddress(false)} className="mt-2 p-3"><Text className="text-foreground text-center">Cancel</Text></Pressable>}
-          </View> : <Pressable disabled={isSubmitting} onPress={() => { setAddressLabel(""); setLocation(EMPTY_PHILIPPINE_ADDRESS); setAddressError(""); setIsAddingAddress(true); }} className="mt-3 py-2"><Text className="text-primary font-semibold">Add another address</Text></Pressable>)}
           <Text className="text-primary text-xs font-semibold mt-6">STEP 2</Text>
           <Text className="text-foreground text-base font-bold mt-1">Fulfillment method</Text>
-          {visiblePreview.fulfillment_methods.map((method) => <Pressable key={method.value} disabled={isSubmitting} accessibilityRole="radio" accessibilityState={{ checked: fulfillment === method.value, disabled: isSubmitting }} onPress={() => { const next = paymentForFulfillment(visiblePreview.payment_methods, method.value, payment); setFulfillment(method.value); if (method.value === "pickup") setDeliveryDestination(""); if (next !== payment) { setProof(null); setPayment(next); } }} className={`mt-3 rounded-xl border p-4 ${fulfillment === method.value ? "border-primary bg-primary/10" : "border-border bg-card"}`}><Text className="text-foreground font-semibold">{fulfillment === method.value ? "● " : "○ "}{method.label}</Text><Text className="text-muted-foreground text-xs mt-1">{method.value === "pickup" ? "Collect your order from Battlefront." : "Send the order to your supplied address."}</Text></Pressable>)}
+          {visiblePreview.fulfillment_methods.map((method) => <Pressable key={method.value} disabled={isSubmitting} accessibilityRole="radio" accessibilityState={{ checked: fulfillment === method.value, disabled: isSubmitting }} onPress={() => { const next = paymentForFulfillment(visiblePreview.payment_methods, method.value, payment); setFulfillment(method.value); if (method.value === "pickup") { setDeliveryDestination(""); setLocation((current) => ({ ...current, delivery_destination: "", delivery_barangay_code: "" })); } if (next !== payment) { setProof(null); setPayment(next); } }} className={`mt-3 rounded-xl border p-4 ${fulfillment === method.value ? "border-primary bg-primary/10" : "border-border bg-card"}`}><Text className="text-foreground font-semibold">{fulfillment === method.value ? "● " : "○ "}{method.label}</Text><Text className="text-muted-foreground text-xs mt-1">{method.value === "pickup" ? "Collect your order from Battlefront." : "Send the order to your supplied address."}</Text></Pressable>)}
           {fulfillment === "delivery" ? <View>
-            <Text className="text-foreground text-sm font-semibold mt-4">Delivery destination</Text>
-            <Text className="text-muted-foreground text-xs mt-1">Choose the destination for the delivery fee and estimate.</Text>
-            {visiblePreview.delivery_quotes.map((quote) => <Pressable key={quote.destination} disabled={isSubmitting} accessibilityRole="radio" accessibilityState={{ checked: deliveryDestination === quote.destination, disabled: isSubmitting }} onPress={() => setDeliveryDestination(quote.destination)} className={`mt-2 rounded-xl border p-3 ${deliveryDestination === quote.destination ? "border-primary bg-primary/10" : "border-border bg-card"}`}><Text className="text-foreground font-semibold">{deliveryDestination === quote.destination ? "● " : "○ "}{quote.destination}</Text><Text className="text-muted-foreground text-xs mt-1">Delivery fee {formatCheckoutAmount(quote.delivery_fee)}</Text></Pressable>)}
+            <DeliveryAddressFields value={location} locations={visiblePreview.delivery_locations} onChange={(next) => { setLocation(next); setDeliveryDestination(next.delivery_destination); setAddress(formatDeliveryAddress(next, visiblePreview.delivery_locations)); }} disabled={isSubmitting || isSavingAddress} />
             {deliveryQuote && <View className="mt-3 rounded-xl border border-border bg-secondary p-4">
               <Text className="text-foreground font-semibold">{deliveryQuote.carrier.toUpperCase()} delivery estimate</Text>
               <Text className="text-muted-foreground text-sm mt-2">{deliveryQuote.packing_expectation} · {deliveryQuote.preparation_days} day{deliveryQuote.preparation_days === 1 ? "" : "s"} preparation</Text>
@@ -185,8 +181,10 @@ export default function CheckoutScreen() {
             </View>}
             {savedAddresses.length > 0 && <View className="mt-3">
               <Text className="text-foreground text-sm font-semibold">Use a saved address</Text>
-              {savedAddresses.map((saved) => <Pressable key={saved.id} disabled={isSubmitting || isSavingAddress} onPress={() => { setAddress(saved.address); setFullName(saved.recipient); setPhone(saved.phone); setIsAddingAddress(!saved.phone.trim() || !saved.address.trim()); }} className="mt-2 rounded-xl border border-border bg-card p-3"><Text className="text-foreground text-sm">{saved.label} · {saved.recipient}</Text><Text className="text-muted-foreground text-xs mt-1">{saved.address}</Text></Pressable>)}
+              {savedAddresses.map((saved) => <Pressable key={saved.id} disabled={isSubmitting || isSavingAddress} onPress={() => { setAddress(saved.address); setFullName(saved.recipient); setPhone(saved.phone); const next = { delivery_destination: saved.delivery_destination ?? "", delivery_barangay_code: saved.delivery_barangay_code ?? "", delivery_address_details: saved.delivery_address_details ?? saved.address }; setLocation(next); setDeliveryDestination(next.delivery_destination); }} className="mt-2 rounded-xl border border-border bg-card p-3"><Text className="text-foreground text-sm">{saved.label} · {saved.recipient}</Text><Text className="text-muted-foreground text-xs mt-1">{saved.address}</Text></Pressable>)}
             </View>}
+            <TextInput accessibilityLabel="Saved address label" value={addressLabel} onChangeText={setAddressLabel} editable={!isSavingAddress} placeholder="Address label (required to save)" className="mt-4 h-11 rounded-lg border border-border bg-secondary px-3 text-foreground text-sm" />
+            <Pressable disabled={isSavingAddress || !addressIsComplete} onPress={() => void saveAddress()} className="mt-2 rounded-xl border border-border bg-card p-3" style={{ opacity: isSavingAddress || !addressIsComplete ? 0.5 : 1 }}><Text className="text-foreground text-center text-sm font-semibold">{isSavingAddress ? "Saving address..." : "Save address on this device"}</Text></Pressable>
             <Text className="text-foreground text-sm mt-3">Delivery address</Text>
             <Text className="text-foreground mt-2">{address || "Add your delivery address above."}</Text>
             <Text className="text-muted-foreground text-xs mt-2">Selected from your saved details. Choose another address above if needed.</Text>
@@ -228,7 +226,6 @@ export default function CheckoutScreen() {
       {session.mode === "customer" && !createdOrderId && <View className="rounded-t-2xl border-t border-border bg-card px-4 py-3">
         {visiblePreview && <View className="flex-row flex-wrap items-center justify-between gap-2 mb-3"><Text className="text-muted-foreground text-sm">Final total</Text><Text className="text-foreground text-xl font-bold">{selectedQuote ? formatCheckoutAmount(selectedQuote.total) : "Select destination"}</Text></View>}
         {visiblePreview && error && <Text accessibilityRole="alert" className="text-danger text-sm mb-2">{error}</Text>}
-        {visiblePreview && fulfillment === "delivery" && isAddingAddress && <Text className="text-muted-foreground text-sm mb-2">Save your delivery address above to continue.</Text>}
         <Pressable accessibilityRole="button" accessibilityState={{ busy: isSubmitting, disabled: cannotSubmit }} disabled={cannotSubmit} onPress={() => void submit()} className="min-h-12 rounded-xl bg-primary px-5 py-3" style={({ pressed }) => ({ opacity: cannotSubmit ? 0.5 : pressed ? 0.8 : 1 })}><Text className="text-primary-foreground text-center font-semibold">{isSubmitting ? "Placing order…" : "Place order"}</Text></Pressable>
       </View>}
       </KeyboardAvoidingView>

@@ -4,14 +4,13 @@ import { ActivityIndicator, Modal, Pressable, ScrollView, Switch, Text, TextInpu
 import { useEffect, useRef, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MockSignInSheet } from "@/components/account/MockSignInSheet";
-import { PhilippineAddressFields } from "@/components/addresses/PhilippineAddressFields";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { useSession } from "@/hooks/useSession";
 import { getLocalUserId } from "@/lib/api";
 import { getOrdersSnapshot } from "@/lib/orders";
-import { EMPTY_PHILIPPINE_ADDRESS, formatPhilippineAddress, isCompletePhilippineAddress, type PhilippineAddressFields as PhilippineAddressValue } from "@/lib/philippineAddress";
 import { loadSavedAddresses, persistSavedAddresses, type SavedAddress } from "@/lib/savedAddresses";
 import { useTheme } from "@/theme/ThemeProvider";
+import { useToast } from "@/hooks/useToast";
 
 const accountLinks = [
   { icon: "receipt-outline", label: "My orders", detail: "View your order history", badge: null },
@@ -24,12 +23,12 @@ export default function AccountScreen() {
   const orders = getOrdersSnapshot() ?? [];
   const { width } = useWindowDimensions();
   const { isDark, toggleMode, colors } = useTheme();
+  const { showToast } = useToast();
   const { session, isHydrated, signOut, saveProfile, refreshProfile } = useSession();
   const isMockAccount = session.mode === "customer";
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [selectedUtility, setSelectedUtility] = useState<string | null>(null);
   const [authMessage, setAuthMessage] = useState("");
-  const [pendingSignInAction, setPendingSignInAction] = useState<"orders" | "addresses" | null>(null);
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [isAddressesLoading, setIsAddressesLoading] = useState(false);
   const [addressError, setAddressError] = useState("");
@@ -37,7 +36,7 @@ export default function AccountScreen() {
   const [newAddressLabel, setNewAddressLabel] = useState("");
   const [newAddressRecipient, setNewAddressRecipient] = useState("");
   const [newAddressPhone, setNewAddressPhone] = useState("");
-  const [newAddressLocation, setNewAddressLocation] = useState<PhilippineAddressValue>(EMPTY_PHILIPPINE_ADDRESS);
+  const [newAddressText, setNewAddressText] = useState("");
   const [isSavingAddress, setIsSavingAddress] = useState(false);
   const [profileName, setProfileName] = useState("");
   const [profileEmail, setProfileEmail] = useState("");
@@ -140,8 +139,8 @@ export default function AccountScreen() {
     const label = newAddressLabel.trim();
     const recipient = newAddressRecipient.trim();
     const phone = newAddressPhone.trim();
-    if (!label || !recipient || !phone || !isCompletePhilippineAddress(newAddressLocation)) {
-      setAddressError("Complete the recipient, phone, and every required Philippine address field.");
+    if (!label || !recipient || !phone || !newAddressText.trim()) {
+      setAddressError("Complete the label, recipient, phone, and address.");
       return;
     }
 
@@ -151,8 +150,7 @@ export default function AccountScreen() {
       label,
       recipient,
       phone,
-      address: formatPhilippineAddress(newAddressLocation),
-      ...newAddressLocation,
+      address: newAddressText.trim(),
     };
     const nextAddresses = [newAddress, ...savedAddresses.filter((address) => address.id !== newAddress.id)];
     setIsSavingAddress(true);
@@ -163,7 +161,7 @@ export default function AccountScreen() {
       setNewAddressLabel("");
       setNewAddressRecipient("");
       setNewAddressPhone("");
-      setNewAddressLocation(EMPTY_PHILIPPINE_ADDRESS);
+      setNewAddressText("");
       setIsAddingAddress(false);
       setAddressError("");
     } catch {
@@ -173,17 +171,18 @@ export default function AccountScreen() {
     }
   }
 
-  function openSignIn(message = "", action: "orders" | "addresses" | null = null) {
+  function openSignIn(message = "") {
     setAuthMessage(message);
-    setPendingSignInAction(action);
     setIsAuthOpen(true);
   }
 
-  function handleSignInSuccess() {
-    const action = pendingSignInAction;
-    setPendingSignInAction(null);
-    if (action === "orders") router.push("/orders");
-    if (action === "addresses") void openSavedAddresses();
+  async function handleSignOut() {
+    try {
+      await signOut();
+      showToast("You have been logged out.", "info");
+    } catch {
+      showToast("Could not sign out. Please try again.", "error");
+    }
   }
 
   if (!isHydrated) {
@@ -221,7 +220,7 @@ export default function AccountScreen() {
             <Pressable
               onPress={() => {
                 if (isMockAccount) {
-                  void signOut().catch(() => undefined);
+                  void handleSignOut();
                   return;
                 }
                 openSignIn();
@@ -282,7 +281,7 @@ export default function AccountScreen() {
                 }
                 if (link.label === "My orders") {
                   if (!isMockAccount) {
-                    openSignIn("Sign in to view your order history.", "orders");
+                    openSignIn("Sign in to view your order history.");
                     return;
                   }
                   router.push("/orders");
@@ -290,7 +289,7 @@ export default function AccountScreen() {
                 }
                 if (link.label === "Delivery addresses") {
                   if (!isMockAccount) {
-                    openSignIn("Sign in to view your saved delivery addresses.", "addresses");
+                    openSignIn("Sign in to view your saved delivery addresses.");
                     return;
                   }
                   void openSavedAddresses();
@@ -354,9 +353,7 @@ export default function AccountScreen() {
         message={authMessage || undefined}
         onClose={() => {
           setIsAuthOpen(false);
-          setPendingSignInAction(null);
         }}
-        onSuccess={handleSignInSuccess}
       />
 
       <Modal visible={selectedUtility !== null} animationType="fade" transparent onRequestClose={() => setSelectedUtility(null)}>
@@ -442,9 +439,16 @@ export default function AccountScreen() {
                       keyboardType="phone-pad"
                       className="mt-2 h-11 rounded-lg border border-border bg-background px-3 text-foreground text-sm"
                     />
-                    <PhilippineAddressFields
-                      value={newAddressLocation}
-                      onChange={(patch) => setNewAddressLocation((current) => ({ ...current, ...patch }))}
+                    <TextInput
+                      accessibilityLabel="Delivery address"
+                      value={newAddressText}
+                      onChangeText={setNewAddressText}
+                      placeholder="House, street, barangay, city / municipality"
+                      placeholderTextColor={colors.muted}
+                      multiline
+                      maxLength={255}
+                      textAlignVertical="top"
+                      className="mt-2 min-h-20 rounded-lg border border-border bg-background px-3 py-3 text-foreground text-sm"
                     />
                     <View className="mt-3 flex-row gap-2">
                       <Pressable

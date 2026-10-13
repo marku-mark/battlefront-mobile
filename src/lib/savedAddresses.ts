@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getLocalUserId } from "@/lib/api";
-import type { PhilippineAddressFields } from "@/lib/philippineAddress";
+import type { DeliveryAddress } from "@/lib/deliveryAddress";
 
 export type SavedAddress = {
   id: string;
@@ -8,7 +8,7 @@ export type SavedAddress = {
   recipient: string;
   phone: string;
   address: string;
-} & Partial<PhilippineAddressFields>;
+} & Partial<DeliveryAddress>;
 
 const SAVED_ADDRESSES_STORAGE_KEY = "battlefront-saved-addresses";
 
@@ -33,11 +33,9 @@ export async function persistSavedAddresses(addresses: SavedAddress[]): Promise<
 function isSavedAddress(value: unknown): value is SavedAddress {
   if (!value || typeof value !== "object") return false;
   const address = value as Partial<SavedAddress>;
-  const hasValidLocationFields = [
-    "region", "regionCode", "province", "provinceCode", "localityParentCode",
-    "city", "cityCode", "barangay", "barangayCode", "street", "zipCode",
-  ].every((field) => address[field as keyof PhilippineAddressFields] === undefined
-    || typeof address[field as keyof PhilippineAddressFields] === "string");
+  const hasValidLocationFields = ["delivery_destination", "delivery_barangay_code", "delivery_address_details"]
+    .every((field) => address[field as keyof DeliveryAddress] === undefined
+      || typeof address[field as keyof DeliveryAddress] === "string");
   return typeof address.id === "string"
     && typeof address.label === "string"
     && typeof address.recipient === "string"

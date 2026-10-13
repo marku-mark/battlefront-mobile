@@ -10,6 +10,7 @@ import { SessionProvider } from "@/hooks/useSession";
 import { NotificationProvider } from "@/hooks/useNotifications";
 import { ThemeProvider } from "@/theme/ThemeProvider";
 import { useTheme } from "@/theme/ThemeProvider";
+import { ToastProvider } from "@/hooks/useToast";
 
 import { View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -38,15 +39,17 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ThemeProvider>
-          <SessionProvider>
-            <NotificationProvider>
-              <CartProvider>
-                <WishlistProvider>
-                  <AppStack />
-                </WishlistProvider>
-              </CartProvider>
-            </NotificationProvider>
-          </SessionProvider>
+          <ToastProvider>
+            <SessionProvider>
+              <NotificationProvider>
+                <CartProvider>
+                  <WishlistProvider>
+                    <AppStack />
+                  </WishlistProvider>
+                </CartProvider>
+              </NotificationProvider>
+            </SessionProvider>
+          </ToastProvider>
         </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

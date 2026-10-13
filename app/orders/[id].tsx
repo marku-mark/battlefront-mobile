@@ -2,18 +2,15 @@ import { useActiveFocusEffect } from "@/hooks/useActiveScreen";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCart } from "@/hooks/useCart";
 import { useSession } from "@/hooks/useSession";
 import { getSessionRevision } from "@/lib/api";
 import { getProductById } from "@/lib/api";
-import { getOrderReturnRequests, saveOrderReturnRequest, type OrderReturnRequest } from "@/lib/orderSupport";
 import { cancelPlacedOrder, getOrderById, getOrderSnapshot, resubmitPaymentProof, type OrderRecord } from "@/lib/orders";
 import * as ImagePicker from "expo-image-picker";
 import { useTheme } from "@/theme/ThemeProvider";
-
-const returnReasons = ["Item damaged", "Wrong item", "Changed my mind"];
 
 const statusSteps = [
   { key: "pending", label: "Pending", detail: "Your order is awaiting staff processing." },
@@ -32,12 +29,6 @@ export default function OrderDetailScreen() {
   const [order, setOrder] = useState<OrderRecord | null>(() => id ? getOrderSnapshot(id) ?? null : null);
   const [isLoadingOrder, setIsLoadingOrder] = useState(() => !id || !getOrderSnapshot(id));
   const [loadError, setLoadError] = useState(false);
-  const [returnRequest, setReturnRequest] = useState<OrderReturnRequest | null>(null);
-  const [isReturnFormOpen, setIsReturnFormOpen] = useState(false);
-  const [selectedReason, setSelectedReason] = useState("");
-  const [returnNote, setReturnNote] = useState("");
-  const [isSavingReturn, setIsSavingReturn] = useState(false);
-  const [returnError, setReturnError] = useState("");
   const [isCancellingOrder, setIsCancellingOrder] = useState(false);
   const [isReordering, setIsReordering] = useState(false);
   const [isUploadingProof, setIsUploadingProof] = useState(false);
@@ -71,10 +62,9 @@ export default function OrderDetailScreen() {
     const cached = getOrderSnapshot(id);
     setOrder(cached ?? null);
     setIsLoadingOrder(!cached);
-    Promise.all([getOrderById(id), getOrderReturnRequests()]).then(([loadedOrder, requests]) => {
+    getOrderById(id).then((loadedOrder) => {
       if (!isActive) return;
       setOrder(loadedOrder);
-      setReturnRequest(requests.find((request) => request.orderId === id) ?? null);
       setIsLoadingOrder(false);
     }).catch(() => {
       if (!isActive) return;
@@ -88,33 +78,23 @@ export default function OrderDetailScreen() {
 
   const currentStepIndex = order ? statusSteps.findIndex((step) => step.key === order.statusValue) : -1;
 
-  async function submitReturnRequest() {
-    if (!order || !selectedReason || isSavingReturn) return;
-    setIsSavingReturn(true);
-    setReturnError("");
-    try {
-      const requests = await saveOrderReturnRequest(order.id, selectedReason, returnNote);
-      setReturnRequest(requests.find((request) => request.orderId === order.id) ?? null);
-      setIsReturnFormOpen(false);
-    } catch {
-      setReturnError("Couldn't save your request. Please try again.");
-    } finally {
-      setIsSavingReturn(false);
-    }
-  }
-
   async function cancelOrder() {
-    if (!order || order.status !== "Ordered" || isCancellingOrder) return;
+    if (!order || !order.canCancel || isCancellingOrder) return;
+    const revision = getSessionRevision();
     setIsCancellingOrder(true);
     try {
       const cancelledOrder = await cancelPlacedOrder(order.id);
-      if (!cancelledOrder) {
-        Alert.alert("Order can't be cancelled", "Only orders that haven't been packed can be cancelled.");
-        return;
-      }
+      if (revision !== getSessionRevision()) return;
       setOrder(cancelledOrder);
-    } catch {
-      Alert.alert("Couldn't cancel order", "Please try again.");
+      Alert.alert("Order cancelled", "Reserved stock has been released. The order remains in your history.");
+    } catch (reason) {
+      if (revision !== getSessionRevision()) return;
+      const message = reason instanceof Error ? reason.message : "Please try again.";
+      try {
+        const latest = await getOrderById(order.id);
+        if (revision === getSessionRevision() && latest) setOrder(latest);
+      } catch { /* Keep the current order visible when refresh also fails. */ }
+      Alert.alert("Couldn't cancel order", message);
     } finally {
       setIsCancellingOrder(false);
     }
@@ -123,7 +103,7 @@ export default function OrderDetailScreen() {
   function confirmCancelOrder() {
     Alert.alert(
       "Cancel this order?",
-      "This order has not been packed yet. You can place a new order later.",
+      "Reserved stock will be released. This order will remain in your order history.",
       [
         { text: "Keep order", style: "cancel" },
         { text: "Cancel order", style: "destructive", onPress: () => void cancelOrder() },
@@ -201,7 +181,7 @@ export default function OrderDetailScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
         {loadError && <Text className="text-danger text-sm mb-3">Could not refresh this order. Showing saved details.</Text>}
         <View className="rounded-2xl border border-border bg-card p-4">
-          <Text className="text-foreground text-xl font-bold">{order.id}</Text>
+          <Text className="text-foreground text-xl font-bold">{order.reference}</Text>
           <Text className="text-muted-foreground text-xs mt-1">Placed {order.date}</Text>
 
           <View className="mt-4 flex-row items-center justify-between border-b border-border pb-3">
@@ -211,7 +191,7 @@ export default function OrderDetailScreen() {
             </View>
           </View>
 
-          {order.status === "Cancelled" ? (
+          {order.statusValue === "cancelled" ? (
             <View className="mt-4 flex-row items-center gap-2 rounded-xl border border-border bg-secondary p-3">
               <Ionicons name="close-circle-outline" size={19} color={colors.muted} />
               <Text className="flex-1 text-muted-foreground text-xs">This order was cancelled before packing.</Text>
@@ -265,10 +245,16 @@ export default function OrderDetailScreen() {
           {order.address ? <DetailRow label="Deliver to" value={`${order.address}${order.phone ? `\n${order.phone}` : ""}`} /> : null}
           {order.deliveryMethod ? <DetailRow label="Delivery" value={order.deliveryMethod} /> : null}
           {order.paymentMethod ? <DetailRow label="Payment" value={order.paymentMethod} /> : null}
+          {order.paymentStatus ? <DetailRow label="Payment status" value={order.paymentStatus} /> : null}
+          {order.productSubtotal ? <DetailRow label="Items subtotal" value={`₱${Number(order.productSubtotal).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`} /> : null}
+          {order.deliveryFee ? <DetailRow label="Delivery fee" value={`₱${Number(order.deliveryFee).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`} /> : null}
         </View>
 
+        {order.paymentRejection ? <View className="mt-4 rounded-xl border border-danger/40 bg-danger/10 p-4"><Text className="text-foreground text-sm font-semibold">Payment proof rejected</Text><Text className="text-muted-foreground text-xs mt-2">{order.paymentRejection.reason}</Text>{order.paymentRejection.note ? <Text className="text-muted-foreground text-xs mt-1">{order.paymentRejection.note}</Text> : null}</View> : null}
         {order.paymentNotice ? <Text className="text-muted-foreground mt-4">{order.paymentNotice}</Text> : null}
         {order.canResubmitProof ? <Pressable disabled={isUploadingProof} onPress={() => void replaceProof()} className="mt-4 rounded-xl bg-primary p-3"><Text className="text-primary-foreground">{isUploadingProof ? "Uploading proof..." : "Replace rejected payment proof"}</Text></Pressable> : null}
+        {order.deliveryQuote ? <View className="mt-4 rounded-2xl border border-border bg-card p-4"><Text className="text-foreground text-base font-bold">Delivery estimate</Text><DetailRow label="Carrier" value={order.deliveryQuote.carrier.toUpperCase()} /><DetailRow label="Destination" value={order.deliveryQuote.destination} /><DetailRow label="Packing" value={order.deliveryQuote.packing_expectation} /><DetailRow label="Estimate" value={`${order.deliveryQuote.eta_min_days}–${order.deliveryQuote.eta_max_days} days`} />{order.deliveryQuote.is_demo && order.deliveryQuote.assumption_label ? <Text className="text-muted-foreground text-xs mt-2">{order.deliveryQuote.assumption_label}</Text> : null}<Text className="text-muted-foreground text-xs mt-2">{order.deliveryQuote.notice}</Text></View> : null}
+        {order.shipment ? <View className="mt-4 rounded-2xl border border-border bg-card p-4"><Text className="text-foreground text-base font-bold">Shipment tracking</Text><DetailRow label="Status" value={order.shipment.status.label} />{order.shipment.tracking_reference ? <DetailRow label="Tracking reference" value={order.shipment.tracking_reference} /> : null}{order.shipment.eta.estimated_delivery_start ? <DetailRow label="Estimated delivery" value={`${order.shipment.eta.estimated_delivery_start}${order.shipment.eta.estimated_delivery_end && order.shipment.eta.estimated_delivery_end !== order.shipment.eta.estimated_delivery_start ? ` – ${order.shipment.eta.estimated_delivery_end}` : ""}`} /> : null}{order.shipment.timeline.map((event) => <DetailRow key={`${event.status}-${event.occurred_at}`} label={event.label} value={new Date(event.occurred_at).toLocaleString("en-PH")} />)}<Text className="text-muted-foreground text-xs mt-2">{order.shipment.notice}</Text>{order.shipment.history_notice ? <Text className="text-muted-foreground text-xs mt-2">{order.shipment.history_notice}</Text> : null}</View> : null}
         {order.productLines && order.productLines.length > 0 && (
           <Pressable
             accessibilityRole="button"
@@ -283,73 +269,6 @@ export default function OrderDetailScreen() {
           </Pressable>
         )}
 
-        {order.canReturn && returnRequest && (
-          <View className="mt-4 rounded-xl border border-primary/30 bg-primary/10 p-4">
-            <View className="flex-row items-center gap-2">
-              <Ionicons name="checkmark-circle-outline" size={19} color={colors.primary} />
-              <Text className="text-foreground text-sm font-semibold">Return requested</Text>
-            </View>
-            <Text className="text-muted-foreground text-xs mt-2">Reason: {returnRequest.reason}</Text>
-            {returnRequest.note ? <Text className="text-muted-foreground text-xs mt-1">{returnRequest.note}</Text> : null}
-            <Text className="text-muted-foreground text-[10px] mt-2">Saved on this device · {new Date(returnRequest.requestedAt).toLocaleDateString()}</Text>
-          </View>
-        )}
-
-        {order.canReturn && !returnRequest && (
-          <View className="mt-4 rounded-xl border border-border bg-card p-4">
-            <Text className="text-foreground text-sm font-semibold">Need to return this order?</Text>
-            <Text className="text-muted-foreground text-xs mt-1">Choose a reason to save a return request in this demo.</Text>
-            {!isReturnFormOpen ? (
-              <Pressable accessibilityRole="button" onPress={() => setIsReturnFormOpen(true)} className="mt-3 h-11 flex-row items-center justify-center gap-2 rounded-xl bg-primary">
-                <Ionicons name="return-down-back-outline" size={17} color="#ffffff" />
-                <Text className="text-primary-foreground text-sm font-bold">Request a return</Text>
-              </Pressable>
-            ) : (
-              <View className="mt-3">
-                <Text className="text-foreground text-xs font-semibold">Reason</Text>
-                <View className="mt-2 flex-row flex-wrap gap-2">
-                  {returnReasons.map((reason) => (
-                    <Pressable
-                      key={reason}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected: selectedReason === reason }}
-                      onPress={() => setSelectedReason(reason)}
-                      className={`rounded-lg border px-3 py-2 ${selectedReason === reason ? "border-primary bg-primary/10" : "border-border bg-secondary"}`}
-                    >
-                      <Text className={`text-xs font-semibold ${selectedReason === reason ? "text-primary" : "text-foreground"}`}>{reason}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-                <TextInput
-                  accessibilityLabel="Optional return details"
-                  value={returnNote}
-                  onChangeText={setReturnNote}
-                  placeholder="Add details (optional)"
-                  maxLength={300}
-                  multiline
-                  textAlignVertical="top"
-                  className="mt-3 min-h-20 rounded-xl border border-border bg-secondary px-3 py-3 text-foreground text-sm"
-                />
-                {returnError ? <Text className="text-danger text-xs mt-2">{returnError}</Text> : null}
-                <View className="mt-3 flex-row gap-2">
-                  <Pressable accessibilityRole="button" onPress={() => setIsReturnFormOpen(false)} className="h-11 flex-1 items-center justify-center rounded-xl border border-border bg-secondary">
-                    <Text className="text-foreground text-sm font-semibold">Cancel</Text>
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityState={{ disabled: !selectedReason || isSavingReturn }}
-                    disabled={!selectedReason || isSavingReturn}
-                    onPress={() => void submitReturnRequest()}
-                    className="h-11 flex-1 items-center justify-center rounded-xl bg-primary"
-                    style={{ opacity: !selectedReason || isSavingReturn ? 0.5 : 1 }}
-                  >
-                    {isSavingReturn ? <ActivityIndicator color="#ffffff" /> : <Text className="text-primary-foreground text-sm font-bold">Submit request</Text>}
-                  </Pressable>
-                </View>
-              </View>
-            )}
-          </View>
-        )}
       </ScrollView>
     </SafeAreaView>
   );
