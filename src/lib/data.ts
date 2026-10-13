@@ -94,12 +94,6 @@ export type Store = {
   longitude?: number;
 };
 
-export const banners: Banner[] = [
-  { id: "banner-1", title: "Shop PC components", subtitle: "Browse current inventory", image: "https://images.unsplash.com/photo-1591488320449-011701bb6704?w=800&q=80" },
-  { id: "banner-2", title: "New Arrivals", subtitle: "Latest products in stock", image: "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=800&q=80" },
-  { id: "banner-3", title: "Peripherals", subtitle: "Keyboards, mice, and more", image: "https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=800&q=80" },
-];
-
 export const stores: Store[] = [
   { id: "store-sagay", name: "Battlefront Computer & Piso-Wifi Store", branch: "Sagay Branch", city: "Sagay City", address: "Infront of Western Union, Maria Lopez Elementary School, AE Marañon St, Unhan, Sagay City, 6122 Negros Occidental", landmark: "Beside LBC Express", hours: "Mon-Sat 8AM-6PM, Sun 10AM-5PM", phone: "(034) 400-0001", latitude: 10.893563, longitude: 123.413813 },
   { id: "store-escalante", name: "Battlefront Computer Parts & Accessories", branch: "Escalante Branch", city: "Escalante City", address: "Escalante City, Negros Occidental", hours: "Mon-Sat 8AM-6PM", phone: "(034) 400-0002", latitude: 10.842687, longitude: 123.498562 },

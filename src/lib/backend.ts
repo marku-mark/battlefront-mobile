@@ -5,7 +5,7 @@ import { createCartApi } from "./cartApi";
 import { loadProductSearchPage } from "./productCatalog";
 import { createReadCache, loadSelectedProducts } from "./readCache";
 import type { ApiUser, ProfileInput } from "./accountApi";
-import { banners, type Banner, type Brand, type Category, type Product, type Store } from "./data";
+import { type Brand, type Category, type Product, type Store } from "./data";
 import { ApiError, createApiClient, createCachedRead, createPacedRead, type Page } from "./apiClient";
 import { createProgressiveCatalog } from "./catalogCache";
 import { createAccountApi } from "./accountApi";
@@ -127,7 +127,6 @@ export async function getHomeCatalog(): Promise<HomeCatalog> {
 export function homeCatalogFromProducts(catalogProducts: Product[]): HomeCatalog {
   return { catalogProducts, flashDeals: catalogProducts.filter((row) => row.originalPrice !== undefined).slice(0, 12), sulitPicks: [...catalogProducts].sort((a, b) => a.price - b.price).slice(0, 12), newArrivals: [] };
 }
-export async function getBanners(): Promise<Banner[]> { return banners; }
 export async function getFlashDeals() { return (await getHomeCatalog()).flashDeals; }
 export async function getSulitPicks() { return (await getHomeCatalog()).sulitPicks; }
 export async function getNewArrivals() { return (await getHomeCatalog()).newArrivals; }

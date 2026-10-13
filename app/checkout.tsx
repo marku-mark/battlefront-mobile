@@ -159,7 +159,7 @@ export default function CheckoutScreen() {
           {error ? <Text accessibilityRole="alert" className="text-danger">{error}</Text> : <ActivityIndicator />}
           {error ? <Pressable onPress={() => setCheckoutRetry((current) => current + 1)}><Text className="text-primary mt-4">Retry</Text></Pressable> : null}
         </View> : <View>
-          <View className="rounded-2xl border border-border bg-card p-5 mb-6"><Text className="text-primary text-xs font-bold uppercase">Customer checkout</Text><Text className="text-foreground text-xl font-bold mt-2">Confirm fulfillment and payment</Text><Text className="text-muted-foreground text-sm mt-2">Review your hardware selection and the details Battlefront needs for your order.</Text></View>
+          <View className="mb-6 border-b border-border pb-5"><Text className="text-foreground text-xl font-bold">Review your order</Text><Text className="text-muted-foreground text-sm mt-2">Complete each step below. Only the items selected in your cart will be purchased.</Text></View>
           <Text className="text-primary text-xs font-semibold">STEP 1</Text>
           <Text className="text-foreground text-base font-bold mt-1">Recipient details</Text>
           <Text className="text-foreground text-sm mt-3">Recipient name</Text>
@@ -208,8 +208,8 @@ export default function CheckoutScreen() {
             </View>
           </View>}
           <View className="mt-6 rounded-2xl border border-border bg-card p-5">
-            <Text className="text-primary text-xs font-semibold">CURRENT CART</Text>
-            <Text className="text-foreground text-lg font-bold mt-2">Selected items</Text>
+            <Text className="text-primary text-xs font-semibold">STEP 4</Text>
+            <Text className="text-foreground text-lg font-bold mt-2">Review selected items and total</Text>
             <Text className="text-muted-foreground text-xs mt-1">Only the items selected in your cart are included.</Text>
             {visiblePreview.cart.items.map((item) => <View key={item.id} className="flex-row justify-between gap-3 border-b border-border py-4"><View className="flex-1"><Text className="text-foreground font-semibold">{item.product.name}</Text><Text className="text-muted-foreground text-xs mt-1">{item.product.brand ? `${item.product.brand} · ` : ""}Qty {item.quantity}</Text></View><Text className="text-foreground font-semibold">{formatCheckoutAmount(item.line_total)}</Text></View>)}
             <View className="flex-row justify-between mt-4"><Text className="text-muted-foreground text-sm">Products</Text><Text className="text-foreground font-semibold">{visiblePreview.cart.item_count}</Text></View>
@@ -217,6 +217,7 @@ export default function CheckoutScreen() {
             <View className="flex-row justify-between mt-4 border-t border-border pt-4"><Text className="text-muted-foreground text-sm">Product subtotal</Text><Text className="text-foreground font-semibold">{formatCheckoutAmount(visiblePreview.pickup_quote.product_subtotal)}</Text></View>
             <View className="flex-row justify-between mt-3"><Text className="text-muted-foreground text-sm">Delivery fee</Text><Text className="text-foreground font-semibold">{selectedQuote ? formatCheckoutAmount(selectedQuote.delivery_fee) : "Select destination"}</Text></View>
             <View className="flex-row justify-between mt-4 border-t border-border pt-4"><Text className="text-foreground font-semibold">Final total</Text><Text className="text-foreground text-xl font-bold">{selectedQuote ? formatCheckoutAmount(selectedQuote.total) : "—"}</Text></View>
+            <Text className="mt-4 text-muted-foreground text-xs">{fulfillment === "pickup" ? `Pickup at ${visiblePreview.pickup_location.name}` : addressIsComplete ? `Deliver to ${address}` : "Complete your delivery address above"} · {selectedPayment?.label ?? "Choose payment above"}</Text>
           </View>
 
           <Text className="text-muted-foreground text-xs text-center mt-3">Review your details before placing your order.</Text>
@@ -224,7 +225,8 @@ export default function CheckoutScreen() {
         </View>}
       </ScrollView>
       {session.mode === "customer" && !createdOrderId && <View className="rounded-t-2xl border-t border-border bg-card px-4 py-3">
-        {visiblePreview && <View className="flex-row flex-wrap items-center justify-between gap-2 mb-3"><Text className="text-muted-foreground text-sm">Final total</Text><Text className="text-foreground text-xl font-bold">{selectedQuote ? formatCheckoutAmount(selectedQuote.total) : "Select destination"}</Text></View>}
+        {visiblePreview && <View className="flex-row flex-wrap items-center justify-between gap-2 mb-1"><Text className="text-muted-foreground text-sm">{visiblePreview.cart.item_count} selected · Final total</Text><Text className="text-foreground text-xl font-bold">{selectedQuote ? formatCheckoutAmount(selectedQuote.total) : "Select destination"}</Text></View>}
+        {visiblePreview && <Text className="mb-3 text-muted-foreground text-xs">{selectedPayment?.requires_proof ? "Payment proof is reviewed manually after placement." : "Follow your order status in My orders after placement."}</Text>}
         {visiblePreview && error && <Text accessibilityRole="alert" className="text-danger text-sm mb-2">{error}</Text>}
         <Pressable accessibilityRole="button" accessibilityState={{ busy: isSubmitting, disabled: cannotSubmit }} disabled={cannotSubmit} onPress={() => void submit()} className="min-h-12 rounded-xl bg-primary px-5 py-3" style={({ pressed }) => ({ opacity: cannotSubmit ? 0.5 : pressed ? 0.8 : 1 })}><Text className="text-primary-foreground text-center font-semibold">{isSubmitting ? "Placing order…" : "Place order"}</Text></Pressable>
       </View>}

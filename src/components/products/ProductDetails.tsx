@@ -10,6 +10,7 @@ import { useWishlist } from "@/hooks/useWishlist";
 import { useSession } from "@/hooks/useSession";
 import { MockSignInSheet } from "@/components/account/MockSignInSheet";
 import { ProductReviewPanel } from "@/components/products/ProductReviewPanel";
+import { Chatbot } from "@/components/support/Chatbot";
 import { getResponsiveLayout, MAX_CONTENT_WIDTH } from "@/lib/responsive";
 
 type ProductDetailsProps = {
@@ -53,6 +54,7 @@ export function ProductDetails({ refreshError = false, onRetry, product, quantit
   const [specificationsOpen, setSpecificationsOpen] = useState(false);
   const [compatibilityOpen, setCompatibilityOpen] = useState(false);
   const [isSignInOpen, setIsSignInOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const wishlisted = isWishlisted(product.id);
   const hasDiscount = product.originalPrice !== undefined && product.originalPrice > product.price;
   const discount = hasDiscount ? Math.round(((product.originalPrice! - product.price) / product.originalPrice!) * 100) : 0;
@@ -82,7 +84,7 @@ export function ProductDetails({ refreshError = false, onRetry, product, quantit
           style={{ maxWidth: MAX_CONTENT_WIDTH }}
         >
           <View style={{ width: useTwoColumnLayout ? imageWidth : "100%", maxWidth: useTwoColumnLayout ? 560 : undefined, alignSelf: useTwoColumnLayout ? undefined : "center" }}>
-            <ProductImage source={getProductImageSource(product.image)} accessibilityLabel={`${product.name} product image`} accessible style={{ width: imageWidth, height: imageWidth }} className="self-center bg-card" resizeMode="cover" />
+            <ProductImage source={getProductImageSource(product.image)} accessibilityLabel={`${product.name} product image`} accessible style={{ width: imageWidth, height: imageWidth }} className="self-center bg-card" resizeMode="contain" />
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ width: imageWidth, alignSelf: "center" }} contentContainerStyle={{ gap: 8, padding: 12 }}>
               <View className="h-16 w-16 overflow-hidden rounded-lg border-2 border-primary"><ProductImage source={getProductImageSource(product.image)} accessibilityLabel={`${product.name} thumbnail`} className="h-full w-full" /></View>
             </ScrollView>
@@ -103,8 +105,10 @@ export function ProductDetails({ refreshError = false, onRetry, product, quantit
                 <Text className="text-muted-foreground text-xs">({reviewCount} reviews)</Text>
               </>
             ) : <Text className="text-muted-foreground text-xs">No reviews yet</Text>}
-            <View className={`ml-2 h-1.5 w-1.5 rounded-full ${stockQuantity > 0 ? "bg-success" : "bg-danger"}`} />
-            <Text className={`text-xs ${stockQuantity > 0 ? "text-muted-foreground" : "text-danger"}`}>{stockQuantity > 0 ? (product.availability === "low_stock" ? "Low stock" : "In stock") : "Out of stock"}</Text>
+          </View>
+          <View className="mt-2 flex-row items-center gap-2">
+            <View className={`h-1.5 w-1.5 rounded-full ${stockQuantity > 0 ? "bg-success" : "bg-danger"}`} />
+            <Text className={`text-sm ${stockQuantity > 0 ? "text-foreground" : "text-danger"}`}>{stockQuantity > 0 ? (product.availability === "low_stock" ? "Low stock" : "In stock") : "Out of stock"}{product.stockQuantity !== undefined ? ` · ${product.stockQuantity} available` : ""}</Text>
           </View>
 
           {variants.length > 0 && <View className="mt-5"><View className="flex-row items-center justify-between mb-2"><Text className="text-foreground text-sm font-semibold">Choose an option</Text><Text className="text-muted-foreground text-xs">{selectedVariant ?? "Select"}</Text></View><View className="flex-row flex-wrap gap-2">{variants.map((variant) => <Pressable key={variant} accessibilityRole="radio" accessibilityLabel={`${variant} option`} accessibilityState={{ selected: selectedVariant === variant }} onPress={() => setSelectedVariant(variant)} className={`rounded-lg border px-3 py-2 ${selectedVariant === variant ? "border-primary bg-primary/10" : "border-border bg-secondary"}`}><Text className={`text-xs font-semibold ${selectedVariant === variant ? "text-primary" : "text-foreground"}`}>{variant}</Text></Pressable>)}</View></View>}
@@ -121,6 +125,10 @@ export function ProductDetails({ refreshError = false, onRetry, product, quantit
               <Text className="text-foreground text-xs font-semibold">Compare products</Text>
             </Pressable>
           )}
+          <Pressable accessibilityRole="button" onPress={() => setIsChatOpen(true)} className="mt-3 min-h-11 flex-row items-center justify-center gap-2 border-b border-border">
+            <Ionicons name="chatbubble-ellipses-outline" size={17} color={colors.foreground} />
+            <Text className="text-foreground text-sm font-semibold">Ask Battlefront support</Text>
+          </Pressable>
           <View className="mt-5 rounded-2xl bg-secondary border border-border p-3 shadow-soft"><Text className="text-foreground text-sm font-semibold">Fulfillment and payment</Text><Text className="text-muted-foreground text-xs mt-1.5">Available pickup, delivery, and payment options are shown at checkout.</Text></View>
 
           <View className="mt-6 pt-5 border-t border-border"><Text className="text-foreground text-base font-semibold">About this product</Text><Text className="text-muted-foreground text-sm leading-5 mt-2">{facts.description}</Text></View>
@@ -141,6 +149,7 @@ export function ProductDetails({ refreshError = false, onRetry, product, quantit
 
       <View className="self-center w-full px-4 pt-3 border-t border-border bg-background" style={{ maxWidth: 760, paddingBottom: Math.max(insets.bottom, 12) }}><View className="flex-row items-center justify-between mb-3"><Text className="text-muted-foreground text-xs uppercase tracking-[0.12em]">Total</Text><Text className="text-foreground text-lg font-bold">{formatPrice(subtotal)}</Text></View><Pressable accessibilityLabel={`Add ${product.name} to cart`} accessibilityRole="button" accessibilityState={{ busy: isAdding, disabled: isAdding || stockQuantity === 0 }} disabled={isAdding || stockQuantity === 0 || (variants.length > 0 && !selectedVariant)} onPress={() => void addToCart()} className="min-h-12 py-3 rounded-xl bg-primary items-center justify-center" style={({ pressed }) => ({ opacity: stockQuantity === 0 || (variants.length > 0 && !selectedVariant) ? 0.45 : pressed ? 0.8 : 1 })}><Text className="text-primary-foreground text-sm font-bold">{isAdding ? "Adding…" : stockQuantity === 0 ? "Out of stock" : variants.length > 0 && !selectedVariant ? "Choose an option" : "Add to cart"}</Text></Pressable></View>
       <MockSignInSheet visible={isSignInOpen} onClose={() => setIsSignInOpen(false)} />
+      {isChatOpen && <Chatbot visible onClose={() => setIsChatOpen(false)} />}
     </View>
   );
 }

@@ -129,7 +129,7 @@ export default function CategoriesScreen() {
 
   return (
     <SafeAreaView edges={["left", "right", "bottom"]} className="flex-1 bg-background">
-      <ScreenHeader title="Categories" subtitle="Find the right parts for your next build." />
+      <ScreenHeader title="Browse products" subtitle="Search, filter, and compare Battlefront parts." />
       <FlashList
         ref={listRef}
         onLoad={() => { if (restoreOffset > 0) listRef.current?.scrollToOffset({ offset: restoreOffset, animated: false }); }}
@@ -170,6 +170,11 @@ export default function CategoriesScreen() {
                   </Pressable>
                 )}
               </View>
+              <Pressable accessibilityRole="button" onPress={() => router.push("/recommendations")} className="mt-3 min-h-10 flex-row items-center gap-2">
+                <Ionicons name="sparkles-outline" size={17} color={isDark ? "#f8fafc" : "#30343b"} />
+                <Text className="text-foreground text-sm font-semibold">See product suggestions</Text>
+                <Ionicons name="arrow-forward" size={15} color={isDark ? "#9ca3af" : "#68717e"} />
+              </Pressable>
             </View>
             {categories.length > 0 && (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: layout.horizontalPadding, paddingTop: 14 }}>

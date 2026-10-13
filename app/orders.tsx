@@ -63,7 +63,7 @@ export default function OrdersScreen() {
         <Text className="text-foreground text-lg font-semibold ml-2">My orders</Text>
       </View>
 
-      <FlatList refreshing={refreshing} onRefresh={() => void refresh()} onEndReached={loadMore} onEndReachedThreshold={0.4} data={owner !== null && loadedOwner === owner ? orders : []} keyExtractor={(order) => order.id} initialNumToRender={8} maxToRenderPerBatch={6} windowSize={5} showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 32 }} renderItem={({ item: order }) => (
+      <FlatList refreshing={refreshing} onRefresh={() => void refresh()} onEndReached={loadMore} onEndReachedThreshold={0.4} data={owner !== null && loadedOwner === owner ? orders : []} keyExtractor={(order) => order.id} initialNumToRender={8} maxToRenderPerBatch={6} windowSize={5} showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 32 }} ListHeaderComponent={owner !== null && orders.length > 0 ? <Text className="mb-4 text-muted-foreground text-sm">Your purchases, payment updates, and delivery progress</Text> : null} renderItem={({ item: order }) => (
           <Pressable
             key={order.id}
             accessibilityRole="button"
@@ -82,14 +82,21 @@ export default function OrdersScreen() {
             <Text className="text-primary text-sm font-bold mt-3">{order.total}</Text>
 
             <View className="flex-row items-center justify-between mt-4 pt-3 border-t border-border">
-              <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.12em]">Track order</Text>
+              <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.12em]">View order details</Text>
               <Ionicons name="chevron-forward" size={16} color="#94a3b8" />
             </View>
           </Pressable>
         )} ListFooterComponent={<View>
         {error && <View><Text className="py-4 text-center text-primary">{error}</Text><Pressable disabled={loading} onPress={() => void (orders.length ? loadNextOrdersPage() : getOrders(true)).catch(() => undefined)} className="min-h-12 justify-center"><Text className="text-primary text-center">Retry loading orders</Text></Pressable></View>}
         {loading && <Text className="py-4 text-center text-muted-foreground">Loading orders…</Text>}
-        {!loading && !error && orders.length === 0 && <Text className="py-10 text-center text-muted-foreground text-sm">No orders to show.</Text>}
+        {!loading && !error && orders.length === 0 && <View className="items-center py-10 px-6">
+          <Ionicons name="receipt-outline" size={32} color="#94a3b8" />
+          <Text className="mt-4 text-foreground text-base font-semibold">{owner === null ? "Sign in to see your orders" : "No orders yet"}</Text>
+          <Text className="mt-2 text-center text-muted-foreground text-sm">{owner === null ? "Your purchase history and updates appear here after sign-in." : "When you place an order, its status and details will appear here."}</Text>
+          <Pressable accessibilityRole="button" onPress={() => router.push(owner === null ? "/account" : "/categories")} className="mt-5 min-h-12 justify-center rounded-xl bg-primary px-5">
+            <Text className="text-primary-foreground text-sm font-semibold">{owner === null ? "Go to account" : "Browse products"}</Text>
+          </Pressable>
+        </View>}
       </View>} />
     </SafeAreaView>
   );

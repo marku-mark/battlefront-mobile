@@ -151,19 +151,9 @@ export default function CartScreen() {
           </Pressable>
           <Text className="text-muted-foreground text-xs">{selectedItems.length} selected</Text>
         </View>
-        <View className="mb-4 rounded-2xl border border-border bg-card p-3 shadow-soft">
-          <View className="flex-row items-center justify-between">
-            <Text className="text-foreground text-sm font-semibold">Order summary</Text>
-            <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.12em]">
-              {items.length} {items.length === 1 ? "product" : "products"}
-            </Text>
-          </View>
-          <View className="mt-2 flex-row items-center gap-2">
-            <Ionicons name="checkmark-circle-outline" size={15} color="#ef4444" />
-            <Text className="text-muted-foreground text-xs">
-              Prices and availability are checked by Battlefront.
-            </Text>
-          </View>
+        <View className="mb-4 border-b border-border pb-3">
+          <Text className="text-foreground text-sm font-semibold">Choose what to buy now</Text>
+          <Text className="mt-1 text-muted-foreground text-xs">Unselected products stay in your cart. Battlefront checks prices and stock again at checkout.</Text>
         </View>
 
         {items.map(({ product, quantity, variant, lineTotal, serverId }) => (
@@ -274,20 +264,28 @@ export default function CartScreen() {
           </View>
           <Text className="text-muted-foreground text-xs mt-3">Only selected items will be purchased. Review delivery fees at checkout.</Text>
           {selectedConflict && <Text className="text-danger text-xs mt-3">Resolve stock issues or deselect unavailable items before checkout.</Text>}
-          <Pressable
-            onPress={() => session.mode === "customer"
-              ? router.push({ pathname: "/checkout", params: { cart_item_ids: selectedCartItemIds.join(",") } })
-              : setIsSignInOpen(true)}
-            disabled={selectedItems.length === 0 || isUpdating || selectedConflict || !!error}
-            className="bg-primary rounded-xl items-center py-3.5 mt-5"
-            style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
-          >
-            <Text className="text-primary-foreground text-sm font-bold">
-              {session.mode !== "customer" ? "Sign in to continue" : selectedConflict ? "Resolve selected item issues" : selectedItems.length === 0 ? "Select items to checkout" : "Proceed to checkout"}
-            </Text>
-          </Pressable>
         </View>
       </ScrollView>
+      <View className="border-t border-border bg-background px-4 py-3">
+        <View className="mb-2 flex-row items-center justify-between">
+          <Text className="text-muted-foreground text-sm">{selectedItems.length} selected · {selectedUnits} units</Text>
+          <Text className="text-foreground text-lg font-bold">{formatPrice(selectedSubtotal)}</Text>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: selectedItems.length === 0 || isUpdating || selectedConflict || !!error }}
+          onPress={() => session.mode === "customer"
+            ? router.push({ pathname: "/checkout", params: { cart_item_ids: selectedCartItemIds.join(",") } })
+            : setIsSignInOpen(true)}
+          disabled={selectedItems.length === 0 || isUpdating || selectedConflict || !!error}
+          className="min-h-12 items-center justify-center rounded-xl bg-primary px-4"
+          style={({ pressed }) => ({ opacity: selectedItems.length === 0 || isUpdating || selectedConflict || !!error ? 0.5 : pressed ? 0.8 : 1 })}
+        >
+          <Text className="text-primary-foreground text-sm font-bold">
+            {session.mode !== "customer" ? "Sign in to continue" : selectedConflict ? "Resolve selected item issues" : selectedItems.length === 0 ? "Select items to checkout" : "Proceed to checkout"}
+          </Text>
+        </Pressable>
+      </View>
       <ConfirmClearModal
         visible={isClearConfirmOpen}
         title="Clear cart?"

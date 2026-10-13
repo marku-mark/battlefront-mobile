@@ -4,11 +4,10 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { FlashList } from "@shopify/flash-list";
 import { useRouter } from "expo-router";
 import { Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
-import { getBanners, getBrands, getCategories, getCatalogPreview, getCatalogSnapshot, getBehavioralRecommendations, getSessionRevision, invalidateCatalog, loadNextCatalogPage, recordRecommendationInteraction, subscribeCatalog, homeCatalogFromProducts } from "@/lib/api";
-import type { Banner, Brand, Category, Product } from "@/lib/data";
+import { getBrands, getCategories, getCatalogPreview, getCatalogSnapshot, getBehavioralRecommendations, getSessionRevision, invalidateCatalog, loadNextCatalogPage, recordRecommendationInteraction, subscribeCatalog, homeCatalogFromProducts } from "@/lib/api";
+import type { Brand, Category, Product } from "@/lib/data";
 import type { BehavioralRecommendation } from "@/lib/api";
 import { Header } from "@/components/layout/Header";
-import { PromoBanners } from "@/components/sections/PromoBanners";
 import { Categories } from "@/components/sections/Categories";
 import { FlashDeals } from "@/components/sections/FlashDeals";
 import { SulitPicks } from "@/components/sections/SulitPicks";
@@ -35,7 +34,6 @@ export default function HomeScreen() {
   useActiveFocusEffect(useCallback(() => {
     if (returnToSearch.current) { returnToSearch.current = false; setIsSearchOpen(true); }
   }, []));
-  const [banners, setBanners] = useState<Banner[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [catalog, setCatalog] = useState(getCatalogSnapshot);
@@ -66,9 +64,9 @@ export default function HomeScreen() {
       });
     }).catch(() => { if (active) setRecommendations([]); });
     void refreshRecentlyViewed(() => active && isScreenActive());
-    Promise.all([getBanners(), getCategories(), getBrands()]).then(([nextBanners, nextCategories, nextBrands]) => {
+    Promise.all([getCategories(), getBrands()]).then(([nextCategories, nextBrands]) => {
       if (!active) return;
-      setBanners(nextBanners); setCategories(nextCategories); setBrands(nextBrands); setMetadataError(false);
+      setCategories(nextCategories); setBrands(nextBrands); setMetadataError(false);
     }).catch(() => { if (active) setMetadataError(true); });
     return () => { active = false; unsubscribe(); };
   }, [retryCount, refreshRecentlyViewed, isScreenActive]));
@@ -126,7 +124,6 @@ export default function HomeScreen() {
         {(catalog.error || metadataError) && <View className="mx-4 mt-4 border border-border bg-card p-4"><Text accessibilityLiveRegion="polite" className="text-danger text-sm">{catalog.error?.message ?? "Some browsing options could not be refreshed."}</Text><Pressable accessibilityRole="button" onPress={retry} className="min-h-12 justify-center"><Text className="text-primary font-semibold">Try again</Text></Pressable></View>}
         <Categories categories={categories} onBrowseAll={() => router.navigate("/categories")} onSelect={(category) => router.push({ pathname: "/categories", params: { categoryId: category.id } })} />
         {cartItems.length > 0 && <ContinueCartBanner itemCount={itemCount} subtotal={subtotal} onPress={() => router.navigate("/cart")} />}
-        {banners.length > 0 ? <PromoBanners banners={banners} onSelect={() => router.push("/categories")} /> : null}
         {featured.flashDeals.length ? <FlashDeals products={featured.flashDeals.slice(0, 6)} onSelectProduct={openProduct} /> : null}
         {recommendations.length > 0 && <SulitPicks products={recommendations.map((row) => row.product)} title="Recommended for you" onSelectRecommendedProduct={openRecommendedProduct} />}
         <View className="px-4 mt-6 mb-3"><Text accessibilityRole="header" className="text-foreground text-lg font-bold">Browse products</Text></View>

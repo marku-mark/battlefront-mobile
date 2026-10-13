@@ -4,10 +4,10 @@ import { ActivityIndicator, Modal, Pressable, ScrollView, Switch, Text, TextInpu
 import { useEffect, useRef, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MockSignInSheet } from "@/components/account/MockSignInSheet";
+import { Chatbot } from "@/components/support/Chatbot";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { useSession } from "@/hooks/useSession";
 import { getLocalUserId } from "@/lib/api";
-import { getOrdersSnapshot } from "@/lib/orders";
 import { loadSavedAddresses, persistSavedAddresses, type SavedAddress } from "@/lib/savedAddresses";
 import { useTheme } from "@/theme/ThemeProvider";
 import { useToast } from "@/hooks/useToast";
@@ -20,13 +20,13 @@ const accountLinks = [
 
 export default function AccountScreen() {
   const router = useRouter();
-  const orders = getOrdersSnapshot() ?? [];
   const { width } = useWindowDimensions();
   const { isDark, toggleMode, colors } = useTheme();
   const { showToast } = useToast();
   const { session, isHydrated, signOut, saveProfile, refreshProfile } = useSession();
   const isMockAccount = session.mode === "customer";
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const [selectedUtility, setSelectedUtility] = useState<string | null>(null);
   const [authMessage, setAuthMessage] = useState("");
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
@@ -253,9 +253,24 @@ export default function AccountScreen() {
         </View>
 
         <View className="flex-row items-center justify-between px-4 mt-7 mb-3">
-          <Text className="text-foreground text-base font-bold">Account shortcuts</Text>
+          <Text className="text-foreground text-base font-bold">Shopping and support</Text>
         </View>
         <View className="mx-4 rounded-2xl bg-card border border-border overflow-hidden">
+          <Pressable
+            onPress={() => router.push("/notifications")}
+            accessibilityRole="button"
+            accessibilityLabel="Open order updates"
+            className="flex-row items-center border-b border-border p-4"
+          >
+            <View className="h-9 w-9 items-center justify-center rounded-xl bg-secondary">
+              <Ionicons name="mail-unread-outline" size={19} color={isDark ? "#f8fafc" : "#30343b"} />
+            </View>
+            <View className="ml-3 flex-1">
+              <Text className="text-foreground text-sm font-medium">Order updates</Text>
+              <Text className="mt-0.5 text-muted-foreground text-xs">Read payment and delivery messages</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={isDark ? "#9ca3af" : "#68717e"} />
+          </Pressable>
           <Pressable
             onPress={() => router.push("/store-locator")}
             accessibilityLabel="Find a Battlefront store"
@@ -268,6 +283,16 @@ export default function AccountScreen() {
             <View className="flex-1 ml-3">
               <Text className="text-foreground text-sm font-medium">Store locator</Text>
               <Text className="text-muted-foreground text-xs mt-0.5">Find a Battlefront branch near you</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={isDark ? "#9ca3af" : "#68717e"} />
+          </Pressable>
+          <Pressable accessibilityRole="button" onPress={() => setIsChatOpen(true)} className="flex-row items-center border-b border-border p-4">
+            <View className="h-9 w-9 items-center justify-center rounded-xl bg-secondary">
+              <Ionicons name="chatbubble-ellipses-outline" size={19} color={isDark ? "#f8fafc" : "#30343b"} />
+            </View>
+            <View className="ml-3 flex-1">
+              <Text className="text-foreground text-sm font-medium">Battlefront support</Text>
+              <Text className="mt-0.5 text-muted-foreground text-xs">Ask about products, stores, and orders</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={isDark ? "#9ca3af" : "#68717e"} />
           </Pressable>
@@ -371,27 +396,14 @@ export default function AccountScreen() {
           setIsAuthOpen(false);
         }}
       />
+      {isChatOpen && <Chatbot visible onClose={() => setIsChatOpen(false)} />}
 
       <Modal visible={selectedUtility !== null} animationType="fade" transparent onRequestClose={() => setSelectedUtility(null)}>
         <View className="flex-1 items-center justify-center px-6 bg-black/50">
           <View className="w-full self-center bg-background border border-border rounded-2xl p-5" style={{ maxWidth: 560, maxHeight: "90%" }}>
             <Text className="text-foreground text-lg font-bold">{selectedUtility}</Text>
             <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} className="mt-3" contentContainerStyle={{ paddingBottom: 4 }}>
-            {selectedUtility === "My orders" && isMockAccount ? (
-              <View className="mt-3 gap-3">
-                <Text className="text-muted-foreground text-xs">Sample order history · not connected to a store</Text>
-                {orders.map((order) => (
-                  <View key={order.id} className="rounded-xl border border-border bg-card p-3">
-                    <View className="flex-row items-center justify-between gap-3">
-                      <Text className="text-foreground text-sm font-semibold">{order.id}</Text>
-                      <Text className="text-primary text-xs font-semibold">{order.status}</Text>
-                    </View>
-                    <Text className="text-muted-foreground text-xs mt-1">{order.date} · {order.items}</Text>
-                    <Text className="text-foreground text-sm font-bold mt-2">{order.total}</Text>
-                  </View>
-                ))}
-              </View>
-            ) : selectedUtility === "Delivery addresses" ? (
+            {selectedUtility === "Delivery addresses" ? (
               <View className="mt-3 gap-3">
                 <Text className="text-muted-foreground text-xs">Your default address syncs with Battlefront and pre-fills delivery checkout. Additional addresses stay on this device.</Text>
                 {session.mode === "customer" && session.user.default_delivery_address && <View className="rounded-xl border border-border bg-card p-3">

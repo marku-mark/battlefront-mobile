@@ -93,7 +93,8 @@ function ProductCardView({ product, width = 150, stretch = false, onPress }: Pro
               accessibilityLabel={`${product.name} product image`}
               accessible
               style={{ width: "100%", height: width * 0.96 }}
-              resizeMode="contain"
+              resizeMode="cover"
+              className="bg-secondary"
             />
 
             {hasDiscount && (
@@ -129,7 +130,7 @@ function ProductCardView({ product, width = 150, stretch = false, onPress }: Pro
               )}
             </View>
 
-            <View className="flex-row flex-wrap items-center justify-between mt-1.5 gap-2">
+            <View className="mt-1.5 flex-row items-center gap-1">
               <View className="flex-row items-center gap-1">
                 {hasRating ? (
                   <>
@@ -141,13 +142,14 @@ function ProductCardView({ product, width = 150, stretch = false, onPress }: Pro
                   <Text className="text-muted-foreground text-xs">No reviews</Text>
                 )}
               </View>
-              <View className="flex-row items-center gap-1">
-                <View className={`h-1.5 w-1.5 rounded-full ${stockQuantity > 0 ? "bg-success" : "bg-danger"}`} />
-                <Text className={`text-xs uppercase tracking-[0.08em] ${stockQuantity > 0 ? "text-muted-foreground" : "text-danger"}`}>
-                  {stockQuantity > 0 ? (product.availability === "low_stock" ? "Low stock" : "In stock") : "Out of stock"}
-                </Text>
-              </View>
             </View>
+            <View className="mt-2 flex-row items-center gap-1">
+              <View className={`h-1.5 w-1.5 rounded-full ${stockQuantity > 0 ? "bg-success" : "bg-danger"}`} />
+              <Text className={`text-xs ${stockQuantity > 0 ? "text-muted-foreground" : "text-danger"}`}>
+                {stockQuantity > 0 ? (product.availability === "low_stock" ? "Low stock" : "In stock") : "Out of stock"}
+              </Text>
+            </View>
+            {product.stockQuantity !== undefined && <Text className="mt-1 text-foreground text-xs font-semibold">{product.stockQuantity} available</Text>}
             {variants.length > 0 && (
               <Text className="text-muted-foreground text-xs mt-1.5" numberOfLines={1}>
                 Options: {variants.join(" • ")}

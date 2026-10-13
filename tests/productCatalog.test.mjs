@@ -3,7 +3,7 @@ import test from "node:test";
 import { mapProduct, getProductFacts } from "../src/lib/productCatalog.ts";
 import { getProductImageSource } from "../src/lib/data.ts";
 
-const product = { id: 42, name: "Memory kit", description: "32GB DDR5-6000 memory kit.", brand: "Kingston", price: "1200.00", discount_price: "900.00", image_url: "http://backend.test/storage/42.webp", category: { id: 3, name: "RAM / Memory" }, inventory: { status: "low_stock" } };
+const product = { id: 42, name: "Memory kit", description: "32GB DDR5-6000 memory kit.", brand: "Kingston", price: "1200.00", discount_price: "900.00", image_url: "http://backend.test/storage/42.webp", category: { id: 3, name: "RAM / Memory" }, inventory: { quantity: 5, status: "low_stock" } };
 
 test("mobile details preserve the server description, category, price, and stock status", () => {
   const mapped = mapProduct(product);
@@ -14,7 +14,8 @@ test("mobile details preserve the server description, category, price, and stock
   assert.equal(mapped.categorySlug, "category-ram-memory");
   assert.equal(facts.description, product.description);
   assert.equal(facts.availability, "Low stock");
-  assert.deepEqual(facts.specifications, [["Category", "RAM / Memory"], ["Availability", "Low stock"], ["Brand", "Kingston"]]);
+  assert.equal(mapped.stockQuantity, 5);
+  assert.deepEqual(facts.specifications, [["Category", "RAM / Memory"], ["Availability", "Low stock"], ["Available quantity", "5"], ["Brand", "Kingston"]]);
 });
 
 test("missing descriptions and inventory do not invent product facts or availability", () => {
@@ -23,9 +24,11 @@ test("missing descriptions and inventory do not invent product facts or availabi
   assert.equal(mapped.price, 1200);
   assert.equal(mapped.originalPrice, undefined);
   assert.equal(mapped.availability, "unavailable");
+  assert.equal(mapped.stockQuantity, undefined);
   assert.equal(facts.availability, "Unavailable");
   assert.equal(facts.description, "No description has been provided for this product.");
   assert.equal(facts.specifications.some(([label]) => label === "Brand"), false);
+  assert.equal(facts.specifications.some(([label]) => label === "Available quantity"), false);
   assert.doesNotMatch(JSON.stringify(facts), /Ready to ship|Warranty included|Ships in 24 hours/);
 });
 

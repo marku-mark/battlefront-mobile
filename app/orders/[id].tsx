@@ -235,6 +235,10 @@ export default function OrderDetailScreen() {
           )}
         </View>
 
+        {order.paymentRejection ? <View className="mt-4 rounded-xl border border-danger/40 bg-danger/10 p-4"><Text className="text-foreground text-sm font-semibold">Payment proof rejected</Text><Text className="text-muted-foreground text-xs mt-2">{order.paymentRejection.reason}</Text>{order.paymentRejection.note ? <Text className="text-muted-foreground text-xs mt-1">{order.paymentRejection.note}</Text> : null}</View> : null}
+        {order.canResubmitProof ? <Pressable accessibilityRole="button" accessibilityState={{ disabled: isUploadingProof }} disabled={isUploadingProof} onPress={() => void replaceProof()} className="mt-3 min-h-12 justify-center rounded-xl bg-primary px-4"><Text className="text-center text-primary-foreground font-semibold">{isUploadingProof ? "Uploading proof..." : "Replace rejected payment proof"}</Text></Pressable> : null}
+        {order.paymentNotice ? <Text className="text-muted-foreground mt-4">{order.paymentNotice}</Text> : null}
+
         {order.canCancel && (
           <Pressable
             accessibilityRole="button"
@@ -267,9 +271,6 @@ export default function OrderDetailScreen() {
           {order.deliveryFee ? <DetailRow label="Delivery fee" value={`₱${Number(order.deliveryFee).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`} /> : null}
         </View>
 
-        {order.paymentRejection ? <View className="mt-4 rounded-xl border border-danger/40 bg-danger/10 p-4"><Text className="text-foreground text-sm font-semibold">Payment proof rejected</Text><Text className="text-muted-foreground text-xs mt-2">{order.paymentRejection.reason}</Text>{order.paymentRejection.note ? <Text className="text-muted-foreground text-xs mt-1">{order.paymentRejection.note}</Text> : null}</View> : null}
-        {order.paymentNotice ? <Text className="text-muted-foreground mt-4">{order.paymentNotice}</Text> : null}
-        {order.canResubmitProof ? <Pressable disabled={isUploadingProof} onPress={() => void replaceProof()} className="mt-4 rounded-xl bg-primary p-3"><Text className="text-primary-foreground">{isUploadingProof ? "Uploading proof..." : "Replace rejected payment proof"}</Text></Pressable> : null}
         {order.deliveryQuote ? <View className="mt-4 rounded-2xl border border-border bg-card p-4"><Text className="text-foreground text-base font-bold">Delivery estimate</Text><DetailRow label="Carrier" value={order.deliveryQuote.carrier.toUpperCase()} /><DetailRow label="Destination" value={order.deliveryQuote.destination} /><DetailRow label="Packing" value={order.deliveryQuote.packing_expectation} /><DetailRow label="Estimate" value={`${order.deliveryQuote.eta_min_days}–${order.deliveryQuote.eta_max_days} days`} />{order.deliveryQuote.is_demo && order.deliveryQuote.assumption_label ? <Text className="text-muted-foreground text-xs mt-2">{order.deliveryQuote.assumption_label}</Text> : null}<Text className="text-muted-foreground text-xs mt-2">{order.deliveryQuote.notice}</Text></View> : null}
         {order.shipment ? <View className="mt-4 rounded-2xl border border-border bg-card p-4">
           <Text className="text-foreground text-base font-bold">Shipment tracking</Text>
