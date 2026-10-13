@@ -24,7 +24,7 @@ import { LoadingMoreFooter } from "@/components/layout/LoadingMoreFooter";
 import { getGridCardWidth, getResponsiveLayout, MAX_CONTENT_WIDTH } from "@/lib/responsive";
 import { getProductImageSource } from "@/lib/data";
 
-type HomeRow = { id: string; kind: "products"; products: Product[] } | { id: string; kind: "recent" | "brands" | "builder" | "promo" };
+type HomeRow = { id: string; kind: "products"; products: Product[] } | { id: string; kind: "recent" | "brands" | "builder" };
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -97,7 +97,7 @@ export default function HomeScreen() {
       result.push({ id: "products-" + catalog.rows[index].id, kind: "products", products: catalog.rows.slice(index, index + layout.productColumns) });
       if (index < 12 && index + layout.productColumns >= Math.min(12, catalog.rows.length)) {
         if (recentlyViewedProducts.length) result.push({ id: "recent", kind: "recent" });
-        result.push({ id: "builder", kind: "builder" }, { id: "brands", kind: "brands" }, { id: "promo", kind: "promo" });
+        result.push({ id: "builder", kind: "builder" }, { id: "brands", kind: "brands" });
       }
     }
     return result;
@@ -106,10 +106,9 @@ export default function HomeScreen() {
     if (item.kind === "recent") return <RecentlyViewedSection products={recentlyViewedProducts} onSelectProduct={openProduct} />;
     if (item.kind === "builder") return <BuilderEntryCard onPress={() => router.push("/builder")} />;
     if (item.kind === "brands") return <Brands brands={brands} onSelect={(brand) => router.push({ pathname: "/categories", params: { brandId: brand.id } })} />;
-    if (item.kind === "promo") return <View className="my-5"><PromoBanners banners={banners} onSelect={() => router.push("/categories")} /></View>;
     if (item.kind === "products") return <View className="flex-row px-2.5 pb-3">{item.products.map((product) => <View key={product.id} style={{ paddingHorizontal: 6 }}><ProductCard product={product} width={cardWidth} onPress={openProduct} /></View>)}</View>;
     return null;
-  }, [banners, brands, cardWidth, openProduct, recentlyViewedProducts, router]);
+  }, [brands, cardWidth, openProduct, recentlyViewedProducts, router]);
 
   return <View className="flex-1 bg-background">
     <Header cartCount={itemCount} onCartPress={() => router.navigate("/cart")} onNotificationPress={() => router.push("/notifications")} onSearchPress={() => setIsSearchOpen(true)} />
@@ -127,6 +126,7 @@ export default function HomeScreen() {
         {(catalog.error || metadataError) && <View className="mx-4 mt-4 border border-border bg-card p-4"><Text accessibilityLiveRegion="polite" className="text-danger text-sm">{catalog.error?.message ?? "Some browsing options could not be refreshed."}</Text><Pressable accessibilityRole="button" onPress={retry} className="min-h-12 justify-center"><Text className="text-primary font-semibold">Try again</Text></Pressable></View>}
         <Categories categories={categories} onBrowseAll={() => router.navigate("/categories")} onSelect={(category) => router.push({ pathname: "/categories", params: { categoryId: category.id } })} />
         {cartItems.length > 0 && <ContinueCartBanner itemCount={itemCount} subtotal={subtotal} onPress={() => router.navigate("/cart")} />}
+        {banners.length > 0 ? <PromoBanners banners={banners} onSelect={() => router.push("/categories")} /> : null}
         {featured.flashDeals.length ? <FlashDeals products={featured.flashDeals.slice(0, 6)} onSelectProduct={openProduct} /> : null}
         {recommendations.length > 0 && <SulitPicks products={recommendations.map((row) => row.product)} title="Recommended for you" onSelectRecommendedProduct={openRecommendedProduct} />}
         <View className="px-4 mt-6 mb-3"><Text accessibilityRole="header" className="text-foreground text-lg font-bold">Browse products</Text></View>

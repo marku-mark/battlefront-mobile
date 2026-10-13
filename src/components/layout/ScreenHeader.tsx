@@ -13,8 +13,8 @@ type ScreenHeaderProps = {
 
 export function ScreenHeader({ title, subtitle, onBack, right }: ScreenHeaderProps) {
   const insets = useSafeAreaInsets();
-  const { isDark } = useTheme();
-  const iconColor = isDark ? "#f8fafc" : "#30343b";
+  const { colors } = useTheme();
+  const iconColor = colors.foreground;
 
   return (
     <View

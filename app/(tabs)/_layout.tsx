@@ -6,12 +6,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function TabsLayout() {
   const { itemCount } = useCart();
-  const { isDark } = useTheme();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const activeColor = isDark ? "#ef1b1b" : "#ab2923";
-  const inactiveColor = isDark ? "#9ca3af" : "#59616d";
-  const backgroundColor = isDark ? "#090b10" : "#fffaf6";
-  const borderColor = isDark ? "#2a2e36" : "#d5cec5";
+  const activeColor = colors.primary;
+  const inactiveColor = colors.muted;
 
   return (
     <Tabs
@@ -20,22 +18,22 @@ export default function TabsLayout() {
         tabBarActiveTintColor: activeColor,
         tabBarInactiveTintColor: inactiveColor,
         tabBarStyle: {
-          backgroundColor,
-          borderTopColor: borderColor,
+          backgroundColor: colors.background,
+          borderTopColor: colors.border,
           borderTopWidth: 1,
           height: 60 + insets.bottom,
           paddingTop: 6,
           paddingBottom: Math.max(insets.bottom, 6),
         },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
+        tabBarLabelStyle: { fontSize: 12, fontWeight: "600" },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: "Home",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" size={size} color={String(color)} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? "home" : "home-outline"} size={size} color={String(color)} />
           ),
         }}
       />
@@ -43,8 +41,8 @@ export default function TabsLayout() {
         name="categories"
         options={{
           title: "Categories",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="grid-outline" size={size} color={String(color)} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? "grid" : "grid-outline"} size={size} color={String(color)} />
           ),
         }}
       />
@@ -52,8 +50,8 @@ export default function TabsLayout() {
         name="builder"
         options={{
           title: "Builder",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="construct-outline" size={size} color={String(color)} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? "construct" : "construct-outline"} size={size} color={String(color)} />
           ),
         }}
       />
@@ -67,8 +65,8 @@ export default function TabsLayout() {
             color: "#f8fafc",
             minWidth: 18,
           },
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="cart-outline" size={size} color={String(color)} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? "cart" : "cart-outline"} size={size} color={String(color)} />
           ),
         }}
       />
@@ -76,8 +74,8 @@ export default function TabsLayout() {
         name="account"
         options={{
           title: "Account",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color={String(color)} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? "person" : "person-outline"} size={size} color={String(color)} />
           ),
         }}
       />

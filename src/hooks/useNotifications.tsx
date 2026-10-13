@@ -5,13 +5,12 @@ import { AppState, Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import * as Notifications from "expo-notifications";
 import { getUnreadNotificationCount } from "@/lib/notifications";
-import { registerPushDevice } from "@/lib/pushDevice";
+import { getPushDeviceStatus, registerPushDevice } from "@/lib/pushDevice";
 import { getSessionRevision } from "@/lib/api";
 import { parseNotificationTarget, type NotificationTarget } from "@/lib/notificationPayload";
-import { useToast } from "@/hooks/useToast";
 import { useSession } from "./useSession";
 
-export type PushStatus = "checking" | "unsupported" | "not-enabled" | "denied" | "enabled" | "error";
+export type PushStatus = "checking" | "unsupported" | "not-enabled" | "denied" | "muted" | "allowed" | "enabled" | "error";
 type NotificationContextValue = {
   unreadCount: number;
   setUnreadCount: (count: number) => void;
@@ -24,9 +23,10 @@ type NotificationContextValue = {
 const NotificationContext = createContext<NotificationContextValue | null>(null);
 const supportsRemotePush = Platform.OS === "ios" || Platform.OS === "android";
 const PUSH_PROMPTED_KEY = "battlefront-push-permission-prompted";
+const ORDER_CHANNEL = "order-updates-v2";
 
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({ shouldShowBanner: false, shouldShowList: true, shouldPlaySound: false, shouldSetBadge: false }),
+  handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }),
 });
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
@@ -34,7 +34,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const navigation = useNavigationContainerRef();
   const owner = session.mode === "customer" ? session.user.id : null;
-  const { showToast } = useToast();
   const sessionRevision = getSessionRevision();
   const [unreadCount, setUnreadCount] = useState(0);
   const [pendingTarget, setPendingTarget] = useState<NotificationTarget | null>(null);
@@ -43,6 +42,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const [pushMessage, setPushMessage] = useState("");
   const countRequest = useRef(0);
   const pushRequest = useRef(0);
+  const invalidTokenReset = useRef<string | null>(null);
+  const resetInFlight = useRef<Promise<Notifications.DevicePushToken> | null>(null);
+  const recoveredToken = useRef<{ key: string; token: Notifications.DevicePushToken } | null>(null);
+  const lastHandledResponse = useRef<string | null>(null);
   const startupPermissionRequest = useRef(false);
   const [startupPermissionReady, setStartupPermissionReady] = useState(!supportsRemotePush);
   const updateUnreadCount = useCallback((count: number) => {
@@ -53,13 +56,14 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const refreshUnreadCount = useCallback(async () => {
     if (owner === null) return;
     const request = ++countRequest.current;
+    const revision = getSessionRevision();
     try {
       const count = await getUnreadNotificationCount();
-      if (request === countRequest.current) setUnreadCount(count);
-    } catch { /* History stays usable when a count refresh fails. */ }
+      if (request === countRequest.current && revision === getSessionRevision()) setUnreadCount(count);
+    } catch { /* Retry on the next active refresh. */ }
   }, [owner]);
 
-  const syncPushRegistration = useCallback(async (allowStartupPrompt: boolean) => {
+  const syncPushRegistration = useCallback(async (allowStartupPrompt: boolean, devicePushToken?: Notifications.DevicePushToken) => {
     const request = ++pushRequest.current;
     const revision = getSessionRevision();
     if (!supportsRemotePush) {
@@ -71,10 +75,12 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     setPushMessage("");
     try {
       if (Platform.OS === "android") {
-        await Notifications.setNotificationChannelAsync("default", {
+        const channel = await Notifications.setNotificationChannelAsync(ORDER_CHANNEL, {
           name: "Order updates",
-          importance: Notifications.AndroidImportance.DEFAULT,
+          importance: Notifications.AndroidImportance.HIGH,
+          sound: "default",
         });
+        if (channel === null) throw new Error("Could not create the Order updates notification channel.");
       }
       let permissions = await Notifications.getPermissionsAsync();
       if (!permissions.granted && allowStartupPrompt && permissions.canAskAgain) {
@@ -94,18 +100,48 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         return;
       }
       if (owner === null) {
-        setPushStatus("enabled");
+        setPushStatus("allowed");
         setPushMessage("Notifications are allowed. Sign in to register this device for order updates.");
         return;
       }
       const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
       if (!projectId) throw new Error("Push setup is missing its EAS project ID.");
-      const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+      let tokenForExpo = devicePushToken;
+      if (Platform.OS === "android") {
+        const previous = await getPushDeviceStatus();
+        const lastDelivery = previous?.last_delivery;
+        if (previous && !previous.is_active && lastDelivery?.error_code === "DeviceNotRegistered" && lastDelivery.current_registration) {
+          const resetKey = `${previous.id}:${lastDelivery.updated_at}`;
+          if (invalidTokenReset.current !== resetKey) {
+            invalidTokenReset.current = resetKey;
+            const reset = Notifications.unregisterForNotificationsAsync().then(() => Notifications.getDevicePushTokenAsync());
+            resetInFlight.current = reset;
+            try {
+              tokenForExpo = await reset;
+              recoveredToken.current = { key: resetKey, token: tokenForExpo };
+            } catch (error) {
+              invalidTokenReset.current = null;
+              recoveredToken.current = null;
+              throw error;
+            } finally {
+              if (resetInFlight.current === reset) resetInFlight.current = null;
+            }
+          } else if (resetInFlight.current) {
+            tokenForExpo = await resetInFlight.current;
+          } else if (recoveredToken.current?.key === resetKey) {
+            tokenForExpo = recoveredToken.current.token;
+          }
+        }
+      }
+      const token = (await Notifications.getExpoPushTokenAsync({ projectId, devicePushToken: tokenForExpo })).data;
       if (request !== pushRequest.current || revision !== getSessionRevision()) return;
-      await registerPushDevice(token);
+      const registration = await registerPushDevice(token);
       if (request === pushRequest.current && revision === getSessionRevision()) {
-        setPushStatus("enabled");
-        setPushMessage("Order updates are enabled on this device.");
+        const channel = Platform.OS === "android" ? await Notifications.getNotificationChannelAsync(ORDER_CHANNEL) : null;
+        if (request !== pushRequest.current || revision !== getSessionRevision()) return;
+        const muted = channel !== null && channel !== undefined && channel.importance < Notifications.AndroidImportance.HIGH;
+        setPushStatus(muted ? "muted" : "enabled");
+        setPushMessage(muted ? "Order update banners are off in device settings. Set the Order updates channel to high importance to see pop-up alerts." : registration ? "This device is registered. Check the latest provider result below to confirm remote delivery." : "Device registration is pending.");
       }
     } catch (failure) {
       if (request === pushRequest.current && revision === getSessionRevision()) {
@@ -152,33 +188,47 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   }, [owner, refreshUnreadCount, refreshPushStatus]);
 
   useEffect(() => {
+    if (owner === null) return;
+    const interval = setInterval(() => {
+      if (AppState.currentState === "active") void refreshUnreadCount();
+    }, 10_000);
+    return () => clearInterval(interval);
+  }, [owner, refreshUnreadCount]);
+
+  useEffect(() => {
     if (!supportsRemotePush) return;
     let active = true;
     let received: { remove: () => void } | undefined;
     let responses: { remove: () => void } | undefined;
     let tokenSubscription: { remove: () => void } | undefined;
     async function listen() {
-      const handleResponse = (response: { notification: { request: { content: { data?: Record<string, unknown> } } } }) => {
+      const handleResponse = (response: { notification: { request: { identifier: string; content: { data?: Record<string, unknown> } } } }) => {
+        const identifier = response.notification.request.identifier;
+        if (identifier === lastHandledResponse.current) return;
+        lastHandledResponse.current = identifier;
         setPendingTarget(parseNotificationTarget(response.notification.request.content.data));
         void refreshUnreadCount();
         void Notifications.clearLastNotificationResponseAsync().catch(() => undefined);
       };
       received = Notifications.addNotificationReceivedListener((notification) => {
-        setUnreadCount((count) => count + 1);
-        void refreshUnreadCount();
-        const { title, body } = notification.request.content;
-        showToast([title, body].filter(Boolean).join(": ") || "You have a new notification.", "info");
+        if (owner === null) return;
+        const data = notification.request.content.data;
+        if (data?.type !== "test") {
+          countRequest.current++;
+          setUnreadCount((count) => count + 1);
+          setTimeout(() => void refreshUnreadCount(), 300);
+        }
       });
       responses = Notifications.addNotificationResponseReceivedListener(handleResponse);
-      tokenSubscription = Notifications.addPushTokenListener(() => {
-        if (active && owner !== null) void syncPushRegistration(false);
+      tokenSubscription = Notifications.addPushTokenListener((devicePushToken) => {
+        if (active && owner !== null) void syncPushRegistration(false, devicePushToken);
       });
       const last = await Notifications.getLastNotificationResponseAsync();
       if (active && last) handleResponse(last);
     }
     void listen().catch(() => undefined);
     return () => { active = false; received?.remove(); responses?.remove(); tokenSubscription?.remove(); };
-  }, [owner, refreshUnreadCount, showToast, syncPushRegistration]);
+  }, [owner, refreshUnreadCount, syncPushRegistration]);
 
   useEffect(() => {
     if (pendingTarget === null || !navigationReady) return;

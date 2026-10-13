@@ -95,16 +95,17 @@ updates the backend if Expo reports a rotated device token. Sign-out revokes
 the device registration. The in-app notification inbox remains available when
 push permission is denied.
 
-Push payloads use the Expo notification message format. The tap data contract is
-`{ "screen": "order_detail", "id": 123, "type": "order_update", "channel": "default" }`.
-For compatibility, the app also accepts the current Laravel shape
-`{ "deep_link": { "screen": "order_detail", "order_id": 123 } }`.
+Push payloads use the Expo notification message format. Laravel sends
+`notification_id`, `order_id`, and
+`{ "deep_link": { "screen": "order_detail", "order_id": 123 } }` in `data`.
+The app also accepts a flat `{ "screen": "order_detail", "id": 123 }` target.
 Unknown or invalid targets open the notification inbox. A valid order target
-stays queued until the customer session and navigation are ready. Keep the
-Android channel ID `default` stable; its user settings cannot be changed after
-the channel is created. The app shows notification messages in the system tray
-while backgrounded or quit, and displays them in the foreground through the
-Expo notification handler. It does not use data-only messages, since those
+stays queued until the customer session and navigation are ready.
+Android order alerts use the high-importance `order-updates-v2` channel. Device
+registration advertises this channel to Laravel; older app installs that have
+not registered it continue receiving pushes through their existing channel.
+The app shows notification messages in the system tray while backgrounded or
+quit, and displays actionable in-app alerts while open. It does not use data-only messages, since those
 would require a separate background execution path and local display behavior.
 
 The Android notification icon is `assets/notification-icon.png` and the Expo

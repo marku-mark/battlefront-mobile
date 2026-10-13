@@ -12,6 +12,8 @@ type ThemeContextValue = {
   reducedMotion: boolean;
   isDark: boolean;
   colors: {
+    background: string;
+    border: string;
     foreground: string;
     icon: string;
     muted: string;
@@ -42,7 +44,7 @@ const themes = {
     "--disabled": "100 116 139",
     "--border": "42 46 54",
     "--ring": "239 27 27",
-    colors: { foreground: "#f8fafc", icon: "#cbd5e1", muted: "#9ca3af", primary: "#ef1b1b" },
+    colors: { background: "#090b10", border: "#2a2e36", foreground: "#f8fafc", icon: "#cbd5e1", muted: "#9ca3af", primary: "#ef1b1b" },
   },
   light: {
     "--background": "244 240 235",
@@ -62,7 +64,7 @@ const themes = {
     "--disabled": "148 163 184",
     "--border": "213 206 197",
     "--ring": "183 52 44",
-    colors: { foreground: "#30343b", icon: "#4b5563", muted: "#68717e", primary: "#ab2923" },
+    colors: { background: "#f4f0eb", border: "#d5cec5", foreground: "#30343b", icon: "#4b5563", muted: "#68717e", primary: "#ab2923" },
   },
 } as const;
 

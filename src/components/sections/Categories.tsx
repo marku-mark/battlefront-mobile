@@ -10,14 +10,14 @@ type CategoriesProps = {
 };
 
 export function Categories({ categories, onSelect, onBrowseAll }: CategoriesProps) {
-  const { isDark } = useTheme();
+  const { colors } = useTheme();
 
   return (
     <View className="mt-6">
       <View className="flex-row items-center justify-between px-4 mb-3">
         <View>
-          <Text className="text-foreground font-bold text-base">Shop by category</Text>
-          <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.14em]">
+          <Text accessibilityRole="header" className="text-foreground font-bold text-lg">Shop by category</Text>
+          <Text className="text-muted-foreground text-xs uppercase tracking-wide">
             find your fit
           </Text>
         </View>
@@ -27,7 +27,7 @@ export function Categories({ categories, onSelect, onBrowseAll }: CategoriesProp
           hitSlop={8}
           style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
         >
-          <Text className="text-primary text-[11px] font-semibold uppercase tracking-[0.12em]">
+          <Text className="text-primary text-xs font-semibold uppercase tracking-wide">
             Browse all
           </Text>
         </Pressable>
@@ -42,19 +42,19 @@ export function Categories({ categories, onSelect, onBrowseAll }: CategoriesProp
           <Pressable
             accessibilityLabel={`Browse ${item.name} category`}
             onPress={() => onSelect?.(item)}
-            className="items-center w-[74px]"
+            className="items-center w-[78px]"
             style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1, transform: [{ scale: pressed ? 0.96 : 1 }] })}
           >
-            <View className="w-14 h-14 rounded-2xl bg-secondary items-center justify-center border border-border">
+            <View className="w-14 h-14 rounded-xl bg-secondary items-center justify-center border border-border">
               <Ionicons
                 name={item.icon as any}
                 size={22}
-                color={isDark ? "#f8fafc" : "#30343b"}
+                color={colors.foreground}
               />
             </View>
             <Text
               numberOfLines={2}
-              className="text-muted-foreground text-[11px] mt-1.5 text-center leading-3"
+              className="text-muted-foreground text-xs mt-1.5 text-center leading-4"
             >
               {item.name}
             </Text>

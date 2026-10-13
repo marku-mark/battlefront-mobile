@@ -1,10 +1,13 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { useCallback, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
 import { LogoMark } from "@/components/layout/LogoMark";
 import { MAX_CONTENT_WIDTH } from "@/lib/responsive";
 import { useNotifications } from "@/hooks/useNotifications";
+import { NotificationPreview } from "@/components/notifications/NotificationPreview";
+import { useActiveFocusEffect } from "@/hooks/useActiveScreen";
 
 type HeaderProps = {
   cartCount?: number;
@@ -16,8 +19,13 @@ type HeaderProps = {
 
 export function Header({ cartCount = 0, onCartPress, onNotificationPress, onSearchPress, searchDisabled = false }: HeaderProps) {
   const insets = useSafeAreaInsets();
-  const { isDark } = useTheme();
-  const { unreadCount } = useNotifications();
+  const { colors } = useTheme();
+  const { unreadCount, refreshUnreadCount } = useNotifications();
+  const [previewOpen, setPreviewOpen] = useState(false);
+
+  useActiveFocusEffect(useCallback(() => {
+    void refreshUnreadCount();
+  }, [refreshUnreadCount]));
 
   return (
     <View
@@ -30,13 +38,13 @@ export function Header({ cartCount = 0, onCartPress, onNotificationPress, onSear
         </View>
 
         <Pressable
-          onPress={onNotificationPress}
+          onPress={() => setPreviewOpen(true)}
           accessibilityRole="button"
           accessibilityLabel={`Open notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ""}`}
           className="relative w-12 h-12 items-center justify-center rounded-xl bg-secondary border border-border shadow-soft"
           style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
         >
-          <Ionicons name="notifications-outline" size={20} color={isDark ? "#f8fafc" : "#30343b"} />
+          <Ionicons name="notifications-outline" size={20} color={colors.foreground} />
           {unreadCount > 0 && <View className="absolute -top-1 -right-1 bg-ring rounded-full min-w-[18px] h-[18px] items-center justify-center px-1"><Text className="text-[9px] text-primary-foreground font-bold">{unreadCount > 99 ? "99+" : unreadCount}</Text></View>}
         </Pressable>
 
@@ -47,7 +55,7 @@ export function Header({ cartCount = 0, onCartPress, onNotificationPress, onSear
           className="relative w-12 h-12 items-center justify-center rounded-xl bg-secondary border border-border shadow-soft"
           style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
         >
-          <Ionicons name="cart-outline" size={20} color={isDark ? "#f8fafc" : "#30343b"} />
+          <Ionicons name="cart-outline" size={20} color={colors.foreground} />
           {cartCount > 0 && (
             <View className="absolute -top-1 -right-1 bg-ring rounded-full min-w-[18px] h-[18px] items-center justify-center px-1">
               <Text className="text-[9px] text-primary-foreground font-bold">
@@ -68,12 +76,13 @@ export function Header({ cartCount = 0, onCartPress, onNotificationPress, onSear
           className="min-h-12 flex-row items-center gap-2 bg-secondary border border-border rounded-xl px-3 py-2.5"
           style={({ pressed }) => ({ opacity: searchDisabled ? 0.5 : pressed ? 0.82 : 1 })}
         >
-          <Ionicons name="search-outline" size={16} color={isDark ? "#cbd5e1" : "#68717e"} />
+          <Ionicons name="search-outline" size={16} color={colors.muted} />
           <Text className="text-muted-foreground text-sm">
             Search products or brands
           </Text>
         </Pressable>
       </View>
+      <NotificationPreview visible={previewOpen} onClose={() => setPreviewOpen(false)} onViewAll={() => onNotificationPress?.()} />
     </View>
   );
 }
