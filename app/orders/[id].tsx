@@ -11,6 +11,8 @@ import { getProductById } from "@/lib/api";
 import { cancelPlacedOrder, getOrderById, getOrderSnapshot, resubmitPaymentProof, type OrderRecord } from "@/lib/orders";
 import * as ImagePicker from "expo-image-picker";
 import { useTheme } from "@/theme/ThemeProvider";
+import * as Clipboard from "expo-clipboard";
+import { useToast } from "@/hooks/useToast";
 
 const statusSteps = [
   { key: "pending", label: "Pending", detail: "Your order is awaiting staff processing." },
@@ -21,6 +23,7 @@ const statusSteps = [
 export default function OrderDetailScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { showToast } = useToast();
   const { addItem } = useCart();
   const { session } = useSession();
   const owner = session.mode === "customer" ? session.user.id : null;
@@ -32,7 +35,21 @@ export default function OrderDetailScreen() {
   const [isCancellingOrder, setIsCancellingOrder] = useState(false);
   const [isReordering, setIsReordering] = useState(false);
   const [isUploadingProof, setIsUploadingProof] = useState(false);
+  const [isCopyingTrackingReference, setIsCopyingTrackingReference] = useState(false);
   const uploadingProof = useRef(false);
+
+  async function copyTrackingReference(reference: string) {
+    if (isCopyingTrackingReference || !reference.trim()) return;
+    setIsCopyingTrackingReference(true);
+    try {
+      await Clipboard.setStringAsync(reference);
+      showToast("Tracking number copied");
+    } catch {
+      showToast("Could not copy tracking number", "error");
+    } finally {
+      setIsCopyingTrackingReference(false);
+    }
+  }
   async function replaceProof() {
     if (!order || uploadingProof.current) return;
     uploadingProof.current = true;
@@ -254,7 +271,24 @@ export default function OrderDetailScreen() {
         {order.paymentNotice ? <Text className="text-muted-foreground mt-4">{order.paymentNotice}</Text> : null}
         {order.canResubmitProof ? <Pressable disabled={isUploadingProof} onPress={() => void replaceProof()} className="mt-4 rounded-xl bg-primary p-3"><Text className="text-primary-foreground">{isUploadingProof ? "Uploading proof..." : "Replace rejected payment proof"}</Text></Pressable> : null}
         {order.deliveryQuote ? <View className="mt-4 rounded-2xl border border-border bg-card p-4"><Text className="text-foreground text-base font-bold">Delivery estimate</Text><DetailRow label="Carrier" value={order.deliveryQuote.carrier.toUpperCase()} /><DetailRow label="Destination" value={order.deliveryQuote.destination} /><DetailRow label="Packing" value={order.deliveryQuote.packing_expectation} /><DetailRow label="Estimate" value={`${order.deliveryQuote.eta_min_days}–${order.deliveryQuote.eta_max_days} days`} />{order.deliveryQuote.is_demo && order.deliveryQuote.assumption_label ? <Text className="text-muted-foreground text-xs mt-2">{order.deliveryQuote.assumption_label}</Text> : null}<Text className="text-muted-foreground text-xs mt-2">{order.deliveryQuote.notice}</Text></View> : null}
-        {order.shipment ? <View className="mt-4 rounded-2xl border border-border bg-card p-4"><Text className="text-foreground text-base font-bold">Shipment tracking</Text><DetailRow label="Status" value={order.shipment.status.label} />{order.shipment.tracking_reference ? <DetailRow label="Tracking reference" value={order.shipment.tracking_reference} /> : null}{order.shipment.eta.estimated_delivery_start ? <DetailRow label="Estimated delivery" value={`${order.shipment.eta.estimated_delivery_start}${order.shipment.eta.estimated_delivery_end && order.shipment.eta.estimated_delivery_end !== order.shipment.eta.estimated_delivery_start ? ` – ${order.shipment.eta.estimated_delivery_end}` : ""}`} /> : null}{order.shipment.timeline.map((event) => <DetailRow key={`${event.status}-${event.occurred_at}`} label={event.label} value={new Date(event.occurred_at).toLocaleString("en-PH")} />)}<Text className="text-muted-foreground text-xs mt-2">{order.shipment.notice}</Text>{order.shipment.history_notice ? <Text className="text-muted-foreground text-xs mt-2">{order.shipment.history_notice}</Text> : null}</View> : null}
+        {order.shipment ? <View className="mt-4 rounded-2xl border border-border bg-card p-4">
+          <Text className="text-foreground text-base font-bold">Shipment tracking</Text>
+          <DetailRow label="Status" value={order.shipment.status.label} />
+          {order.shipment.tracking_reference ? <View className="mt-3">
+            <Text className="text-muted-foreground text-xs">Tracking reference</Text>
+            <View className="mt-1 flex-row items-center gap-2">
+              <Text selectable className="flex-1 text-foreground text-sm font-semibold">{order.shipment.tracking_reference}</Text>
+              <Pressable accessibilityRole="button" accessibilityLabel="Copy tracking number" accessibilityState={{ disabled: isCopyingTrackingReference }} disabled={isCopyingTrackingReference} onPress={() => void copyTrackingReference(order.shipment!.tracking_reference!)} className="min-h-10 flex-row items-center gap-2 rounded-lg border border-border bg-secondary px-3" style={({ pressed }) => ({ opacity: isCopyingTrackingReference ? 0.6 : pressed ? 0.7 : 1 })}>
+                {isCopyingTrackingReference ? <ActivityIndicator size="small" color={colors.foreground} /> : <Ionicons name="copy-outline" size={16} color={colors.foreground} />}
+                <Text className="text-foreground text-xs font-semibold">{isCopyingTrackingReference ? "Copying" : "Copy"}</Text>
+              </Pressable>
+            </View>
+          </View> : null}
+          {order.shipment.eta.estimated_delivery_start ? <DetailRow label="Estimated delivery" value={`${order.shipment.eta.estimated_delivery_start}${order.shipment.eta.estimated_delivery_end && order.shipment.eta.estimated_delivery_end !== order.shipment.eta.estimated_delivery_start ? ` – ${order.shipment.eta.estimated_delivery_end}` : ""}`} /> : null}
+          {order.shipment.timeline.map((event) => <DetailRow key={`${event.status}-${event.occurred_at}`} label={event.label} value={new Date(event.occurred_at).toLocaleString("en-PH")} />)}
+          <Text className="text-muted-foreground text-xs mt-2">{order.shipment.notice}</Text>
+          {order.shipment.history_notice ? <Text className="text-muted-foreground text-xs mt-2">{order.shipment.history_notice}</Text> : null}
+        </View> : null}
         {order.productLines && order.productLines.length > 0 && (
           <Pressable
             accessibilityRole="button"

@@ -88,14 +88,48 @@ FCM V1 push delivery.
 Build with the `development` profile
 in `eas.json` and install that binary to test push. Android Expo Go cannot
 receive remote push on this SDK. Set `EXPO_PUBLIC_API_URL` for the build to a
-backend address reachable from the device. Sign in on the device and allow
-notifications to register its Expo push token. The inbox works even if push
-permission is denied.
+backend address reachable from the device. On the first app launch, Battlefront
+requests notification permission. After sign-in, it registers the Expo push
+token, refreshes registration when the app returns to the foreground, and
+updates the backend if Expo reports a rotated device token. Sign-out revokes
+the device registration. The in-app notification inbox remains available when
+push permission is denied.
+
+Push payloads use the Expo notification message format. The tap data contract is
+`{ "screen": "order_detail", "id": 123, "type": "order_update", "channel": "default" }`.
+For compatibility, the app also accepts the current Laravel shape
+`{ "deep_link": { "screen": "order_detail", "order_id": 123 } }`.
+Unknown or invalid targets open the notification inbox. A valid order target
+stays queued until the customer session and navigation are ready. Keep the
+Android channel ID `default` stable; its user settings cannot be changed after
+the channel is created. The app shows notification messages in the system tray
+while backgrounded or quit, and displays them in the foreground through the
+Expo notification handler. It does not use data-only messages, since those
+would require a separate background execution path and local display behavior.
+
+The Android notification icon is `assets/notification-icon.png` and the Expo
+config declares `POST_NOTIFICATIONS`. Expo manages the native projects for this
+app, so validate generated permissions and Android SDK settings with an EAS
+development build rather than editing a checked-in Android manifest. Confirm
+the iOS push capability and provisioning in the EAS credentials/build setup;
+the capability cannot be verified from the managed app config alone.
 
 On Laravel, run the notification migration and a database queue worker for the
 `notifications` queue, and set `EXPO_PUSH_ENABLED=true`. Keep
 `EXPO_PUSH_ACCESS_TOKEN`, if used, on the server only. See
 `docs/MOBILE_API_HANDOFF.md` in the backend project for the complete contract.
+
+For an end-to-end delivery check, use an installed iOS or Android development
+build and a signed-in test customer. Enable order notifications, confirm the
+device is registered in Laravel, then create an order update that emits a
+customer notification. Confirm the queued notification is processed, the push
+provider accepts it, and the device receives it in foreground and background.
+Tap it from both a warm app and a cold start and confirm it opens the matching
+order. Also check permission denial, enabling permission later in device
+settings, sign-out, and signing into another customer on the same device. A
+401 caused by an expired session cannot be used by the app to revoke a device
+registration; the backend should remove registrations as part of session/token
+revocation and discard provider tokens reported invalid by the push service.
 
 ## Troubleshooting
 

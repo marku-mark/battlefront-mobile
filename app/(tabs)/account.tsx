@@ -271,6 +271,22 @@ export default function AccountScreen() {
             </View>
             <Ionicons name="chevron-forward" size={18} color={isDark ? "#9ca3af" : "#68717e"} />
           </Pressable>
+          <Pressable
+            onPress={() => router.push("/notification-settings")}
+            accessibilityRole="button"
+            accessibilityLabel="Manage order push notifications"
+            className="flex-row items-center border-b border-border p-4"
+            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+          >
+            <View className="h-9 w-9 items-center justify-center rounded-xl bg-secondary">
+              <Ionicons name="notifications-outline" size={19} color={isDark ? "#f8fafc" : "#30343b"} />
+            </View>
+            <View className="ml-3 flex-1">
+              <Text className="text-foreground text-sm font-medium">Order notifications</Text>
+              <Text className="mt-0.5 text-muted-foreground text-xs">Manage push alerts on this device</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={isDark ? "#9ca3af" : "#68717e"} />
+          </Pressable>
           {accountLinks.map((link, index) => (
             <Pressable
               key={link.label}

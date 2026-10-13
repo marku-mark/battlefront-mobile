@@ -171,15 +171,8 @@ export async function getCheckout(cartItemIds: number[]) {
   const query = cartItemIds.map((id) => `cart_item_ids[]=${encodeURIComponent(id)}`).join("&");
   return (await apiRequest<Envelope<Checkout>>(`checkout?${query}`)).data;
 }
-export type RecommendationOptions = { intended_uses: { value: string; label: string }[]; filter_options: Filters };
-export type Recommendation = { product: ApiProduct; effective_price: string; reasons: string[] };
 export type BehavioralRecommendationReason = { code: string; value: string };
 export type BehavioralRecommendation = { product: Product; effective_price: string; reasons: BehavioralRecommendationReason[] };
-const recommendationOptionsCache = createReadCache<RecommendationOptions>(CACHE_AGE.filters, Date.now, 1);
-export function getRecommendationOptions() { return recommendationOptionsCache.read("options", async () => (await apiRequest<Envelope<RecommendationOptions>>("recommendations/options")).data); }
-export async function getRecommendations(criteria: { budget: string; intended_use: string; category_id?: number; preferred_brand?: string; tag_ids?: number[] }) {
-  return (await apiRequest<Envelope<Recommendation[]>>("recommendations", { method: "POST", body: JSON.stringify(criteria) })).data;
-}
 const behavioralRecommendationCache = createReadCache<BehavioralRecommendation[]>(CACHE_AGE.private, Date.now, 4);
 const recommendationInteractionRequest = createPacedRead(apiRequest, 3000);
 const recentRecommendationImpressions = new Map<string, number>();

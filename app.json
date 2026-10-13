@@ -27,7 +27,8 @@
         "expo-notifications",
         {
           "defaultChannel": "default",
-          "color": "#ef1b1b"
+          "color": "#ef1b1b",
+          "icon": "./assets/notification-icon.png"
         }
       ],
       [
@@ -36,6 +37,14 @@
           "photosPermission": "Choose a payment proof image for your Battlefront order.",
           "cameraPermission": false,
           "microphonePermission": false
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
         }
       ]
     ],
@@ -46,6 +55,9 @@
     "android": {
       "package": "com.battlefront.mobile",
       "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "POST_NOTIFICATIONS"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/battlefront-adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -66,6 +78,12 @@
         "projectId": "f470ac29-4c52-4a08-932a-452f3810a3c6"
       }
     },
-    "owner": "ifnothing"
+    "owner": "ifnothing",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/f470ac29-4c52-4a08-932a-452f3810a3c6"
+    }
   }
 }
