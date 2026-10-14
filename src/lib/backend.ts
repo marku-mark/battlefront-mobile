@@ -165,6 +165,28 @@ export type CheckoutQuote = { product_subtotal: string; delivery_fee: string; to
 export type DeliveryQuote = CheckoutQuote & { destination: string; carrier: string; packing_expectation: string; base_fee: string; handling_surcharge: string; preparation_days: number; estimated_delivery_start: string; estimated_delivery_end: string; notice: string; is_demo: boolean; assumption_label: string };
 export type DeliveryLocation = import("./deliveryAddress").DeliveryLocation;
 export type DeliveryAddress = import("./deliveryAddress").DeliveryAddress;
+export type DeliveryCity = { code: string; name: string; destination: string; region_code: string; province_code: string | null; type: "city" | "municipality"; city_class: "CC" | "HUC" | null };
+export type DeliveryProvince = { code: string; name: string; region_code: string };
+export type SelectedDeliveryQuote = Omit<DeliveryQuote, "carrier" | "packing_expectation" | "base_fee" | "handling_surcharge" | "preparation_days" | "estimated_delivery_start" | "estimated_delivery_end"> & { pricing_configured: boolean; order_placement_allowed: boolean; payment_methods: string[]; destination_label: string; carrier: string | null; packing_expectation: string | null; base_fee: string | null; handling_surcharge: string | null; preparation_days: number | null; estimated_delivery_start: string | null; estimated_delivery_end: string | null };
+export async function getDeliveryLocations<T>(level: string, parentCode?: string): Promise<T[]> {
+  const query = `level=${encodeURIComponent(level)}${parentCode ? `&parent_code=${encodeURIComponent(parentCode)}` : ""}`;
+  return (await apiRequest<Envelope<{ version: string; locations: T[] }>>(`delivery-locations?${query}`)).data.locations;
+}
+export async function getNegrosDeliveryLocations(): Promise<DeliveryLocation[]> {
+  const provinces = (await getDeliveryLocations<DeliveryProvince>("provinces", "1800000000"))
+    .filter((province) => province.name === "Negros Occidental" || province.name === "Negros Oriental");
+  const cityGroups = await Promise.all([...provinces.map((province) => province.code), "1800000000"]
+    .map((parent) => getDeliveryLocations<DeliveryCity>("cities", parent)));
+  return cityGroups.flat().map((city) => ({
+    destination: city.code, code: city.code, name: city.destination, type: city.type, city_class: city.city_class,
+    province: provinces.find((province) => province.code === city.province_code) ?? null,
+    region_code: city.region_code, barangays: [],
+  })).sort((a, b) => a.name.localeCompare(b.name));
+}
+export async function getDeliveryQuote(cityCode: string, cartItemIds: number[]): Promise<{ available: boolean; quote: SelectedDeliveryQuote | null; notice?: string }> {
+  const query = [`delivery_city_code=${encodeURIComponent(cityCode)}`, ...cartItemIds.map((id) => `cart_item_ids[]=${encodeURIComponent(id)}`)].join("&");
+  return (await apiRequest<Envelope<{ available: boolean; quote: SelectedDeliveryQuote | null; notice?: string }>>(`checkout/delivery-quote?${query}`)).data;
+}
 export type Checkout = { cart: { items: { id: number; quantity: number; product: { id: number; name: string; brand: string | null; image_url: string | null }; unit_price: string; line_total: string }[]; item_count: number; total_quantity: number; total: string }; pickup_quote: CheckoutQuote; delivery_quotes: DeliveryQuote[]; delivery_locations: DeliveryLocation[]; delivery_address_prefill: DeliveryAddress; pickup_location: { name: string; address: string; contact_number: string | null; operating_hours: string }; customer: { name: string; default_delivery_address: string | null }; fulfillment_methods: { value: string; label: string }[]; payment_methods: { value: string; label: string; requires_proof: boolean; available_for: string[]; payment_account: { account_name: string; account_number: string; is_demo: boolean } | null }[] };
 export async function getCheckout(cartItemIds: number[]) {
   const query = cartItemIds.map((id) => `cart_item_ids[]=${encodeURIComponent(id)}`).join("&");

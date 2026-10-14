@@ -48,6 +48,24 @@ test("clearing the synced default address sends null and preserves name and emai
   assert.deepEqual(await account.updateProfile({ name: user.name, email: user.email, default_delivery_address: null }), user);
 });
 
+test("structured Negros default sends PSGC parent, city, barangay, and details", async () => {
+  const account = createAccountApi(async (path, options) => {
+    assert.equal(path, "profile");
+    assert.deepEqual(JSON.parse(options.body), {
+      name: user.name, email: user.email, default_delivery_address_action: "save",
+      default_delivery_region_code: "1800000000", default_delivery_province_code: "1804500000",
+      default_delivery_city_code: "1804523000", default_delivery_barangay_code: "1804523018",
+      default_delivery_address_details: "12 Mabini Street",
+    });
+    return { data: { ...user, default_delivery_address: "12 Mabini Street, Poblacion I, Sagay City, Negros Occidental" } };
+  });
+  const updated = await account.updateProfile({ name: user.name, email: user.email, default_delivery_address_action: "save",
+    default_delivery_region_code: "1800000000", default_delivery_province_code: "1804500000",
+    default_delivery_city_code: "1804523000", default_delivery_barangay_code: "1804523018",
+    default_delivery_address_details: "12 Mabini Street" });
+  assert.match(updated.default_delivery_address, /Sagay City, Negros Occidental/);
+});
+
 test("profile validation failures reach the editor without reporting a saved result", async (t) => {
   t.mock.method(globalThis, "fetch", async () => Response.json({ errors: { default_delivery_address: ["The default delivery address may not be greater than 255 characters."] } }, { status: 422 }));
   const account = createAccountApi(createApiClient("http://backend.test/api/v1", () => result.token));

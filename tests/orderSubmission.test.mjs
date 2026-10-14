@@ -100,6 +100,24 @@ test("phone pickup checkout sends authenticated JSON and returns the created ord
   assert.deepEqual(await orders.placeOrder(pickup), { id: 7, status: { value: "pending" } });
 });
 
+test("Negros city checkout sends the complete PSGC hierarchy and structured address", async () => {
+  const orders = createOrderSubmission(async (_path, options) => {
+    const body = JSON.parse(options.body);
+    assert.deepEqual({
+      region: body.delivery_region_code, province: body.delivery_province_code, city: body.delivery_city_code,
+      destination: body.delivery_destination, barangay: body.delivery_barangay_code, details: body.delivery_address_details,
+    }, {
+      region: "1800000000", province: "1804500000", city: "1804523000", destination: "1804523000",
+      barangay: "1804523018", details: "12 Mabini Street",
+    });
+    assert.equal(body.delivery_address, undefined);
+    return { data: { id: 9 } };
+  }, "native");
+  assert.deepEqual(await orders.placeOrder({ ...pickup, fulfillment_method: "delivery", payment_method: "cod",
+    delivery_region_code: "1800000000", delivery_province_code: "1804500000", delivery_city_code: "1804523000",
+    delivery_destination: "1804523000", delivery_barangay_code: "1804523018", delivery_address_details: "12 Mabini Street" }), { id: 9 });
+});
+
 test("native wallet checkout encodes proof bytes and delivery details without setting a multipart boundary", async (t) => {
   useNativeFormData(t);
   const proof = { uri: "file:///phone/payment.png", name: "payment.png", type: "image/png" };

@@ -1,5 +1,5 @@
 export type PaymentProof = { uri: string; name: string; type: string };
-export type OrderInput = { cart_item_ids: number[]; recipient_name: string; contact_number: string; fulfillment_method: string; payment_method: string; delivery_destination?: string; delivery_barangay_code?: string; delivery_address_details?: string; delivery_address?: string; payment_proof?: PaymentProof };
+export type OrderInput = { cart_item_ids: number[]; recipient_name: string; contact_number: string; fulfillment_method: string; payment_method: string; delivery_destination?: string; delivery_region_code?: string; delivery_province_code?: string | null; delivery_city_code?: string; delivery_barangay_code?: string; delivery_address_details?: string; delivery_address?: string; payment_proof?: PaymentProof };
 type Request = <T>(path: string, options?: RequestInit) => Promise<T>;
 type NativeProofFile = { bytes: () => Promise<Uint8Array> };
 
@@ -26,7 +26,7 @@ export function createOrderSubmission<T>(request: Request, platform: "web" | "na
     } else {
       const formData = new FormData();
       for (const [key, value] of Object.entries(input)) {
-        if (value === undefined || key === "payment_proof") continue;
+        if (value === undefined || value === null || key === "payment_proof") continue;
         if (Array.isArray(value)) value.forEach((entry) => formData.append(`${key}[]`, String(entry)));
         else formData.append(key, String(value));
       }

@@ -7,7 +7,9 @@ import { MockSignInSheet } from "@/components/account/MockSignInSheet";
 import { Chatbot } from "@/components/support/Chatbot";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { useSession } from "@/hooks/useSession";
-import { getLocalUserId } from "@/lib/api";
+import { getLocalUserId, getNegrosDeliveryLocations, getDeliveryLocations } from "@/lib/api";
+import { DeliveryAddressFields } from "@/components/addresses/DeliveryAddressFields";
+import { EMPTY_DELIVERY_ADDRESS, formatDeliveryAddress, isCompleteDeliveryAddress, type DeliveryAddress, type DeliveryBarangay, type DeliveryLocation } from "@/lib/deliveryAddress";
 import { loadSavedAddresses, persistSavedAddresses, type SavedAddress } from "@/lib/savedAddresses";
 import { useTheme } from "@/theme/ThemeProvider";
 import { useToast } from "@/hooks/useToast";
@@ -36,7 +38,8 @@ export default function AccountScreen() {
   const [newAddressLabel, setNewAddressLabel] = useState("");
   const [newAddressRecipient, setNewAddressRecipient] = useState("");
   const [newAddressPhone, setNewAddressPhone] = useState("");
-  const [newAddressText, setNewAddressText] = useState("");
+  const [newAddress, setNewAddress] = useState<DeliveryAddress>(EMPTY_DELIVERY_ADDRESS);
+  const [locations, setLocations] = useState<DeliveryLocation[]>([]);
   const [isSavingAddress, setIsSavingAddress] = useState(false);
   const [profileName, setProfileName] = useState("");
   const [profileEmail, setProfileEmail] = useState("");
@@ -55,10 +58,20 @@ export default function AccountScreen() {
     previousCustomerId.current = customerId;
     if (previousId === null || previousId === customerId) return;
     setSelectedUtility(null);
-    setSavedAddresses([]); setIsAddingAddress(false);
+    setSavedAddresses([]); setIsAddingAddress(false); setNewAddress(EMPTY_DELIVERY_ADDRESS); setLocations([]);
     setAddressError(""); setProfileError("");
     setIsSavingAddress(false); setIsAddressesLoading(false); setIsSavingProfile(false); setIsProfileLoading(false); setIsProfileLoaded(false);
   }, [customerId]);
+  useEffect(() => {
+    const cityCode = newAddress.delivery_destination;
+    if (!/^\d{10}$/.test(cityCode) || !locations.some((item) => item.code === cityCode)) return;
+    if (locations.find((item) => item.code === cityCode)?.barangays.length) return;
+    let active = true;
+    void getDeliveryLocations<DeliveryBarangay>("barangays", cityCode).then((barangays) => {
+      if (active) setLocations((current) => current.map((item) => item.code === cityCode ? { ...item, barangays } : item));
+    }).catch((reason) => { if (active) setAddressError(reason instanceof Error ? reason.message : "Could not load barangays."); });
+    return () => { active = false; };
+  }, [newAddress.delivery_destination, locations]);
 
   async function openProfileSettings() {
     const owner = getLocalUserId();
@@ -83,7 +96,6 @@ export default function AccountScreen() {
       await saveProfile({
         name: profileName,
         email: profileEmail,
-        default_delivery_address: profileAddress.trim() || null,
         personalized_recommendations_enabled: personalizedRecommendationsEnabled,
         search_recommendations_enabled: searchRecommendationsEnabled,
         product_view_recommendations_enabled: productViewRecommendationsEnabled,
@@ -93,13 +105,21 @@ export default function AccountScreen() {
     finally { if (getLocalUserId() === customerId) setIsSavingProfile(false); }
   }
 
-  async function useDefaultAddress(address: string | null) {
+  async function useDefaultAddress(address: SavedAddress | null) {
     if (isSavingAddress) return;
     const owner = getLocalUserId();
     setIsSavingAddress(true); setAddressError("");
     try {
       const user = await refreshProfile();
-      await saveProfile({ name: user.name, email: user.email, default_delivery_address: address }, user.id);
+      if (address && (!locations.some((item) => item.code === address.delivery_destination) || !address.delivery_barangay_code || !address.delivery_address_details)) throw new Error("Recreate this address with a city and barangay before setting it as default.");
+      await saveProfile(address ? {
+        name: user.name, email: user.email, default_delivery_address_action: "save",
+        default_delivery_region_code: "1800000000",
+        default_delivery_province_code: locations.find((item) => item.code === address.delivery_destination)?.province?.code ?? null,
+        default_delivery_city_code: address.delivery_destination,
+        default_delivery_barangay_code: address.delivery_barangay_code,
+        default_delivery_address_details: address.delivery_address_details,
+      } : { name: user.name, email: user.email, default_delivery_address_action: "clear" }, user.id);
     } catch (reason) { if (getLocalUserId() === owner) setAddressError(reason instanceof Error ? reason.message : "Could not update your default address."); }
     finally { if (getLocalUserId() === owner) setIsSavingAddress(false); }
   }
@@ -110,8 +130,8 @@ export default function AccountScreen() {
     setAddressError("");
     const owner = getLocalUserId();
     try {
-      const [addresses] = await Promise.all([loadSavedAddresses(), refreshProfile()]);
-      if (getLocalUserId() === owner) setSavedAddresses(addresses);
+      const [addresses, , directory] = await Promise.all([loadSavedAddresses(), refreshProfile(), getNegrosDeliveryLocations()]);
+      if (getLocalUserId() === owner) { setSavedAddresses(addresses); setLocations(directory); }
     } catch (reason) { if (getLocalUserId() === owner) setAddressError(reason instanceof Error ? reason.message : "Could not load your addresses."); }
     finally { if (getLocalUserId() === owner) setIsAddressesLoading(false); }
   }
@@ -139,20 +159,21 @@ export default function AccountScreen() {
     const label = newAddressLabel.trim();
     const recipient = newAddressRecipient.trim();
     const phone = newAddressPhone.trim();
-    if (!label || !recipient || !phone || !newAddressText.trim()) {
-      setAddressError("Complete the label, recipient, phone, and address.");
+    if (!label || !recipient || !phone || !isCompleteDeliveryAddress(newAddress, locations)) {
+      setAddressError("Complete the label, recipient, phone, city, barangay, and street details.");
       return;
     }
 
     const existingAddress = savedAddresses.find((address) => address.label.toLowerCase() === label.toLowerCase());
-    const newAddress: SavedAddress = {
+    const savedEntry: SavedAddress = {
       id: existingAddress?.id ?? `address-${Date.now()}`,
       label,
       recipient,
       phone,
-      address: newAddressText.trim(),
+      address: formatDeliveryAddress(newAddress, locations),
+      ...newAddress,
     };
-    const nextAddresses = [newAddress, ...savedAddresses.filter((address) => address.id !== newAddress.id)];
+    const nextAddresses = [savedEntry, ...savedAddresses.filter((address) => address.id !== savedEntry.id)];
     setIsSavingAddress(true);
     try {
       await persistSavedAddresses(nextAddresses);
@@ -161,7 +182,7 @@ export default function AccountScreen() {
       setNewAddressLabel("");
       setNewAddressRecipient("");
       setNewAddressPhone("");
-      setNewAddressText("");
+      setNewAddress(EMPTY_DELIVERY_ADDRESS);
       setIsAddingAddress(false);
       setAddressError("");
     } catch {
@@ -239,7 +260,7 @@ export default function AccountScreen() {
                   void openProfileSettings();
                   return;
                 }
-                return;
+                router.navigate("/");
               }}
               accessibilityLabel={isMockAccount ? "Open account settings" : "Continue as guest"}
               className="flex-1 border border-border rounded-xl items-center py-3"
@@ -420,8 +441,8 @@ export default function AccountScreen() {
                         <Text className="text-foreground text-sm font-semibold">{address.label} · {address.recipient}</Text>
                         <Text className="text-muted-foreground text-xs leading-5 mt-1">{address.address}</Text>
                         <Text className="text-muted-foreground text-xs mt-1">{address.phone}</Text>
-                        <Pressable disabled={isSavingAddress || isAddressesLoading || (session.mode === "customer" && session.user.default_delivery_address === address.address)} onPress={() => void useDefaultAddress(address.address)} className="mt-2 py-2">
-                          <Text className="text-primary text-xs font-semibold">{session.mode === "customer" && session.user.default_delivery_address === address.address ? "Default address" : isSavingAddress ? "Updating..." : "Use as default"}</Text>
+                        <Pressable disabled={isSavingAddress || isAddressesLoading || !locations.some((item) => item.code === address.delivery_destination) || !address.delivery_barangay_code || !address.delivery_address_details || (session.mode === "customer" && session.user.default_delivery_address === address.address)} onPress={() => void useDefaultAddress(address)} className="mt-2 py-2">
+                          <Text className="text-primary text-xs font-semibold">{session.mode === "customer" && session.user.default_delivery_address === address.address ? "Default address" : !locations.some((item) => item.code === address.delivery_destination) ? "Recreate to use as default" : isSavingAddress ? "Updating..." : "Use as default"}</Text>
                         </Pressable>
                       </View>
                       <Pressable
@@ -467,17 +488,7 @@ export default function AccountScreen() {
                       keyboardType="phone-pad"
                       className="mt-2 h-11 rounded-lg border border-border bg-background px-3 text-foreground text-sm"
                     />
-                    <TextInput
-                      accessibilityLabel="Delivery address"
-                      value={newAddressText}
-                      onChangeText={setNewAddressText}
-                      placeholder="House, street, barangay, city / municipality"
-                      placeholderTextColor={colors.muted}
-                      multiline
-                      maxLength={255}
-                      textAlignVertical="top"
-                      className="mt-2 min-h-20 rounded-lg border border-border bg-background px-3 py-3 text-foreground text-sm"
-                    />
+                    <DeliveryAddressFields value={newAddress} locations={locations} onChange={setNewAddress} disabled={isSavingAddress} />
                     <View className="mt-3 flex-row gap-2">
                       <Pressable
                         accessibilityRole="button"
@@ -524,8 +535,8 @@ export default function AccountScreen() {
                   <Text className="text-foreground text-sm font-semibold mt-4">Email address</Text>
                   <TextInput accessibilityLabel="Profile email" value={profileEmail} onChangeText={setProfileEmail} editable={!isSavingProfile} autoCapitalize="none" autoCorrect={false} keyboardType="email-address" maxLength={255} className="mt-2 h-11 rounded-lg border border-border bg-secondary px-3 text-foreground text-sm" />
                   <Text className="text-foreground text-sm font-semibold mt-4">Default delivery address</Text>
-                  <TextInput accessibilityLabel="Default delivery address" value={profileAddress} onChangeText={setProfileAddress} editable={!isSavingProfile} multiline maxLength={255} className="mt-2 rounded-lg border border-border bg-secondary px-3 py-3 text-foreground text-sm" />
-                  <Text className="text-muted-foreground text-xs mt-2">Used to pre-fill delivery checkout. Leave empty to clear it.</Text>
+                  <Text className="mt-2 text-foreground text-sm">{profileAddress || "No default address selected."}</Text>
+                  <Pressable onPress={() => void openSavedAddresses()} className="mt-2 rounded-lg border border-border bg-secondary px-3 py-3"><Text className="text-primary text-sm font-semibold">Manage delivery addresses</Text></Pressable>
                   <View className="mt-5 rounded-xl border border-border bg-background p-3">
                     <Text className="text-foreground text-sm font-semibold">Recommendation privacy</Text>
                     <Text className="text-muted-foreground text-xs leading-5 mt-1">Choose which activity Battlefront may use to personalize product suggestions. Turning off a source deletes its saved recommendation history.</Text>

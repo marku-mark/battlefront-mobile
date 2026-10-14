@@ -12,6 +12,8 @@ import { MockSignInSheet } from "@/components/account/MockSignInSheet";
 import { ProductReviewPanel } from "@/components/products/ProductReviewPanel";
 import { Chatbot } from "@/components/support/Chatbot";
 import { getResponsiveLayout, MAX_CONTENT_WIDTH } from "@/lib/responsive";
+import * as Clipboard from "expo-clipboard";
+import { useToast } from "@/hooks/useToast";
 
 type ProductDetailsProps = {
   refreshError?: boolean;
@@ -32,7 +34,16 @@ function formatPrice(value: number): string {
 
 export function ProductDetails({ refreshError = false, onRetry, product, quantity, onQuantityChange, onAddToCart, onCompare, onClose }: ProductDetailsProps) {
   const { colors } = useTheme();
+  const { showToast } = useToast();
   const [isAdding, setIsAdding] = useState(false);
+  async function copyProductName() {
+    try {
+      await Clipboard.setStringAsync(product.name);
+      showToast("Product name copied");
+    } catch {
+      showToast("Could not copy product name", "error");
+    }
+  }
   const adding = useRef(false);
   async function addToCart() {
     if (adding.current) return;
@@ -92,10 +103,11 @@ export function ProductDetails({ refreshError = false, onRetry, product, quantit
 
         <View className={useTwoColumnLayout ? "flex-1 pt-5" : "self-center w-full px-4 pt-5"} style={{ maxWidth: 760 }}>
           <View className="flex-row items-start justify-between gap-3">
-            <Text className="flex-1 text-foreground text-xl font-bold leading-7">{product.name}</Text>
+            <Text selectable className="flex-1 text-foreground text-xl font-bold leading-7">{product.name}</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="Copy product name" onPress={() => void copyProductName()} hitSlop={8} className="h-9 w-9 items-center justify-center rounded-lg border border-border bg-secondary"><Ionicons name="copy-outline" size={17} color={colors.foreground} /></Pressable>
             {hasDiscount && <View className="bg-ring rounded-full px-2 py-1"><Text className="text-primary-foreground text-xs font-bold">-{discount}%</Text></View>}
           </View>
-          <View className="flex-row items-baseline gap-2 mt-3"><Text className="text-primary text-2xl font-bold">{formatPrice(product.price)}</Text>{hasDiscount && <Text className="text-muted-foreground text-sm line-through">{formatPrice(product.originalPrice!)}</Text>}</View>
+          <View className="flex-row items-baseline gap-2 mt-3"><Text selectable className="text-primary text-2xl font-bold">{formatPrice(product.price)}</Text>{hasDiscount && <Text className="text-muted-foreground text-sm line-through">{formatPrice(product.originalPrice!)}</Text>}</View>
 
           <View className="flex-row items-center gap-2 mt-3">
             {hasRating ? (
@@ -131,7 +143,7 @@ export function ProductDetails({ refreshError = false, onRetry, product, quantit
           </Pressable>
           <View className="mt-5 rounded-2xl bg-secondary border border-border p-3 shadow-soft"><Text className="text-foreground text-sm font-semibold">Fulfillment and payment</Text><Text className="text-muted-foreground text-xs mt-1.5">Available pickup, delivery, and payment options are shown at checkout.</Text></View>
 
-          <View className="mt-6 pt-5 border-t border-border"><Text className="text-foreground text-base font-semibold">About this product</Text><Text className="text-muted-foreground text-sm leading-5 mt-2">{facts.description}</Text></View>
+          <View className="mt-6 pt-5 border-t border-border"><Text className="text-foreground text-base font-semibold">About this product</Text><Text selectable className="text-muted-foreground text-sm leading-5 mt-2">{facts.description}</Text></View>
           <ProductReviewPanel
             productId={product.id}
             rating={rating}
@@ -139,8 +151,8 @@ export function ProductDetails({ refreshError = false, onRetry, product, quantit
             isMockAccount={session.mode === "customer"}
             onSignIn={() => setIsSignInOpen(true)}
           />
-          <DetailDisclosure title="Specifications" open={specificationsOpen} color={colors.muted} onPress={() => setSpecificationsOpen((current) => !current)}>{facts.specifications.map(([label, value]) => <View key={label} className="flex-row justify-between gap-4 py-2 border-b border-border"><Text className="text-muted-foreground text-sm">{label}</Text><Text className="text-foreground text-sm font-medium flex-1 text-right">{value}</Text></View>)}</DetailDisclosure>
-          <DetailDisclosure title="Compatibility and support" open={compatibilityOpen} color={colors.muted} onPress={() => setCompatibilityOpen((current) => !current)}><Text className="text-muted-foreground text-sm leading-5">{facts.compatibility}</Text></DetailDisclosure>
+          <DetailDisclosure title="Specifications" open={specificationsOpen} color={colors.muted} onPress={() => setSpecificationsOpen((current) => !current)}>{facts.specifications.map(([label, value]) => <View key={label} className="flex-row justify-between gap-4 py-2 border-b border-border"><Text className="text-muted-foreground text-sm">{label}</Text><Text selectable className="text-foreground text-sm font-medium flex-1 text-right">{value}</Text></View>)}</DetailDisclosure>
+          <DetailDisclosure title="Compatibility and support" open={compatibilityOpen} color={colors.muted} onPress={() => setCompatibilityOpen((current) => !current)}><Text selectable className="text-muted-foreground text-sm leading-5">{facts.compatibility}</Text></DetailDisclosure>
 
           <View className="flex-row items-center justify-between mt-6"><Text className="text-foreground text-sm font-semibold">Quantity</Text><View className="flex-row items-center border border-border rounded-xl overflow-hidden bg-secondary"><QuantityButton icon="remove" accessibilityLabel="Decrease quantity" color={colors.foreground} disabled={quantity <= 1} onPress={() => onQuantityChange(Math.max(1, quantity - 1))} /><Text className="text-foreground text-sm font-semibold min-w-[36px] text-center">{quantity}</Text><QuantityButton icon="add" accessibilityLabel="Increase quantity" color={colors.foreground} disabled={quantity >= stockQuantity} onPress={() => onQuantityChange(Math.min(stockQuantity, quantity + 1))} /></View></View>
         </View>

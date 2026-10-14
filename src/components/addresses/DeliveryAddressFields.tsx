@@ -19,7 +19,7 @@ export function DeliveryAddressFields({
   const [search, setSearch] = useState("");
   const destination = locations.find((item) => item.destination === value.delivery_destination);
   const barangay = destination?.barangays.find((item) => item.code === value.delivery_barangay_code);
-  const options = openPicker === "destination" ? locations.map((item) => ({ code: item.destination, name: item.destination })) : destination?.barangays ?? [];
+  const options = openPicker === "destination" ? locations.map((item) => ({ code: item.destination, name: item.province ? `${item.name}, ${item.province.name}` : item.name })) : destination?.barangays ?? [];
   const filteredOptions = useMemo(() => {
     const normalized = search.trim().toLowerCase();
     return options.filter((option) => !normalized || option.name.toLowerCase().includes(normalized));
@@ -33,10 +33,10 @@ export function DeliveryAddressFields({
   return (
     <View className="mt-2">
       <Text className="text-foreground text-sm font-semibold">Delivery address</Text>
-      <Text className="mt-1 text-muted-foreground text-[11px]">Delivery is available in the destinations listed by Battlefront.</Text>
+      <Text className="mt-1 text-muted-foreground text-[11px]">Choose a Negros destination. Some delivery charges need separate confirmation.</Text>
       <AddressPicker
         label="City / Municipality"
-        value={value.delivery_destination}
+        value={destination ? (destination.province ? `${destination.name}, ${destination.province.name}` : destination.name) : ""}
         placeholder="Select a supported destination"
         isOpen={openPicker === "destination"}
         disabled={disabled}
@@ -53,9 +53,9 @@ export function DeliveryAddressFields({
       <AddressPicker
         label="Barangay"
         value={barangay?.name ?? ""}
-        placeholder={destination ? "Select a barangay" : "Select a destination first"}
+        placeholder={destination ? (destination.barangays.length ? "Select a barangay" : "Loading barangays…") : "Select a destination first"}
         isOpen={openPicker === "barangay"}
-        disabled={disabled || !destination}
+        disabled={disabled || !destination || destination.barangays.length === 0}
         search={search}
         options={filteredOptions}
         placeholderTextColor={colors.muted}

@@ -6,6 +6,7 @@ export type DeliveryLocation = {
   type: "city" | "municipality";
   city_class: "CC" | "HUC" | null;
   province: { code: string; name: string } | null;
+  region_code?: string;
   barangays: DeliveryBarangay[];
 };
 export type DeliveryAddress = {
@@ -23,12 +24,12 @@ export const EMPTY_DELIVERY_ADDRESS: DeliveryAddress = {
 export function formatDeliveryAddress(address: DeliveryAddress, locations: DeliveryLocation[]): string {
   const location = locations.find((item) => item.destination === address.delivery_destination);
   const barangay = location?.barangays.find((item) => item.code === address.delivery_barangay_code);
-  return [address.delivery_address_details.trim(), barangay?.name, location?.destination].filter(Boolean).join(", ");
+  return [address.delivery_address_details.trim(), barangay?.name, location?.name, location?.province?.name].filter(Boolean).join(", ");
 }
 
 export function isCompleteDeliveryAddress(address: DeliveryAddress, locations: DeliveryLocation[]): boolean {
   const location = locations.find((item) => item.destination === address.delivery_destination);
   return Boolean(location?.barangays.some((barangay) => barangay.code === address.delivery_barangay_code)
     && address.delivery_address_details.trim()
-    && address.delivery_address_details.trim().length <= 255);
+    && formatDeliveryAddress(address, locations).length <= 255);
 }

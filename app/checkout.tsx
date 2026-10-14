@@ -7,12 +7,12 @@ import * as ImagePicker from "expo-image-picker";
 import { MockSignInSheet } from "@/components/account/MockSignInSheet";
 import { useCart } from "@/hooks/useCart";
 import { useSession } from "@/hooks/useSession";
-import { getCart, getCheckout, type Checkout } from "@/lib/api";
+import { getCart, getCheckout, getDeliveryLocations, getDeliveryQuote, getNegrosDeliveryLocations, type Checkout, type SelectedDeliveryQuote } from "@/lib/api";
 import { placeOrder } from "@/lib/orders";
 import { loadSavedAddresses, persistSavedAddresses, type SavedAddress } from "@/lib/savedAddresses";
-import { checkoutRecipient, paymentForFulfillment, paymentProofError, formatCheckoutAmount, checkoutDetailsError, quoteForFulfillment } from "@/lib/checkoutForm";
+import { checkoutRecipient, paymentForFulfillment, paymentProofError, formatCheckoutAmount, checkoutDetailsError } from "@/lib/checkoutForm";
 import { DeliveryAddressFields } from "@/components/addresses/DeliveryAddressFields";
-import { EMPTY_DELIVERY_ADDRESS, isCompleteDeliveryAddress, formatDeliveryAddress } from "@/lib/deliveryAddress";
+import { EMPTY_DELIVERY_ADDRESS, isCompleteDeliveryAddress, formatDeliveryAddress, type DeliveryBarangay, type DeliveryLocation } from "@/lib/deliveryAddress";
 import { getLocalUserId } from "@/lib/api";
 
 export default function CheckoutScreen() {
@@ -29,6 +29,10 @@ export default function CheckoutScreen() {
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [addressLabel, setAddressLabel] = useState("");
   const [location, setLocation] = useState(EMPTY_DELIVERY_ADDRESS);
+  const [locations, setLocations] = useState<DeliveryLocation[]>([]);
+  const [liveQuote, setLiveQuote] = useState<SelectedDeliveryQuote | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [quoteError, setQuoteError] = useState("");
   const [isSavingAddress, setIsSavingAddress] = useState(false);
   const [addressError, setAddressError] = useState("");
   const [checkoutRetry, setCheckoutRetry] = useState(0);
@@ -50,14 +54,14 @@ export default function CheckoutScreen() {
     setPreview(null); setError("");
     setSelectedCartItemIds([]);
     setSavedAddresses([]);
-    setAddressLabel(""); setLocation(EMPTY_DELIVERY_ADDRESS); setAddressError(""); setIsSavingAddress(false);
+    setAddressLabel(""); setLocation(EMPTY_DELIVERY_ADDRESS); setLocations([]); setLiveQuote(null); setQuoteError(""); setAddressError(""); setIsSavingAddress(false);
     setFullName(""); setPhone(""); setAddress(""); setProof(null); setFulfillment("pickup"); setDeliveryDestination(""); setPayment("cash");
   }, [customerId, createdOrderId, checkoutRetry]);
   useActiveFocusEffect(useCallback(() => {
     let active = true;
     if (customerId === null || createdOrderId) return;
     if (initializedCustomer.current === customerId && lastSelectedIdsParam.current === selectedIdsParam && Date.now() - lastPreviewAt.current < 30_000) return;
-    Promise.all([getCart(true), loadSavedAddresses()]).then(async ([cart, addresses]) => {
+    Promise.all([getCart(true), loadSavedAddresses(), getNegrosDeliveryLocations()]).then(async ([cart, addresses, negrosLocations]) => {
       if (!active) return;
       const requestedIds = typeof selectedIdsParam === "string" ? selectedIdsParam.split(",").map(Number).filter((id) => Number.isInteger(id) && id > 0) : [];
       const ids = requestedIds.length > 0 ? cart.items.filter((item) => requestedIds.includes(item.id)).map((item) => item.id) : cart.items.map((item) => item.id);
@@ -66,6 +70,10 @@ export default function CheckoutScreen() {
       if (ids.length === 0) { setError("Your cart is empty."); return; }
       const result = await getCheckout(ids);
       if (!active) return;
+      const nextLocations: DeliveryLocation[] = negrosLocations.map((city) => ({
+        ...city, barangays: result.delivery_locations.find((legacy) => legacy.code === city.code)?.barangays ?? [],
+      }));
+      setLocations(nextLocations);
       const recipient = checkoutRecipient(result.customer, addresses);
       setPreview(result); setSavedAddresses(addresses);
       if (initializedCustomer.current !== customerId) {
@@ -73,9 +81,11 @@ export default function CheckoutScreen() {
         const prefill = selectedSavedAddress?.delivery_destination && selectedSavedAddress.delivery_barangay_code && selectedSavedAddress.delivery_address_details
           ? { delivery_destination: selectedSavedAddress.delivery_destination, delivery_barangay_code: selectedSavedAddress.delivery_barangay_code, delivery_address_details: selectedSavedAddress.delivery_address_details }
           : result.delivery_address_prefill;
-        const formattedAddress = formatDeliveryAddress(prefill, result.delivery_locations);
-        setFullName(recipient.name); setPhone(recipient.phone); setAddress(formattedAddress); setLocation(prefill);
-        setDeliveryDestination(prefill.delivery_destination);
+        const legacyLocation = result.delivery_locations.find((item) => item.destination === prefill.delivery_destination);
+        const selectedLocation = { ...prefill, delivery_destination: legacyLocation?.code ?? prefill.delivery_destination };
+        const formattedAddress = formatDeliveryAddress(selectedLocation, nextLocations);
+        setFullName(recipient.name); setPhone(recipient.phone); setAddress(formattedAddress); setLocation(selectedLocation);
+        setDeliveryDestination(selectedLocation.delivery_destination);
         initializedCustomer.current = customerId;
       }
       lastPreviewAt.current = Date.now();
@@ -83,19 +93,46 @@ export default function CheckoutScreen() {
     }).catch((reason) => { if (active) setError(reason.message); });
     return () => { active = false; };
   }, [customerId, createdOrderId, checkoutRetry, selectedIdsParam]));
+  useEffect(() => {
+    const cityCode = location.delivery_destination;
+    if (!/^\d{10}$/.test(cityCode) || !locations.some((item) => item.code === cityCode)) return;
+    if (locations.find((item) => item.code === cityCode)?.barangays.length) return;
+    let active = true;
+    void getDeliveryLocations<DeliveryBarangay>("barangays", cityCode).then((barangays) => {
+      if (active) setLocations((current) => current.map((item) => item.code === cityCode ? { ...item, barangays } : item));
+    }).catch((reason) => { if (active) setAddressError(reason instanceof Error ? reason.message : "Could not load barangays."); });
+    return () => { active = false; };
+  }, [location.delivery_destination, locations]);
+  useEffect(() => {
+    setAddress(formatDeliveryAddress(location, locations));
+  }, [location, locations]);
+  useEffect(() => {
+    const cityCode = location.delivery_destination;
+    if (fulfillment !== "delivery" || !/^\d{10}$/.test(cityCode) || selectedCartItemIds.length === 0) { setLiveQuote(null); setQuoteLoading(false); return; }
+    let active = true;
+    setQuoteLoading(true); setQuoteError(""); setLiveQuote(null);
+    void getDeliveryQuote(cityCode, selectedCartItemIds).then((result) => {
+      if (!active) return;
+      if (result.available && result.quote?.order_placement_allowed) setLiveQuote(result.quote);
+      else setQuoteError(result.notice ?? "Delivery is unavailable for this destination.");
+    }).catch((reason) => { if (active) setQuoteError(reason instanceof Error ? reason.message : "Could not load the delivery quote."); })
+      .finally(() => { if (active) setQuoteLoading(false); });
+    return () => { active = false; };
+  }, [fulfillment, location.delivery_destination, selectedCartItemIds.join(",")]);
   const visiblePreview = initializedCustomer.current === customerId && lastSelectedIdsParam.current === selectedIdsParam ? preview : null;
-  const paymentOptions = visiblePreview?.payment_methods.filter((method) => method.available_for.includes(fulfillment)) ?? [];
+  const paymentOptions = visiblePreview?.payment_methods.filter((method) => method.available_for.includes(fulfillment) && (fulfillment !== "delivery" || liveQuote?.payment_methods.includes(method.value))) ?? [];
   const selectedPayment = paymentOptions.find((method) => method.value === payment);
-  const selectedQuote = visiblePreview ? quoteForFulfillment(fulfillment, deliveryDestination, visiblePreview.delivery_quotes, visiblePreview.pickup_quote) : undefined;
-  const deliveryQuote = fulfillment === "delivery" ? visiblePreview?.delivery_quotes.find((quote) => quote.destination === deliveryDestination) : undefined;
-  const addressIsComplete = Boolean(visiblePreview && isCompleteDeliveryAddress(location, visiblePreview.delivery_locations));
-  const cannotSubmit = isSubmitting || isSavingAddress || selectedCartItemIds.length === 0 || !visiblePreview || !selectedQuote || (fulfillment === "delivery" && !addressIsComplete);
+  const selectedQuote = fulfillment === "delivery" ? liveQuote : visiblePreview?.pickup_quote;
+  const deliveryQuote = fulfillment === "delivery" ? liveQuote : null;
+  const selectedLocation = locations.find((item) => item.code === location.delivery_destination);
+  const addressIsComplete = isCompleteDeliveryAddress(location, locations);
+  const cannotSubmit = isSubmitting || isSavingAddress || quoteLoading || selectedCartItemIds.length === 0 || !visiblePreview || !selectedQuote || !selectedPayment || (fulfillment === "delivery" && !addressIsComplete);
   async function saveAddress() {
     if (isSavingAddress || customerId === null) return;
-    if (!addressLabel.trim() || !fullName.trim() || !phone.trim() || !visiblePreview || !isCompleteDeliveryAddress(location, visiblePreview.delivery_locations)) {
+    if (!addressLabel.trim() || !fullName.trim() || !phone.trim() || !visiblePreview || !addressIsComplete) {
       setAddressError("Complete the label, recipient, phone, destination, barangay, and street details."); return;
     }
-    const formatted = formatDeliveryAddress(location, visiblePreview.delivery_locations);
+    const formatted = formatDeliveryAddress(location, locations);
     if (formatted.length > 255) { setAddressError("Keep the complete address within 255 characters."); return; }
     const existing = savedAddresses.find((entry) => entry.label.toLowerCase() === addressLabel.trim().toLowerCase());
     const entry: SavedAddress = { ...location, id: existing?.id ?? `address-${Date.now()}`, label: addressLabel.trim(), recipient: fullName.trim(), phone: phone.trim(), address: formatted };
@@ -121,7 +158,7 @@ export default function CheckoutScreen() {
   }
   async function submit() {
     if (submitting.current || createdOrderId || isSavingAddress || selectedCartItemIds.length === 0 || !visiblePreview || !selectedPayment) return;
-      const addressComplete = visiblePreview && isCompleteDeliveryAddress(location, visiblePreview.delivery_locations);
+      const addressComplete = addressIsComplete;
       const validation = checkoutDetailsError({ name: fullName, phone, fulfillment, destination: deliveryDestination, address: addressComplete ? address : "", editingAddress: false, requiresProof: selectedPayment.requires_proof, hasProof: Boolean(proof) });
     if (validation) { setError(validation); return; }
     if (!selectedQuote) { setError("Select an available delivery destination."); return; }
@@ -131,6 +168,9 @@ export default function CheckoutScreen() {
       const order = await placeOrder({ cart_item_ids: selectedCartItemIds, recipient_name: fullName.trim(), contact_number: phone.trim(), fulfillment_method: fulfillment,
         payment_method: payment,
         delivery_destination: fulfillment === "delivery" ? location.delivery_destination : undefined,
+        delivery_region_code: fulfillment === "delivery" ? selectedLocation?.region_code : undefined,
+        delivery_province_code: fulfillment === "delivery" ? selectedLocation?.province?.code ?? null : undefined,
+        delivery_city_code: fulfillment === "delivery" ? selectedLocation?.code : undefined,
         delivery_barangay_code: fulfillment === "delivery" ? location.delivery_barangay_code : undefined,
         delivery_address_details: fulfillment === "delivery" ? location.delivery_address_details.trim() : undefined,
         payment_proof: selectedPayment.requires_proof && proof ? { uri: proof.uri, name: proof.fileName ?? "payment-proof.jpg", type: proof.mimeType ?? "image/jpeg" } : undefined });
@@ -170,18 +210,21 @@ export default function CheckoutScreen() {
           <Text className="text-foreground text-base font-bold mt-1">Fulfillment method</Text>
           {visiblePreview.fulfillment_methods.map((method) => <Pressable key={method.value} disabled={isSubmitting} accessibilityRole="radio" accessibilityState={{ checked: fulfillment === method.value, disabled: isSubmitting }} onPress={() => { const next = paymentForFulfillment(visiblePreview.payment_methods, method.value, payment); setFulfillment(method.value); if (method.value === "pickup") { setDeliveryDestination(""); setLocation((current) => ({ ...current, delivery_destination: "", delivery_barangay_code: "" })); } if (next !== payment) { setProof(null); setPayment(next); } }} className={`mt-3 rounded-xl border p-4 ${fulfillment === method.value ? "border-primary bg-primary/10" : "border-border bg-card"}`}><Text className="text-foreground font-semibold">{fulfillment === method.value ? "● " : "○ "}{method.label}</Text><Text className="text-muted-foreground text-xs mt-1">{method.value === "pickup" ? "Collect your order from Battlefront." : "Send the order to your supplied address."}</Text></Pressable>)}
           {fulfillment === "delivery" ? <View>
-            <DeliveryAddressFields value={location} locations={visiblePreview.delivery_locations} onChange={(next) => { setLocation(next); setDeliveryDestination(next.delivery_destination); setAddress(formatDeliveryAddress(next, visiblePreview.delivery_locations)); }} disabled={isSubmitting || isSavingAddress} />
+            <DeliveryAddressFields value={location} locations={locations} onChange={(next) => { setLocation(next); setDeliveryDestination(next.delivery_destination); setAddress(formatDeliveryAddress(next, locations)); setAddressError(""); }} disabled={isSubmitting || isSavingAddress} />
+            {quoteLoading && <Text className="mt-3 text-muted-foreground text-sm">Loading delivery quote…</Text>}
+            {quoteError && <Text accessibilityRole="alert" className="mt-3 text-danger text-sm">{quoteError}</Text>}
+            {addressError && <Text accessibilityRole="alert" className="mt-3 text-danger text-sm">{addressError}</Text>}
             {deliveryQuote && <View className="mt-3 rounded-xl border border-border bg-secondary p-4">
-              <Text className="text-foreground font-semibold">{deliveryQuote.carrier.toUpperCase()} delivery estimate</Text>
-              <Text className="text-muted-foreground text-sm mt-2">{deliveryQuote.packing_expectation} · {deliveryQuote.preparation_days} day{deliveryQuote.preparation_days === 1 ? "" : "s"} preparation</Text>
-              <Text className="text-muted-foreground text-sm mt-1">Base fee {formatCheckoutAmount(deliveryQuote.base_fee)} + handling {formatCheckoutAmount(deliveryQuote.handling_surcharge)}</Text>
-              <Text className="text-foreground text-sm mt-2">Estimated delivery: {new Date(`${deliveryQuote.estimated_delivery_start}T00:00:00`).toLocaleDateString("en-PH", { dateStyle: "medium" })}{deliveryQuote.estimated_delivery_end !== deliveryQuote.estimated_delivery_start ? ` – ${new Date(`${deliveryQuote.estimated_delivery_end}T00:00:00`).toLocaleDateString("en-PH", { dateStyle: "medium" })}` : ""}</Text>
+              <Text className="text-foreground font-semibold">{deliveryQuote.pricing_configured ? `${deliveryQuote.carrier?.toUpperCase()} delivery estimate` : "Delivery arrangement pending"}</Text>
+              {deliveryQuote.pricing_configured && <Text className="text-muted-foreground text-sm mt-2">{deliveryQuote.packing_expectation} · {deliveryQuote.preparation_days} day{deliveryQuote.preparation_days === 1 ? "" : "s"} preparation</Text>}
+              {deliveryQuote.pricing_configured && deliveryQuote.base_fee && deliveryQuote.handling_surcharge && <Text className="text-muted-foreground text-sm mt-1">Base fee {formatCheckoutAmount(deliveryQuote.base_fee)} + handling {formatCheckoutAmount(deliveryQuote.handling_surcharge)}</Text>}
+              {deliveryQuote.estimated_delivery_start && <Text className="text-foreground text-sm mt-2">Estimated delivery: {deliveryQuote.estimated_delivery_start}{deliveryQuote.estimated_delivery_end !== deliveryQuote.estimated_delivery_start ? ` – ${deliveryQuote.estimated_delivery_end}` : ""}</Text>}
               <Text className="text-muted-foreground text-xs mt-2">{deliveryQuote.notice}</Text>
               {deliveryQuote.is_demo && <Text className="text-muted-foreground text-xs mt-2">{deliveryQuote.assumption_label}</Text>}
             </View>}
             {savedAddresses.length > 0 && <View className="mt-3">
               <Text className="text-foreground text-sm font-semibold">Use a saved address</Text>
-              {savedAddresses.map((saved) => <Pressable key={saved.id} disabled={isSubmitting || isSavingAddress} onPress={() => { setAddress(saved.address); setFullName(saved.recipient); setPhone(saved.phone); const next = { delivery_destination: saved.delivery_destination ?? "", delivery_barangay_code: saved.delivery_barangay_code ?? "", delivery_address_details: saved.delivery_address_details ?? saved.address }; setLocation(next); setDeliveryDestination(next.delivery_destination); }} className="mt-2 rounded-xl border border-border bg-card p-3"><Text className="text-foreground text-sm">{saved.label} · {saved.recipient}</Text><Text className="text-muted-foreground text-xs mt-1">{saved.address}</Text></Pressable>)}
+              {savedAddresses.map((saved) => <Pressable key={saved.id} disabled={isSubmitting || isSavingAddress} onPress={() => { const legacy = visiblePreview.delivery_locations.find((item) => item.destination === saved.delivery_destination); const next = { delivery_destination: legacy?.code ?? saved.delivery_destination ?? "", delivery_barangay_code: saved.delivery_barangay_code ?? "", delivery_address_details: saved.delivery_address_details ?? "" }; setAddress(saved.address); setFullName(saved.recipient); setPhone(saved.phone); setLocation(next); setDeliveryDestination(next.delivery_destination); }} className="mt-2 rounded-xl border border-border bg-card p-3"><Text className="text-foreground text-sm">{saved.label} · {saved.recipient}</Text><Text className="text-muted-foreground text-xs mt-1">{saved.address}</Text></Pressable>)}
             </View>}
             <TextInput accessibilityLabel="Saved address label" value={addressLabel} onChangeText={setAddressLabel} editable={!isSavingAddress} placeholder="Address label (required to save)" className="mt-4 h-11 rounded-lg border border-border bg-secondary px-3 text-foreground text-sm" />
             <Pressable disabled={isSavingAddress || !addressIsComplete} onPress={() => void saveAddress()} className="mt-2 rounded-xl border border-border bg-card p-3" style={{ opacity: isSavingAddress || !addressIsComplete ? 0.5 : 1 }}><Text className="text-foreground text-center text-sm font-semibold">{isSavingAddress ? "Saving address..." : "Save address on this device"}</Text></Pressable>
@@ -192,8 +235,8 @@ export default function CheckoutScreen() {
           <Text className="text-primary text-xs font-semibold mt-6">STEP 3</Text>
           <Text className="text-foreground text-base font-bold mt-1">Payment method</Text>
           {visiblePreview.payment_methods.map((method) => {
-            const available = method.available_for.includes(fulfillment);
-            return <Pressable key={method.value} disabled={!available || isSubmitting} accessibilityRole="radio" accessibilityState={{ checked: payment === method.value, disabled: !available || isSubmitting }} onPress={() => { setPayment(method.value); setProof(null); }} className={`mt-3 rounded-xl border p-4 ${payment === method.value ? "border-primary bg-primary/10" : "border-border bg-card"}`} style={{ opacity: available ? 1 : 0.5 }}><Text className="text-foreground font-semibold">{payment === method.value ? "● " : "○ "}{method.label}</Text><Text className="text-muted-foreground text-xs mt-1">{!available ? "Available for pickup only." : method.requires_proof ? "Manual e-wallet payment with proof." : "Pay when you collect your order."}</Text></Pressable>;
+            const available = method.available_for.includes(fulfillment) && (fulfillment !== "delivery" || Boolean(liveQuote?.payment_methods.includes(method.value)));
+            return <Pressable key={method.value} disabled={!available || isSubmitting} accessibilityRole="radio" accessibilityState={{ checked: payment === method.value && available, disabled: !available || isSubmitting }} onPress={() => { setPayment(method.value); setProof(null); }} className={`mt-3 rounded-xl border p-4 ${payment === method.value && available ? "border-primary bg-primary/10" : "border-border bg-card"}`} style={{ opacity: available ? 1 : 0.5 }}><Text className="text-foreground font-semibold">{payment === method.value && available ? "● " : "○ "}{method.label}</Text><Text className="text-muted-foreground text-xs mt-1">{!available ? "Unavailable for this fulfillment or destination." : method.requires_proof ? "Manual e-wallet payment with proof." : method.value === "cod" ? "Pay upon delivery." : "Pay when you collect your order."}</Text></Pressable>;
           })}
           {selectedPayment?.requires_proof && <View>
             <View className="mt-3 rounded-2xl border border-border bg-card p-4">
@@ -215,7 +258,7 @@ export default function CheckoutScreen() {
             <View className="flex-row justify-between mt-4"><Text className="text-muted-foreground text-sm">Products</Text><Text className="text-foreground font-semibold">{visiblePreview.cart.item_count}</Text></View>
             <View className="flex-row justify-between mt-3"><Text className="text-muted-foreground text-sm">Units</Text><Text className="text-foreground font-semibold">{visiblePreview.cart.total_quantity}</Text></View>
             <View className="flex-row justify-between mt-4 border-t border-border pt-4"><Text className="text-muted-foreground text-sm">Product subtotal</Text><Text className="text-foreground font-semibold">{formatCheckoutAmount(visiblePreview.pickup_quote.product_subtotal)}</Text></View>
-            <View className="flex-row justify-between mt-3"><Text className="text-muted-foreground text-sm">Delivery fee</Text><Text className="text-foreground font-semibold">{selectedQuote ? formatCheckoutAmount(selectedQuote.delivery_fee) : "Select destination"}</Text></View>
+            <View className="flex-row justify-between mt-3"><Text className="text-muted-foreground text-sm">Delivery fee</Text><Text className="text-foreground font-semibold">{fulfillment === "delivery" && deliveryQuote && !deliveryQuote.pricing_configured ? "To be confirmed" : selectedQuote ? formatCheckoutAmount(selectedQuote.delivery_fee) : "Select destination"}</Text></View>
             <View className="flex-row justify-between mt-4 border-t border-border pt-4"><Text className="text-foreground font-semibold">Final total</Text><Text className="text-foreground text-xl font-bold">{selectedQuote ? formatCheckoutAmount(selectedQuote.total) : "—"}</Text></View>
             <Text className="mt-4 text-muted-foreground text-xs">{fulfillment === "pickup" ? `Pickup at ${visiblePreview.pickup_location.name}` : addressIsComplete ? `Deliver to ${address}` : "Complete your delivery address above"} · {selectedPayment?.label ?? "Choose payment above"}</Text>
           </View>

@@ -11,6 +11,12 @@ export type ProfileInput = {
   name: string;
   email: string;
   default_delivery_address?: string | null;
+  default_delivery_address_action?: "keep" | "save" | "clear";
+  default_delivery_region_code?: string;
+  default_delivery_province_code?: string | null;
+  default_delivery_city_code?: string;
+  default_delivery_barangay_code?: string;
+  default_delivery_address_details?: string;
   search_recommendations_enabled?: boolean;
   product_view_recommendations_enabled?: boolean;
   personalized_recommendations_enabled?: boolean;
