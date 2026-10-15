@@ -6,6 +6,7 @@ import Animated, { FadeInDown, FadeOutUp } from "react-native-reanimated";
 import { Pressable, Text, View } from "react-native";
 import { memo, useEffect, useRef } from "react";
 import { getProductImageSource, getProductVariants, type Product } from "@/lib/data";
+import { getProductStock } from "@/lib/productCatalog";
 import { useCartActions } from "@/hooks/useCart";
 import { useIsWishlisted, useWishlistActions } from "@/hooks/useWishlist";
 import { prefetchProductById } from "@/lib/api";
@@ -31,6 +32,7 @@ function ProductCardView({ product, width = 150, stretch = false, onPress }: Pro
   currentId.current = product.id;
   const [isAdding, setIsAdding] = useRecyclingState(false, [product.id]);
   const [justAdded, setJustAdded] = useRecyclingState(false, [product.id]);
+  const [quantity, setQuantity] = useRecyclingState(1, [product.id]);
   const feedbackTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wishlisted = useIsWishlisted(product.id);
 
@@ -44,12 +46,12 @@ function ProductCardView({ product, width = 150, stretch = false, onPress }: Pro
 
   async function handleQuickAdd() {
     const id = product.id;
-    if (adding.current === id) return;
+    if (adding.current === id || selectedQuantity === 0) return;
     adding.current = id;
     setIsAdding(true);
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
     try {
-      const succeeded = await addItem(product, 1, variants[0] ?? null);
+      const succeeded = await addItem(product, selectedQuantity, variants[0] ?? null);
       if (!succeeded || currentId.current !== id) return;
       setJustAdded(true);
       if (feedbackTimeout.current) clearTimeout(feedbackTimeout.current);
@@ -67,7 +69,11 @@ function ProductCardView({ product, width = 150, stretch = false, onPress }: Pro
   const rating = product.rating ?? 0;
   const reviewCount = product.reviewCount ?? 0;
   const hasRating = rating > 0 && reviewCount > 0;
-  const stockQuantity = ["out_of_stock", "unavailable"].includes(product.availability ?? "") ? 0 : (product.stockQuantity ?? Number.MAX_SAFE_INTEGER);
+  const stock = getProductStock(product);
+  const selectedQuantity = stock.maxQuantity > 0 ? Math.max(1, Math.min(quantity, stock.maxQuantity)) : 0;
+  useEffect(() => {
+    setQuantity((current) => Math.min(Math.max(1, current), Math.max(1, stock.maxQuantity)));
+  }, [stock.maxQuantity, setQuantity]);
   const variants = getProductVariants(product);
   const discountPct = hasDiscount
     ? Math.round(
@@ -144,12 +150,14 @@ function ProductCardView({ product, width = 150, stretch = false, onPress }: Pro
               </View>
             </View>
             <View className="mt-2 flex-row items-center gap-1">
-              <View className={`h-1.5 w-1.5 rounded-full ${stockQuantity > 0 ? "bg-success" : "bg-danger"}`} />
-              <Text className={`text-xs ${stockQuantity > 0 ? "text-muted-foreground" : "text-danger"}`}>
-                {stockQuantity > 0 ? (product.availability === "low_stock" ? "Low stock" : "In stock") : "Out of stock"}
+              <View className={`h-1.5 w-1.5 rounded-full ${stock.maxQuantity > 0 ? "bg-success" : "bg-danger"}`} />
+              <Text className={`text-xs ${stock.maxQuantity > 0 ? "text-muted-foreground" : "text-danger"}`}>
+                {stock.statusLabel}
               </Text>
             </View>
-            {product.stockQuantity !== undefined && <Text className="mt-1 text-foreground text-xs font-semibold">{product.stockQuantity} available</Text>}
+            {stock.statusLabel !== stock.quantityLabel && (
+              <Text className="mt-1 text-foreground text-xs font-semibold">{stock.quantityLabel}</Text>
+            )}
             {variants.length > 0 && (
               <Text className="text-muted-foreground text-xs mt-1.5" numberOfLines={1}>
                 Options: {variants.join(" • ")}
@@ -158,6 +166,34 @@ function ProductCardView({ product, width = 150, stretch = false, onPress }: Pro
           </View>
         </Pressable>
 
+        <View className="items-center px-2.5 pb-2.5">
+          <Text className="self-start text-muted-foreground text-xs font-semibold mb-1">Quantity</Text>
+          <View className="flex-row items-center rounded-lg border border-border bg-secondary">
+            <Pressable
+              accessibilityLabel={`Decrease ${product.name} quantity`}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: isAdding || selectedQuantity <= 1 }}
+              disabled={isAdding || selectedQuantity <= 1}
+              onPress={() => setQuantity(selectedQuantity - 1)}
+              className="w-10 h-10 items-center justify-center"
+              style={({ pressed }) => ({ opacity: isAdding || selectedQuantity <= 1 ? 0.35 : pressed ? 0.7 : 1 })}
+            >
+              <Ionicons name="remove" size={16} color={colors.foreground} />
+            </Pressable>
+            <Text accessibilityLabel={`${selectedQuantity} selected`} className="min-w-[24px] text-center text-foreground text-xs font-semibold">{selectedQuantity}</Text>
+            <Pressable
+              accessibilityLabel={`Increase ${product.name} quantity`}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: isAdding || selectedQuantity >= stock.maxQuantity }}
+              disabled={isAdding || selectedQuantity >= stock.maxQuantity}
+              onPress={() => setQuantity(selectedQuantity + 1)}
+              className="w-10 h-10 items-center justify-center"
+              style={({ pressed }) => ({ opacity: isAdding || selectedQuantity >= stock.maxQuantity ? 0.35 : pressed ? 0.7 : 1 })}
+            >
+              <Ionicons name="add" size={16} color={colors.foreground} />
+            </Pressable>
+          </View>
+        </View>
         <View className="flex-row items-center gap-2 px-2.5 pb-2.5">
           <Pressable
             accessibilityLabel={`${wishlisted ? "Remove" : "Add"} ${product.name} ${wishlisted ? "from" : "to"} wishlist`}
@@ -177,14 +213,14 @@ function ProductCardView({ product, width = 150, stretch = false, onPress }: Pro
             />
           </Pressable>
           <Pressable
-            accessibilityLabel={`${justAdded ? "Add another" : "Add"} ${product.name} to cart`}
-            accessibilityHint="Adds one unit to your cart"
+            accessibilityLabel={`${justAdded ? "Add another" : "Add"} ${selectedQuantity} ${product.name} to cart`}
+            accessibilityHint={`Adds ${selectedQuantity} ${selectedQuantity === 1 ? "unit" : "units"} to your cart`}
             accessibilityRole="button"
-            accessibilityState={{ disabled: stockQuantity <= 0 || isAdding, busy: isAdding }}
-            disabled={stockQuantity <= 0 || isAdding}
+            accessibilityState={{ disabled: stock.maxQuantity <= 0 || isAdding, busy: isAdding }}
+            disabled={stock.maxQuantity <= 0 || isAdding}
             onPress={handleQuickAdd}
             className="flex-1 min-h-12 py-2 rounded-lg bg-primary flex-row items-center justify-center gap-1.5"
-            style={({ pressed }) => ({ opacity: stockQuantity <= 0 ? 0.45 : pressed ? 0.8 : 1 })}
+            style={({ pressed }) => ({ opacity: stock.maxQuantity <= 0 ? 0.45 : pressed ? 0.8 : 1 })}
           >
             <Animated.View
               key={justAdded ? "added" : "add"}

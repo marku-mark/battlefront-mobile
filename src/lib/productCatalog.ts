@@ -16,15 +16,33 @@ export function mapProduct(row: ApiProduct): Product {
 }
 
 export function getProductFacts(product: Product) {
-  const availability = { in_stock: "In stock", low_stock: "Low stock", out_of_stock: "Out of stock" }[product.availability ?? ""] ?? "Unavailable";
+  const stock = getProductStock(product);
+  const availability = stock.statusLabel;
   const specifications: [string, string][] = [["Category", product.categoryName || "Not provided"], ["Availability", availability]];
-  if (product.stockQuantity !== undefined) specifications.push(["Available quantity", String(product.stockQuantity)]);
+  if (stock.quantityLabel !== "Quantity unavailable") specifications.push(["Available quantity", String(stock.maxQuantity)]);
   if (product.brandId) specifications.push(["Brand", product.brandId]);
   return {
     description: product.description?.trim() || "No description has been provided for this product.",
     availability,
     specifications,
     compatibility: "Check the product description for specifications and contact Battlefront to confirm compatibility and warranty details before ordering.",
+  };
+}
+
+export function getProductStock(product: Product) {
+  const quantity = product.stockQuantity;
+  const isOutOfStock = product.availability === "out_of_stock";
+  const isUnavailable = product.availability === "unavailable";
+  const hasQuantity = Number.isInteger(quantity) && quantity !== undefined && quantity >= 0;
+  const maxQuantity = !isOutOfStock && !isUnavailable && hasQuantity ? quantity : 0;
+  return {
+    maxQuantity,
+    statusLabel: isUnavailable || (!isOutOfStock && !hasQuantity)
+      ? "Quantity unavailable"
+      : maxQuantity === 0 ? "Out of stock" : product.availability === "low_stock" ? "Low stock" : "In stock",
+    quantityLabel: isUnavailable ? "Quantity unavailable"
+      : isOutOfStock || (hasQuantity && quantity === 0) ? "0 available"
+      : hasQuantity ? `${quantity} available` : "Quantity unavailable",
   };
 }
 

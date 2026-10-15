@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mapProduct, getProductFacts } from "../src/lib/productCatalog.ts";
+import { mapProduct, getProductFacts, getProductStock } from "../src/lib/productCatalog.ts";
 import { getProductImageSource } from "../src/lib/data.ts";
 
 const product = { id: 42, name: "Memory kit", description: "32GB DDR5-6000 memory kit.", brand: "Kingston", price: "1200.00", discount_price: "900.00", image_url: "http://backend.test/storage/42.webp", category: { id: 3, name: "RAM / Memory" }, inventory: { quantity: 5, status: "low_stock" } };
@@ -25,7 +25,7 @@ test("missing descriptions and inventory do not invent product facts or availabi
   assert.equal(mapped.originalPrice, undefined);
   assert.equal(mapped.availability, "unavailable");
   assert.equal(mapped.stockQuantity, undefined);
-  assert.equal(facts.availability, "Unavailable");
+  assert.equal(facts.availability, "Quantity unavailable");
   assert.equal(facts.description, "No description has been provided for this product.");
   assert.equal(facts.specifications.some(([label]) => label === "Brand"), false);
   assert.equal(facts.specifications.some(([label]) => label === "Available quantity"), false);
@@ -36,6 +36,25 @@ test("out-of-stock products keep their server description without promising ship
   const facts = getProductFacts(mapProduct({ ...product, inventory: { status: "out_of_stock" } }));
   assert.equal(facts.availability, "Out of stock");
   assert.equal(facts.description, product.description);
+});
+
+test("stock display and purchase limit agree for available, empty, and unknown inventory", () => {
+  assert.deepEqual(getProductStock(mapProduct(product)), {
+    maxQuantity: 5, statusLabel: "Low stock", quantityLabel: "5 available",
+  });
+  assert.deepEqual(getProductStock(mapProduct({ ...product, inventory: { quantity: 0, status: "out_of_stock" } })), {
+    maxQuantity: 0, statusLabel: "Out of stock", quantityLabel: "0 available",
+  });
+  assert.deepEqual(getProductStock(mapProduct({ ...product, inventory: undefined })), {
+    maxQuantity: 0, statusLabel: "Quantity unavailable", quantityLabel: "Quantity unavailable",
+  });
+  assert.deepEqual(getProductStock(mapProduct({ ...product, inventory: { status: "in_stock" } })), {
+    maxQuantity: 0, statusLabel: "Quantity unavailable", quantityLabel: "Quantity unavailable",
+  });
+  assert.equal(getProductFacts(mapProduct({ ...product, inventory: { status: "in_stock" } })).availability, "Quantity unavailable");
+  assert.deepEqual(getProductStock(mapProduct({ ...product, inventory: { status: "out_of_stock" } })), {
+    maxQuantity: 0, statusLabel: "Out of stock", quantityLabel: "0 available",
+  });
 });
 
 test("catalog images use the exact URL supplied by the backend", () => {

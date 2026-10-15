@@ -1,7 +1,7 @@
 import { useActiveFocusEffect } from "@/hooks/useActiveScreen";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ProductDetails } from "@/components/products/ProductDetails";
@@ -9,6 +9,7 @@ import { useCart } from "@/hooks/useCart";
 import { addRecentlyViewedProduct } from "@/hooks/useRecentlyViewed";
 import { getProductById, getProductSnapshot } from "@/lib/api";
 import type { Product } from "@/lib/data";
+import { getProductStock } from "@/lib/productCatalog";
 
 export default function ProductRoute() {
   const router = useRouter();
@@ -19,6 +20,13 @@ export default function ProductRoute() {
   const [hasLoadError, setHasLoadError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [quantity, setQuantity] = useState(1);
+
+  useEffect(() => setQuantity(1), [id]);
+  useEffect(() => {
+    if (!product) return;
+    const maxQuantity = getProductStock(product).maxQuantity;
+    setQuantity((current) => Math.min(Math.max(1, current), Math.max(1, maxQuantity)));
+  }, [product?.id, product?.availability, product?.stockQuantity]);
 
   useActiveFocusEffect(useCallback(() => {
     let isActive = true;

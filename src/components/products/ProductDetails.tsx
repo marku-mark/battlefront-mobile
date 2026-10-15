@@ -4,7 +4,7 @@ import { Alert, Pressable, ScrollView, Text, View, useWindowDimensions } from "r
 import { useRef, useState, type ReactNode } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getProductImageSource, getProductVariants, type Product } from "@/lib/data";
-import { getProductFacts } from "@/lib/productCatalog";
+import { getProductFacts, getProductStock } from "@/lib/productCatalog";
 import { useTheme } from "@/theme/ThemeProvider";
 import { useWishlist } from "@/hooks/useWishlist";
 import { useSession } from "@/hooks/useSession";
@@ -46,9 +46,9 @@ export function ProductDetails({ refreshError = false, onRetry, product, quantit
   }
   const adding = useRef(false);
   async function addToCart() {
-    if (adding.current) return;
+    if (adding.current || selectedQuantity === 0) return;
     adding.current = true; setIsAdding(true);
-    try { await onAddToCart(product, quantity, selectedVariant); }
+    try { await onAddToCart(product, selectedQuantity, selectedVariant); }
     finally { adding.current = false; setIsAdding(false); }
   }
   const insets = useSafeAreaInsets();
@@ -72,9 +72,10 @@ export function ProductDetails({ refreshError = false, onRetry, product, quantit
   const rating = product.rating ?? 0;
   const reviewCount = product.reviewCount ?? 0;
   const hasRating = rating > 0 && reviewCount > 0;
-  const stockQuantity = ["out_of_stock", "unavailable"].includes(product.availability ?? "") ? 0 : (product.stockQuantity ?? Number.MAX_SAFE_INTEGER);
+  const stock = getProductStock(product);
+  const selectedQuantity = stock.maxQuantity > 0 ? Math.max(1, Math.min(quantity, stock.maxQuantity)) : 0;
   const facts = getProductFacts(product);
-  const subtotal = product.price * quantity;
+  const subtotal = product.price * selectedQuantity;
 
   return (
     <View className="flex-1 bg-background">
@@ -119,8 +120,8 @@ export function ProductDetails({ refreshError = false, onRetry, product, quantit
             ) : <Text className="text-muted-foreground text-xs">No reviews yet</Text>}
           </View>
           <View className="mt-2 flex-row items-center gap-2">
-            <View className={`h-1.5 w-1.5 rounded-full ${stockQuantity > 0 ? "bg-success" : "bg-danger"}`} />
-            <Text className={`text-sm ${stockQuantity > 0 ? "text-foreground" : "text-danger"}`}>{stockQuantity > 0 ? (product.availability === "low_stock" ? "Low stock" : "In stock") : "Out of stock"}{product.stockQuantity !== undefined ? ` · ${product.stockQuantity} available` : ""}</Text>
+            <View className={`h-1.5 w-1.5 rounded-full ${stock.maxQuantity > 0 ? "bg-success" : "bg-danger"}`} />
+            <Text className={`text-sm ${stock.maxQuantity > 0 ? "text-foreground" : "text-danger"}`}>{stock.statusLabel}{stock.statusLabel !== stock.quantityLabel ? ` · ${stock.quantityLabel}` : ""}</Text>
           </View>
 
           {variants.length > 0 && <View className="mt-5"><View className="flex-row items-center justify-between mb-2"><Text className="text-foreground text-sm font-semibold">Choose an option</Text><Text className="text-muted-foreground text-xs">{selectedVariant ?? "Select"}</Text></View><View className="flex-row flex-wrap gap-2">{variants.map((variant) => <Pressable key={variant} accessibilityRole="radio" accessibilityLabel={`${variant} option`} accessibilityState={{ selected: selectedVariant === variant }} onPress={() => setSelectedVariant(variant)} className={`rounded-lg border px-3 py-2 ${selectedVariant === variant ? "border-primary bg-primary/10" : "border-border bg-secondary"}`}><Text className={`text-xs font-semibold ${selectedVariant === variant ? "text-primary" : "text-foreground"}`}>{variant}</Text></Pressable>)}</View></View>}
@@ -154,12 +155,12 @@ export function ProductDetails({ refreshError = false, onRetry, product, quantit
           <DetailDisclosure title="Specifications" open={specificationsOpen} color={colors.muted} onPress={() => setSpecificationsOpen((current) => !current)}>{facts.specifications.map(([label, value]) => <View key={label} className="flex-row justify-between gap-4 py-2 border-b border-border"><Text className="text-muted-foreground text-sm">{label}</Text><Text selectable className="text-foreground text-sm font-medium flex-1 text-right">{value}</Text></View>)}</DetailDisclosure>
           <DetailDisclosure title="Compatibility and support" open={compatibilityOpen} color={colors.muted} onPress={() => setCompatibilityOpen((current) => !current)}><Text selectable className="text-muted-foreground text-sm leading-5">{facts.compatibility}</Text></DetailDisclosure>
 
-          <View className="flex-row items-center justify-between mt-6"><Text className="text-foreground text-sm font-semibold">Quantity</Text><View className="flex-row items-center border border-border rounded-xl overflow-hidden bg-secondary"><QuantityButton icon="remove" accessibilityLabel="Decrease quantity" color={colors.foreground} disabled={quantity <= 1} onPress={() => onQuantityChange(Math.max(1, quantity - 1))} /><Text className="text-foreground text-sm font-semibold min-w-[36px] text-center">{quantity}</Text><QuantityButton icon="add" accessibilityLabel="Increase quantity" color={colors.foreground} disabled={quantity >= stockQuantity} onPress={() => onQuantityChange(Math.min(stockQuantity, quantity + 1))} /></View></View>
+          <View className="flex-row items-center justify-between mt-6"><Text className="text-foreground text-sm font-semibold">Quantity</Text><View className="flex-row items-center border border-border rounded-xl overflow-hidden bg-secondary"><QuantityButton icon="remove" accessibilityLabel="Decrease quantity" color={colors.foreground} disabled={selectedQuantity <= 1} onPress={() => onQuantityChange(Math.max(1, selectedQuantity - 1))} /><Text className="text-foreground text-sm font-semibold min-w-[36px] text-center">{selectedQuantity}</Text><QuantityButton icon="add" accessibilityLabel="Increase quantity" color={colors.foreground} disabled={selectedQuantity >= stock.maxQuantity} onPress={() => onQuantityChange(Math.min(stock.maxQuantity, selectedQuantity + 1))} /></View></View>
         </View>
         </View>
       </ScrollView>
 
-      <View className="self-center w-full px-4 pt-3 border-t border-border bg-background" style={{ maxWidth: 760, paddingBottom: Math.max(insets.bottom, 12) }}><View className="flex-row items-center justify-between mb-3"><Text className="text-muted-foreground text-xs uppercase tracking-[0.12em]">Total</Text><Text className="text-foreground text-lg font-bold">{formatPrice(subtotal)}</Text></View><Pressable accessibilityLabel={`Add ${product.name} to cart`} accessibilityRole="button" accessibilityState={{ busy: isAdding, disabled: isAdding || stockQuantity === 0 }} disabled={isAdding || stockQuantity === 0 || (variants.length > 0 && !selectedVariant)} onPress={() => void addToCart()} className="min-h-12 py-3 rounded-xl bg-primary items-center justify-center" style={({ pressed }) => ({ opacity: stockQuantity === 0 || (variants.length > 0 && !selectedVariant) ? 0.45 : pressed ? 0.8 : 1 })}><Text className="text-primary-foreground text-sm font-bold">{isAdding ? "Adding…" : stockQuantity === 0 ? "Out of stock" : variants.length > 0 && !selectedVariant ? "Choose an option" : "Add to cart"}</Text></Pressable></View>
+      <View className="self-center w-full px-4 pt-3 border-t border-border bg-background" style={{ maxWidth: 760, paddingBottom: Math.max(insets.bottom, 12) }}><View className="flex-row items-center justify-between mb-3"><Text className="text-muted-foreground text-xs uppercase tracking-[0.12em]">Total</Text><Text className="text-foreground text-lg font-bold">{formatPrice(subtotal)}</Text></View><Pressable accessibilityLabel={`Add ${product.name} to cart`} accessibilityRole="button" accessibilityState={{ busy: isAdding, disabled: isAdding || selectedQuantity === 0 || (variants.length > 0 && !selectedVariant) }} disabled={isAdding || selectedQuantity === 0 || (variants.length > 0 && !selectedVariant)} onPress={() => void addToCart()} className="min-h-12 py-3 rounded-xl bg-primary items-center justify-center" style={({ pressed }) => ({ opacity: selectedQuantity === 0 || (variants.length > 0 && !selectedVariant) ? 0.45 : pressed ? 0.8 : 1 })}><Text className="text-primary-foreground text-sm font-bold">{isAdding ? "Adding…" : selectedQuantity === 0 ? stock.statusLabel : variants.length > 0 && !selectedVariant ? "Choose an option" : "Add to cart"}</Text></Pressable></View>
       <MockSignInSheet visible={isSignInOpen} onClose={() => setIsSignInOpen(false)} />
       {isChatOpen && <Chatbot visible onClose={() => setIsChatOpen(false)} />}
     </View>
