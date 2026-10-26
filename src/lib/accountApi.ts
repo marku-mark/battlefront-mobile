@@ -3,6 +3,7 @@ export type ApiUser = {
   name: string;
   email: string;
   default_delivery_address: string | null;
+  default_delivery_contact_number?: string | null;
   search_recommendations_enabled: boolean;
   product_view_recommendations_enabled: boolean;
   personalized_recommendations_enabled: boolean;
@@ -11,6 +12,7 @@ export type ProfileInput = {
   name: string;
   email: string;
   default_delivery_address?: string | null;
+  default_delivery_contact_number?: string | null;
   default_delivery_address_action?: "keep" | "save" | "clear";
   default_delivery_region_code?: string;
   default_delivery_province_code?: string | null;
@@ -39,6 +41,9 @@ export function createAccountApi(request: Request) {
       return (await request<Envelope<ApiUser>>("profile", { method: "PATCH", body: JSON.stringify({ ...fields, name: fields.name.trim(), email: fields.email.trim() }) })).data;
     },
     async logout() { await request<void>("auth/logout", { method: "POST" }); },
+    async changePassword(fields: { current_password: string; password: string; password_confirmation: string }) {
+      await request<void>("profile/password", { method: "PUT", body: JSON.stringify(fields) });
+    },
   };
 }
 

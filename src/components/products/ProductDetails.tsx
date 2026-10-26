@@ -1,15 +1,12 @@
 import { ProductImage } from "@/components/products/ProductImage";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { Alert, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
+import { Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { useRef, useState, type ReactNode } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getProductImageSource, getProductVariants, type Product } from "@/lib/data";
 import { getProductFacts, getProductStock } from "@/lib/productCatalog";
 import { useTheme } from "@/theme/ThemeProvider";
 import { useWishlist } from "@/hooks/useWishlist";
-import { useSession } from "@/hooks/useSession";
-import { MockSignInSheet } from "@/components/account/MockSignInSheet";
-import { ProductReviewPanel } from "@/components/products/ProductReviewPanel";
 import { Chatbot } from "@/components/support/Chatbot";
 import { getResponsiveLayout, MAX_CONTENT_WIDTH } from "@/lib/responsive";
 import * as Clipboard from "expo-clipboard";
@@ -26,7 +23,6 @@ type ProductDetailsProps = {
   onClose?: () => void;
 };
 
-type ProductReview = { id: string; author: string; title: string; body: string; rating: number };
 
 function formatPrice(value: number): string {
   return `₱${value.toLocaleString("en-PH")}`;
@@ -59,19 +55,14 @@ export function ProductDetails({ refreshError = false, onRetry, product, quantit
     ? Math.min(560, (layout.contentWidth - 72) * 0.44)
     : Math.min(layout.contentWidth, layout.isTablet ? 560 : width);
   const { isWishlisted, toggleWishlist } = useWishlist();
-  const { session } = useSession();
   const variants = getProductVariants(product);
   const [selectedVariant, setSelectedVariant] = useState(variants[0] ?? null);
   const [specificationsOpen, setSpecificationsOpen] = useState(false);
   const [compatibilityOpen, setCompatibilityOpen] = useState(false);
-  const [isSignInOpen, setIsSignInOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const wishlisted = isWishlisted(product.id);
   const hasDiscount = product.originalPrice !== undefined && product.originalPrice > product.price;
   const discount = hasDiscount ? Math.round(((product.originalPrice! - product.price) / product.originalPrice!) * 100) : 0;
-  const rating = product.rating ?? 0;
-  const reviewCount = product.reviewCount ?? 0;
-  const hasRating = rating > 0 && reviewCount > 0;
   const stock = getProductStock(product);
   const selectedQuantity = stock.maxQuantity > 0 ? Math.max(1, Math.min(quantity, stock.maxQuantity)) : 0;
   const facts = getProductFacts(product);
@@ -110,15 +101,6 @@ export function ProductDetails({ refreshError = false, onRetry, product, quantit
           </View>
           <View className="flex-row items-baseline gap-2 mt-3"><Text selectable className="text-primary text-2xl font-bold">{formatPrice(product.price)}</Text>{hasDiscount && <Text className="text-muted-foreground text-sm line-through">{formatPrice(product.originalPrice!)}</Text>}</View>
 
-          <View className="flex-row items-center gap-2 mt-3">
-            {hasRating ? (
-              <>
-                <Ionicons name="star" size={16} color="#f59e0b" />
-                <Text className="text-foreground text-sm font-semibold">{rating.toFixed(1)}</Text>
-                <Text className="text-muted-foreground text-xs">({reviewCount} reviews)</Text>
-              </>
-            ) : <Text className="text-muted-foreground text-xs">No reviews yet</Text>}
-          </View>
           <View className="mt-2 flex-row items-center gap-2">
             <View className={`h-1.5 w-1.5 rounded-full ${stock.maxQuantity > 0 ? "bg-success" : "bg-danger"}`} />
             <Text className={`text-sm ${stock.maxQuantity > 0 ? "text-foreground" : "text-danger"}`}>{stock.statusLabel}{stock.statusLabel !== stock.quantityLabel ? ` · ${stock.quantityLabel}` : ""}</Text>
@@ -145,13 +127,6 @@ export function ProductDetails({ refreshError = false, onRetry, product, quantit
           <View className="mt-5 rounded-2xl bg-secondary border border-border p-3 shadow-soft"><Text className="text-foreground text-sm font-semibold">Fulfillment and payment</Text><Text className="text-muted-foreground text-xs mt-1.5">Available pickup, delivery, and payment options are shown at checkout.</Text></View>
 
           <View className="mt-6 pt-5 border-t border-border"><Text className="text-foreground text-base font-semibold">About this product</Text><Text selectable className="text-muted-foreground text-sm leading-5 mt-2">{facts.description}</Text></View>
-          <ProductReviewPanel
-            productId={product.id}
-            rating={rating}
-            reviewCount={reviewCount}
-            isMockAccount={session.mode === "customer"}
-            onSignIn={() => setIsSignInOpen(true)}
-          />
           <DetailDisclosure title="Specifications" open={specificationsOpen} color={colors.muted} onPress={() => setSpecificationsOpen((current) => !current)}>{facts.specifications.map(([label, value]) => <View key={label} className="flex-row justify-between gap-4 py-2 border-b border-border"><Text className="text-muted-foreground text-sm">{label}</Text><Text selectable className="text-foreground text-sm font-medium flex-1 text-right">{value}</Text></View>)}</DetailDisclosure>
           <DetailDisclosure title="Compatibility and support" open={compatibilityOpen} color={colors.muted} onPress={() => setCompatibilityOpen((current) => !current)}><Text selectable className="text-muted-foreground text-sm leading-5">{facts.compatibility}</Text></DetailDisclosure>
 
@@ -161,21 +136,9 @@ export function ProductDetails({ refreshError = false, onRetry, product, quantit
       </ScrollView>
 
       <View className="self-center w-full px-4 pt-3 border-t border-border bg-background" style={{ maxWidth: 760, paddingBottom: Math.max(insets.bottom, 12) }}><View className="flex-row items-center justify-between mb-3"><Text className="text-muted-foreground text-xs uppercase tracking-[0.12em]">Total</Text><Text className="text-foreground text-lg font-bold">{formatPrice(subtotal)}</Text></View><Pressable accessibilityLabel={`Add ${product.name} to cart`} accessibilityRole="button" accessibilityState={{ busy: isAdding, disabled: isAdding || selectedQuantity === 0 || (variants.length > 0 && !selectedVariant) }} disabled={isAdding || selectedQuantity === 0 || (variants.length > 0 && !selectedVariant)} onPress={() => void addToCart()} className="min-h-12 py-3 rounded-xl bg-primary items-center justify-center" style={({ pressed }) => ({ opacity: selectedQuantity === 0 || (variants.length > 0 && !selectedVariant) ? 0.45 : pressed ? 0.8 : 1 })}><Text className="text-primary-foreground text-sm font-bold">{isAdding ? "Adding…" : selectedQuantity === 0 ? stock.statusLabel : variants.length > 0 && !selectedVariant ? "Choose an option" : "Add to cart"}</Text></Pressable></View>
-      <MockSignInSheet visible={isSignInOpen} onClose={() => setIsSignInOpen(false)} />
       {isChatOpen && <Chatbot visible onClose={() => setIsChatOpen(false)} />}
     </View>
   );
-}
-
-function getProductReviews(product: Product): ProductReview[] {
-  return [
-    { id: `${product.id}-review-1`, author: "Marco R.", title: "Good value for the build", body: "Arrived in good condition and matched the product details. Setup was straightforward.", rating: 5 },
-    { id: `${product.id}-review-2`, author: "Jessa L.", title: "Solid everyday performance", body: "Good fit for my current setup. Delivery and support details were easy to understand.", rating: 4 },
-  ];
-}
-
-function ReviewSection({ rating, reviewCount, reviews, isMockAccount, onSignIn }: { rating: number; reviewCount: number; reviews: ProductReview[]; isMockAccount: boolean; onSignIn: () => void }) {
-  return <View className="mt-6 pt-5 border-t border-border"><View className="flex-row items-center justify-between mb-4"><View><Text className="text-foreground text-base font-semibold">Reviews</Text><Text className="text-muted-foreground text-xs mt-1">{reviewCount} sample reviews</Text></View><Pressable accessibilityLabel={isMockAccount ? "Preview writing a review" : "Sign in to preview writing a review"} accessibilityRole="button" onPress={() => isMockAccount ? Alert.alert("Review preview", "Review submission is not connected in this demo.") : onSignIn()}><Text className="text-primary text-xs font-semibold">{isMockAccount ? "Write a review" : "Sign in to review"}</Text></Pressable></View><View className="flex-row items-center bg-card border border-border rounded-2xl p-4"><View className="items-center pr-5 border-r border-border"><Text className="text-foreground text-3xl font-bold">{rating.toFixed(1)}</Text><View className="flex-row mt-1">{Array.from({ length: 5 }).map((_, index) => <Ionicons key={index} name={index < Math.round(rating) ? "star" : "star-outline"} size={13} color="#f59e0b" />)}</View></View><View className="flex-1 ml-4 gap-1.5">{[5, 4, 3, 2, 1].map((score) => <View key={score} className="flex-row items-center gap-2"><Text className="text-muted-foreground text-[10px] w-3">{score}</Text><View className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden"><View className={`h-full rounded-full ${score >= 4 ? "bg-primary" : "bg-muted-foreground"}`} style={{ width: `${score >= 4 ? 76 : 18}%` }} /></View></View>)}</View></View><View className="mt-3 gap-3">{reviews.map((review) => <View key={review.id} className="border-b border-border pb-3"><View className="flex-row items-center justify-between"><Text className="text-foreground text-sm font-semibold">{review.title}</Text><View className="flex-row">{Array.from({ length: review.rating }).map((_, index) => <Ionicons key={index} name="star" size={12} color="#f59e0b" />)}</View></View><Text className="text-muted-foreground text-xs mt-1 leading-5">{review.body}</Text><Text className="text-muted-foreground text-[10px] uppercase tracking-[0.1em] mt-2">{review.author} · Sample review · not verified</Text></View>)}</View></View>;
 }
 
 function DetailDisclosure({ title, open, color, onPress, children }: { title: string; open: boolean; color: string; onPress: () => void; children: ReactNode }) {

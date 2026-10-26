@@ -8,9 +8,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { getProductImageSource, getProductVariants, type Product } from "@/lib/data";
 import { getSelectedProducts, getProductSnapshot } from "@/lib/api";
 import { LoadingState } from "@/components/layout/LoadingState";
-import { useWishlist } from "@/hooks/useWishlist";
+import { useGuestWishlistImport, useWishlist } from "@/hooks/useWishlist";
 import { useCart } from "@/hooks/useCart";
 import { useSession } from "@/hooks/useSession";
+import { useToast } from "@/hooks/useToast";
 import { getResponsiveLayout } from "@/lib/responsive";
 
 function formatPrice(value: number): string {
@@ -23,12 +24,16 @@ export default function WishlistScreen() {
   const { width } = useWindowDimensions();
   const layout = getResponsiveLayout(width);
   const { items: wishlistIds, toggleWishlist, isLoading: isWishlistLoading } = useWishlist();
+  const { importGuestWishlist, getGuestWishlist } = useGuestWishlistImport();
   const { addItem, items: cartItems, isUpdating } = useCart();
   const [removedProduct, setRemovedProduct] = useState<Product | null>(null);
   const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
   const [isCatalogLoading, setIsCatalogLoading] = useState(true);
   const [hasCatalogError, setHasCatalogError] = useState(false);
   const { isHydrated, session } = useSession();
+  const { showToast } = useToast();
+  const [isImporting, setIsImporting] = useState(false);
+  const guestWishlistCount = getGuestWishlist().length;
   const owner = session.mode === "customer" ? session.user.id : "guest";
   const [visibleCount, setVisibleCount] = useState(12);
   const [retryCount, setRetryCount] = useState(0);
@@ -69,6 +74,21 @@ export default function WishlistScreen() {
           </Text>
         </View>
       </View>
+
+      {session.mode === "customer" && guestWishlistCount > 0 ? (
+        <View className="mx-4 mt-3 flex-row items-center gap-3 rounded-xl border border-border bg-card p-3">
+          <View className="flex-1">
+            <Text className="text-foreground text-sm font-semibold">Saved on this device</Text>
+            <Text className="mt-1 text-muted-foreground text-xs">Import {guestWishlistCount} guest item{guestWishlistCount === 1 ? "" : "s"} into this account?</Text>
+          </View>
+          <Pressable disabled={isImporting || isWishlistLoading} onPress={() => {
+            setIsImporting(true);
+            void importGuestWishlist().then((count) => showToast(`${count} item${count === 1 ? "" : "s"} imported to your wishlist`)).catch(() => showToast("Could not import saved items", "error")).finally(() => setIsImporting(false));
+          }} className="rounded-lg bg-primary px-3 py-2" style={{ opacity: isImporting ? 0.6 : 1 }}>
+            <Text className="text-primary-foreground text-xs font-bold">{isImporting ? "Importing" : "Import"}</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {isLoading ? (
         <LoadingState label="Loading wishlist..." />

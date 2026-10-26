@@ -52,7 +52,7 @@ test("native proof sends image bytes, picker filename and MIME type through Expo
     await assertEncodedProof(options.body, proof.name);
     return { data: { id: 8 } };
   }, "native", readNativeProof);
-  assert.deepEqual(await orders.placeOrder({ ...pickup, payment_method: "gcash", payment_proof: proof }), { id: 8 });
+  assert.deepEqual(await orders.placeOrder({ ...pickup, payment_method: "gcash", payment_proof: proof }), { data: { id: 8 } });
 });
 
 test("repeated proof uploads are blocked before reading the file and unlock after completion", async (t) => {
@@ -97,7 +97,18 @@ test("phone pickup checkout sends authenticated JSON and returns the created ord
     return Response.json({ data: { id: 7, status: { value: "pending" } } }, { status: 201 });
   });
   const orders = createOrderSubmission(createApiClient("http://backend.test/api/v1", () => "customer-token"), "native");
-  assert.deepEqual(await orders.placeOrder(pickup), { id: 7, status: { value: "pending" } });
+  assert.deepEqual(await orders.placeOrder(pickup), { data: { id: 7, status: { value: "pending" } } });
+});
+
+test("Pay online checkout sends the hosted method and one submission key without proof", async (t) => {
+  const input = { ...pickup, fulfillment_method: "delivery", payment_method: "online", payment_channel: "hosted_checkout", hosted_payment_method: "gcash", checkout_submission_key: "b1e90c58-4d88-4d1c-a270-1c6bc9836ea2", delivery_destination: "1804523000", delivery_barangay_code: "1804523018", delivery_address_details: "12 Mabini Street" };
+  t.mock.method(globalThis, "fetch", async (_url, options) => {
+    assert.equal(options.headers.get("Content-Type"), "application/json");
+    assert.deepEqual(JSON.parse(options.body), input);
+    return Response.json({ data: { id: 14 }, payment: { redirect_url: "https://payments.example/checkout" } }, { status: 201 });
+  });
+  const orders = createOrderSubmission(createApiClient("http://backend.test/api/v1", () => "customer-token"), "native");
+  assert.deepEqual(await orders.placeOrder(input), { data: { id: 14 }, payment: { redirect_url: "https://payments.example/checkout" } });
 });
 
 test("Negros city checkout sends the complete PSGC hierarchy and structured address", async () => {
@@ -115,7 +126,7 @@ test("Negros city checkout sends the complete PSGC hierarchy and structured addr
   }, "native");
   assert.deepEqual(await orders.placeOrder({ ...pickup, fulfillment_method: "delivery", payment_method: "cod",
     delivery_region_code: "1800000000", delivery_province_code: "1804500000", delivery_city_code: "1804523000",
-    delivery_destination: "1804523000", delivery_barangay_code: "1804523018", delivery_address_details: "12 Mabini Street" }), { id: 9 });
+    delivery_destination: "1804523000", delivery_barangay_code: "1804523018", delivery_address_details: "12 Mabini Street" }), { data: { id: 9 } });
 });
 
 test("native wallet checkout encodes proof bytes and delivery details without setting a multipart boundary", async (t) => {
@@ -131,7 +142,7 @@ test("native wallet checkout encodes proof bytes and delivery details without se
     return Response.json({ data: { id: 8 } }, { status: 201 });
   });
   const orders = createOrderSubmission(createApiClient("http://backend.test/api/v1"), "native", (selected) => { assert.deepEqual(selected, proof); return readNativeProof(); });
-  assert.deepEqual(await orders.placeOrder({ ...pickup, fulfillment_method: "delivery", delivery_destination: "Sagay City", delivery_address: "Sagay delivery address", payment_method: "gcash", payment_proof: proof }), { id: 8 });
+  assert.deepEqual(await orders.placeOrder({ ...pickup, fulfillment_method: "delivery", delivery_destination: "Sagay City", delivery_address: "Sagay delivery address", payment_method: "gcash", payment_proof: proof }), { data: { id: 8 } });
 });
 
 test("a missing native image stops placement before contacting the order endpoint", async () => {
@@ -164,7 +175,7 @@ test("browser wallet checkout sends actual image bytes and a supported filename"
     return Response.json({ data: { id: 9 } }, { status: 201 });
   });
   const orders = createOrderSubmission(createApiClient("http://backend.test/api/v1"), "web");
-  assert.deepEqual(await orders.placeOrder({ ...pickup, payment_method: "maya", payment_proof: { uri: "blob:proof", name: "proof.png", type: "image/png" } }), { id: 9 });
+  assert.deepEqual(await orders.placeOrder({ ...pickup, payment_method: "maya", payment_proof: { uri: "blob:proof", name: "proof.png", type: "image/png" } }), { data: { id: 9 } });
 });
 
 test("failed order submissions expose validation errors and are never retried automatically", async (t) => {
@@ -193,7 +204,7 @@ test("repeated placement taps cannot start another request while submission is p
   await assert.rejects(orders.placeOrder(pickup), /still being submitted/);
   assert.equal(calls, 1);
   finish({ data: { id: 12 } });
-  assert.deepEqual(await first, { id: 12 });
+  assert.deepEqual(await first, { data: { id: 12 } });
 });
 
 test("failed placements unlock for an explicit retry but never retry themselves", async () => {
@@ -205,6 +216,6 @@ test("failed placements unlock for an explicit retry but never retry themselves"
   }, "native");
   await assert.rejects(orders.placeOrder(pickup), /Offline/);
   assert.equal(calls, 1);
-  assert.deepEqual(await orders.placeOrder(pickup), { id: 13 });
+  assert.deepEqual(await orders.placeOrder(pickup), { data: { id: 13 } });
   assert.equal(calls, 2);
 });

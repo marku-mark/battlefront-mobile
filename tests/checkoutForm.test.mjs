@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { checkoutRecipient, paymentForFulfillment, paymentProofError, formatCheckoutAmount, checkoutDetailsError, quoteForFulfillment } from "../src/lib/checkoutForm.ts";
+import { checkoutRecipient, isPaymentAllowedByQuote, paymentForAvailableMethods, paymentForFulfillment, paymentProofError, formatCheckoutAmount, checkoutDetailsError, quoteForFulfillment } from "../src/lib/checkoutForm.ts";
 
 const methods = [
   { value: "cash", available_for: ["pickup"] },
@@ -15,6 +15,20 @@ test("delivery replaces pickup-only payment and preserves an eligible wallet", (
   assert.equal(paymentForFulfillment(methods, "delivery", "maya"), "maya");
   assert.equal(paymentForFulfillment(methods, "pickup", "maya"), "maya");
   assert.equal(paymentForFulfillment([], "delivery", "cash"), "");
+});
+
+test("online payments stay available when a delivery quote lists their underlying wallets", () => {
+  const methods = [
+    { value: "cod", available_for: ["delivery"] },
+    { value: "online", available_for: ["pickup", "delivery"] },
+    { value: "card_at_store", available_for: ["pickup"] },
+  ];
+  const quoteMethods = ["gcash", "maya", "cod"];
+  assert.equal(isPaymentAllowedByQuote("online", quoteMethods), true);
+  assert.equal(isPaymentAllowedByQuote("cod", quoteMethods), true);
+  assert.equal(paymentForAvailableMethods(methods, "delivery", quoteMethods, "online"), "online");
+  assert.equal(isPaymentAllowedByQuote("online", ["cod"]), false);
+  assert.equal(paymentForAvailableMethods(methods, "delivery", ["cod"], "online"), "cod");
 });
 
 test("wallet proof accepts supported images up to 5 MB and rejects missing, oversized, and unsupported proof", () => {

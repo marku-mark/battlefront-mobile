@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useActiveFocusEffect } from "@/hooks/useActiveScreen";
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import { MockSignInSheet } from "@/components/account/MockSignInSheet";
@@ -10,10 +10,11 @@ import { useSession } from "@/hooks/useSession";
 import { getCart, getCheckout, getDeliveryLocations, getDeliveryQuote, getNegrosDeliveryLocations, type Checkout, type SelectedDeliveryQuote } from "@/lib/api";
 import { placeOrder } from "@/lib/orders";
 import { loadSavedAddresses, persistSavedAddresses, type SavedAddress } from "@/lib/savedAddresses";
-import { checkoutRecipient, paymentForFulfillment, paymentProofError, formatCheckoutAmount, checkoutDetailsError } from "@/lib/checkoutForm";
+import { checkoutRecipient, defaultHostedPayment, isPaymentAllowedByQuote, paymentForAvailableMethods, paymentForFulfillment, paymentProofError, formatCheckoutAmount, checkoutDetailsError } from "@/lib/checkoutForm";
 import { DeliveryAddressFields } from "@/components/addresses/DeliveryAddressFields";
 import { EMPTY_DELIVERY_ADDRESS, isCompleteDeliveryAddress, formatDeliveryAddress, type DeliveryBarangay, type DeliveryLocation } from "@/lib/deliveryAddress";
 import { getLocalUserId } from "@/lib/api";
+import * as Crypto from "expo-crypto";
 
 export default function CheckoutScreen() {
   const router = useRouter();
@@ -38,10 +39,12 @@ export default function CheckoutScreen() {
   const [checkoutRetry, setCheckoutRetry] = useState(0);
   const [fulfillment, setFulfillment] = useState("pickup");
   const [deliveryDestination, setDeliveryDestination] = useState("");
-  const [payment, setPayment] = useState("cash");
+  const [payment, setPayment] = useState("cod");
+  const [hostedMethod, setHostedMethod] = useState("qrph");
   const [proof, setProof] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitting = useRef(false);
+  const checkoutSubmissionKey = useRef(Crypto.randomUUID());
   const [isSignInOpen, setIsSignInOpen] = useState(false);
   const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
   const customerId = session.mode === "customer" ? session.user.id : null;
@@ -55,7 +58,7 @@ export default function CheckoutScreen() {
     setSelectedCartItemIds([]);
     setSavedAddresses([]);
     setAddressLabel(""); setLocation(EMPTY_DELIVERY_ADDRESS); setLocations([]); setLiveQuote(null); setQuoteError(""); setAddressError(""); setIsSavingAddress(false);
-    setFullName(""); setPhone(""); setAddress(""); setProof(null); setFulfillment("pickup"); setDeliveryDestination(""); setPayment("cash");
+    setFullName(""); setPhone(""); setAddress(""); setProof(null); setFulfillment("pickup"); setDeliveryDestination(""); setPayment("cod"); setHostedMethod("qrph"); checkoutSubmissionKey.current = Crypto.randomUUID();
   }, [customerId, createdOrderId, checkoutRetry]);
   useActiveFocusEffect(useCallback(() => {
     let active = true;
@@ -120,12 +123,22 @@ export default function CheckoutScreen() {
     return () => { active = false; };
   }, [fulfillment, location.delivery_destination, selectedCartItemIds.join(",")]);
   const visiblePreview = initializedCustomer.current === customerId && lastSelectedIdsParam.current === selectedIdsParam ? preview : null;
-  const paymentOptions = visiblePreview?.payment_methods.filter((method) => method.available_for.includes(fulfillment) && (fulfillment !== "delivery" || liveQuote?.payment_methods.includes(method.value))) ?? [];
+  const paymentOptions = visiblePreview?.payment_methods.filter((method) => method.available_for.includes(fulfillment) && isPaymentAllowedByQuote(method.value, fulfillment === "delivery" ? liveQuote?.payment_methods ?? null : null)) ?? [];
   const selectedPayment = paymentOptions.find((method) => method.value === payment);
   const selectedQuote = fulfillment === "delivery" ? liveQuote : visiblePreview?.pickup_quote;
   const deliveryQuote = fulfillment === "delivery" ? liveQuote : null;
   const selectedLocation = locations.find((item) => item.code === location.delivery_destination);
   const addressIsComplete = isCompleteDeliveryAddress(location, locations);
+  useEffect(() => {
+    if (!visiblePreview) return;
+    setHostedMethod((current) => defaultHostedPayment(visiblePreview.paymongo_hosted_methods ?? [], current));
+    const allowedValues = fulfillment === "delivery" && liveQuote ? liveQuote.payment_methods : null;
+    const nextPayment = paymentForAvailableMethods(visiblePreview.payment_methods, fulfillment, allowedValues, payment);
+    if (nextPayment !== payment) {
+      setPayment(nextPayment);
+      setProof(null);
+    }
+  }, [visiblePreview, fulfillment, liveQuote?.payment_methods.join(","), payment]);
   const cannotSubmit = isSubmitting || isSavingAddress || quoteLoading || selectedCartItemIds.length === 0 || !visiblePreview || !selectedQuote || !selectedPayment || (fulfillment === "delivery" && !addressIsComplete);
   async function saveAddress() {
     if (isSavingAddress || customerId === null) return;
@@ -165,8 +178,11 @@ export default function CheckoutScreen() {
     submitting.current = true;
     setIsSubmitting(true); setError("");
     try {
-      const order = await placeOrder({ cart_item_ids: selectedCartItemIds, recipient_name: fullName.trim(), contact_number: phone.trim(), fulfillment_method: fulfillment,
+      const result = await placeOrder({ cart_item_ids: selectedCartItemIds, recipient_name: fullName.trim(), contact_number: phone.trim(), fulfillment_method: fulfillment,
         payment_method: payment,
+        hosted_payment_method: selectedPayment.value === "online" ? hostedMethod : undefined,
+        payment_channel: selectedPayment.value === "online" ? "hosted_checkout" : undefined,
+        checkout_submission_key: selectedPayment.value === "online" ? checkoutSubmissionKey.current : undefined,
         delivery_destination: fulfillment === "delivery" ? location.delivery_destination : undefined,
         delivery_region_code: fulfillment === "delivery" ? selectedLocation?.region_code : undefined,
         delivery_province_code: fulfillment === "delivery" ? selectedLocation?.province?.code ?? null : undefined,
@@ -175,8 +191,12 @@ export default function CheckoutScreen() {
         delivery_address_details: fulfillment === "delivery" ? location.delivery_address_details.trim() : undefined,
         payment_proof: selectedPayment.requires_proof && proof ? { uri: proof.uri, name: proof.fileName ?? "payment-proof.jpg", type: proof.mimeType ?? "image/jpeg" } : undefined });
       if (getLocalUserId() !== customerId) return;
-      setCreatedOrderId(order.id);
+      setCreatedOrderId(result.order.id);
       void refreshCart().catch(() => undefined);
+      if (result.redirectUrl) {
+        try { await Linking.openURL(result.redirectUrl); }
+        catch { setError("Order placed. Open My orders and use Continue payment to finish checkout."); }
+      } else if (result.reconciliationPending) setError("Order placed. Payment setup is still being confirmed; check My orders shortly.");
     } catch (reason) {
       if (getLocalUserId() !== customerId) return;
       setError(reason instanceof Error ? reason.message : "Could not place order.");
@@ -194,6 +214,8 @@ export default function CheckoutScreen() {
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
         {createdOrderId ? <View>
           <Text className="text-foreground text-lg font-bold">Order placed</Text>
+          <Text className="mt-2 text-muted-foreground">Your order is saved. Continue payment from the order page if payment is still due.</Text>
+          {error ? <Text accessibilityRole="alert" className="mt-2 text-danger">{error}</Text> : null}
           <Pressable onPress={() => router.replace({ pathname: "/orders/[id]", params: { id: createdOrderId } })} className="mt-5 rounded-xl bg-primary px-5 py-3"><Text className="text-primary-foreground">View order</Text></Pressable>
         </View> : session.mode === "guest" ? <Pressable onPress={() => setIsSignInOpen(true)} className="rounded-xl bg-primary px-5 py-3"><Text className="text-primary-foreground">Sign in to continue</Text></Pressable> : !visiblePreview ? <View>
           {error ? <Text accessibilityRole="alert" className="text-danger">{error}</Text> : <ActivityIndicator />}
@@ -211,6 +233,7 @@ export default function CheckoutScreen() {
           {visiblePreview.fulfillment_methods.map((method) => <Pressable key={method.value} disabled={isSubmitting} accessibilityRole="radio" accessibilityState={{ checked: fulfillment === method.value, disabled: isSubmitting }} onPress={() => { const next = paymentForFulfillment(visiblePreview.payment_methods, method.value, payment); setFulfillment(method.value); if (method.value === "pickup") { setDeliveryDestination(""); setLocation((current) => ({ ...current, delivery_destination: "", delivery_barangay_code: "" })); } if (next !== payment) { setProof(null); setPayment(next); } }} className={`mt-3 rounded-xl border p-4 ${fulfillment === method.value ? "border-primary bg-primary/10" : "border-border bg-card"}`}><Text className="text-foreground font-semibold">{fulfillment === method.value ? "● " : "○ "}{method.label}</Text><Text className="text-muted-foreground text-xs mt-1">{method.value === "pickup" ? "Collect your order from Battlefront." : "Send the order to your supplied address."}</Text></Pressable>)}
           {fulfillment === "delivery" ? <View>
             <DeliveryAddressFields value={location} locations={locations} onChange={(next) => { setLocation(next); setDeliveryDestination(next.delivery_destination); setAddress(formatDeliveryAddress(next, locations)); setAddressError(""); }} disabled={isSubmitting || isSavingAddress} />
+            {visiblePreview.customer.default_delivery_address && <Text className="mt-2 text-muted-foreground text-xs">Saved profile address: {visiblePreview.customer.default_delivery_address}. Confirm the destination and enter the street details above.</Text>}
             {quoteLoading && <Text className="mt-3 text-muted-foreground text-sm">Loading delivery quote…</Text>}
             {quoteError && <Text accessibilityRole="alert" className="mt-3 text-danger text-sm">{quoteError}</Text>}
             {addressError && <Text accessibilityRole="alert" className="mt-3 text-danger text-sm">{addressError}</Text>}
@@ -235,9 +258,12 @@ export default function CheckoutScreen() {
           <Text className="text-primary text-xs font-semibold mt-6">STEP 3</Text>
           <Text className="text-foreground text-base font-bold mt-1">Payment method</Text>
           {visiblePreview.payment_methods.map((method) => {
-            const available = method.available_for.includes(fulfillment) && (fulfillment !== "delivery" || Boolean(liveQuote?.payment_methods.includes(method.value)));
+            const available = method.available_for.includes(fulfillment) && isPaymentAllowedByQuote(method.value, fulfillment === "delivery" ? liveQuote?.payment_methods ?? null : null);
+            if (method.value === "online" && !visiblePreview.paymongo_hosted_methods?.length && !method.requires_proof) return null;
+            if (method.requires_proof && visiblePreview.paymongo_hosted_methods?.length) return null;
             return <Pressable key={method.value} disabled={!available || isSubmitting} accessibilityRole="radio" accessibilityState={{ checked: payment === method.value && available, disabled: !available || isSubmitting }} onPress={() => { setPayment(method.value); setProof(null); }} className={`mt-3 rounded-xl border p-4 ${payment === method.value && available ? "border-primary bg-primary/10" : "border-border bg-card"}`} style={{ opacity: available ? 1 : 0.5 }}><Text className="text-foreground font-semibold">{payment === method.value && available ? "● " : "○ "}{method.label}</Text><Text className="text-muted-foreground text-xs mt-1">{!available ? "Unavailable for this fulfillment or destination." : method.requires_proof ? "Manual e-wallet payment with proof." : method.value === "cod" ? "Pay upon delivery." : "Pay when you collect your order."}</Text></Pressable>;
           })}
+          {selectedPayment?.value === "online" && (visiblePreview.paymongo_hosted_methods ?? []).length > 0 ? <View className="mt-3"><Text className="text-muted-foreground text-sm">Online payment method</Text><View className="mt-2 flex-row flex-wrap gap-2">{visiblePreview.paymongo_hosted_methods?.map((value) => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: hostedMethod === value }} onPress={() => setHostedMethod(defaultHostedPayment(visiblePreview.paymongo_hosted_methods ?? [], value))} className={`rounded-lg border px-3 py-2 ${hostedMethod === value ? "border-primary bg-primary/10" : "border-border"}`}><Text className="text-foreground">{({ qrph: "QR Ph", card: "Card", gcash: "GCash", paymaya: "Maya" } as Record<string, string>)[value] ?? value}</Text></Pressable>)}</View><Text className="mt-2 text-muted-foreground text-xs">Payment is confirmed by Battlefront through PayMongo.</Text></View> : null}
           {selectedPayment?.requires_proof && <View>
             <View className="mt-3 rounded-2xl border border-border bg-card p-4">
               <Text className="text-foreground font-semibold">{selectedPayment.label} receiving account</Text>

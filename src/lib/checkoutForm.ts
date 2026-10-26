@@ -1,10 +1,10 @@
 type PaymentMethod = { value: string; available_for: string[] };
 
-export function checkoutRecipient(customer: { name: string; default_delivery_address?: string | null }, addresses: { recipient: string; phone: string; address: string }[]) {
+export function checkoutRecipient(customer: { name: string; default_delivery_address?: string | null; default_delivery_contact_number?: string | null }, addresses: { recipient: string; phone: string; address: string }[]) {
   const saved = addresses.find((entry) => entry.address === customer.default_delivery_address) ?? addresses[0];
   return {
     name: saved?.recipient || customer.name,
-    phone: saved?.phone ?? "",
+    phone: customer.default_delivery_contact_number || saved?.phone || "",
     address: saved?.address || customer.default_delivery_address || "",
   };
 }
@@ -12,6 +12,21 @@ export function checkoutRecipient(customer: { name: string; default_delivery_add
 export function paymentForFulfillment(methods: PaymentMethod[], fulfillment: string, current: string): string {
   const available = methods.filter((method) => method.available_for.includes(fulfillment));
   return available.some((method) => method.value === current) ? current : available[0]?.value ?? "";
+}
+
+export function paymentForAvailableMethods(methods: PaymentMethod[], fulfillment: string, allowedValues: string[] | null, current: string): string {
+  const available = methods.filter((method) => method.available_for.includes(fulfillment) && isPaymentAllowedByQuote(method.value, allowedValues));
+  return available.some((method) => method.value === current) ? current : available[0]?.value ?? "";
+}
+
+export function isPaymentAllowedByQuote(paymentMethod: string, quoteMethods: string[] | null): boolean {
+  if (quoteMethods === null) return true;
+  if (paymentMethod === "online") return quoteMethods.some((method) => method === "gcash" || method === "maya");
+  return quoteMethods.includes(paymentMethod);
+}
+
+export function defaultHostedPayment(methods: string[], current: string): string {
+  return methods.includes(current) ? current : methods.includes("qrph") ? "qrph" : methods[0] ?? "";
 }
 
 export function quoteForFulfillment<T extends { destination: string }, P>(fulfillment: string, destination: string, deliveryQuotes: T[], pickupQuote: P): T | P | undefined {

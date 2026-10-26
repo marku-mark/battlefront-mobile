@@ -37,10 +37,22 @@ export const apiRequest = createApiClient(process.env.EXPO_PUBLIC_API_URL ?? "",
   setAccessToken(null);
   sessionListeners.forEach((listener) => listener());
 }, Date.now, expoFetch);
+export function authenticatedMediaSource(path: string) {
+  const apiRoot = process.env.EXPO_PUBLIC_API_URL ?? "";
+  const appRoot = apiRoot.replace(/\/api\/v1\/?$/, "").replace(/\/+$/, "");
+  const headers: Record<string, string> = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+  return { uri: /^https?:\/\//i.test(path) ? path : new URL(path, `${appRoot}/`).toString(), headers };
+}
+export function passwordResetUrl(email: string) {
+  const apiRoot = process.env.EXPO_PUBLIC_API_URL ?? "";
+  const appRoot = apiRoot.replace(/\/api\/v1\/?$/, "").replace(/\/+$/, "");
+  if (!/^https?:\/\//i.test(appRoot)) throw new Error("Set EXPO_PUBLIC_API_URL to the Battlefront server URL.");
+  return `${appRoot}/forgot-password?email=${encodeURIComponent(email.trim())}`;
+}
 type Envelope<T> = { data: T };
 const account = createAccountApi(apiRequest);
 const profileCache = createReadCache<ApiUser>(30_000, Date.now, 1);
-export const { login, register, logout } = account;
+export const { login, register, logout, changePassword } = account;
 export function getProfile() { return profileCache.read("profile", account.getProfile); }
 export async function updateProfile(fields: ProfileInput) {
   const owner = sessionRevision;
@@ -187,10 +199,26 @@ export async function getDeliveryQuote(cityCode: string, cartItemIds: number[]):
   const query = [`delivery_city_code=${encodeURIComponent(cityCode)}`, ...cartItemIds.map((id) => `cart_item_ids[]=${encodeURIComponent(id)}`)].join("&");
   return (await apiRequest<Envelope<{ available: boolean; quote: SelectedDeliveryQuote | null; notice?: string }>>(`checkout/delivery-quote?${query}`)).data;
 }
-export type Checkout = { cart: { items: { id: number; quantity: number; product: { id: number; name: string; brand: string | null; image_url: string | null }; unit_price: string; line_total: string }[]; item_count: number; total_quantity: number; total: string }; pickup_quote: CheckoutQuote; delivery_quotes: DeliveryQuote[]; delivery_locations: DeliveryLocation[]; delivery_address_prefill: DeliveryAddress; pickup_location: { name: string; address: string; contact_number: string | null; operating_hours: string }; customer: { name: string; default_delivery_address: string | null }; fulfillment_methods: { value: string; label: string }[]; payment_methods: { value: string; label: string; requires_proof: boolean; available_for: string[]; payment_account: { account_name: string; account_number: string; is_demo: boolean } | null }[] };
+export type Checkout = { cart: { items: { id: number; quantity: number; product: { id: number; name: string; brand: string | null; image_url: string | null }; unit_price: string; line_total: string }[]; item_count: number; total_quantity: number; total: string }; pickup_quote: CheckoutQuote; delivery_quotes: DeliveryQuote[]; delivery_locations: DeliveryLocation[]; delivery_address_prefill: DeliveryAddress; pickup_location: { name: string; address: string; contact_number: string | null; operating_hours: string }; customer: { name: string; default_delivery_address: string | null; default_delivery_contact_number?: string | null }; fulfillment_methods: { value: string; label: string }[]; paymongo_hosted_methods?: string[]; payment_methods: { value: string; label: string; requires_proof: boolean; available_for: string[]; payment_account: { account_name: string; account_number: string; is_demo: boolean } | null }[] };
 export async function getCheckout(cartItemIds: number[]) {
   const query = cartItemIds.map((id) => `cart_item_ids[]=${encodeURIComponent(id)}`).join("&");
   return (await apiRequest<Envelope<Checkout>>(`checkout?${query}`)).data;
+}
+export async function recordProductDwell(productId: string, seconds: number): Promise<void> {
+  await apiRequest(`products/${encodeURIComponent(productId)}/dwell`, { method: "POST", body: JSON.stringify({ seconds }) });
+}
+export async function recordProductView(productId: string): Promise<void> {
+  await apiRequest(`products/${encodeURIComponent(productId)}/view`, { method: "POST" });
+}
+export async function getWishlist(): Promise<{ items: { product_id: number; is_available: boolean; can_add_to_cart: boolean; product: ApiProduct | null }[]; count: number }> {
+  const result = await apiRequest<{ data: { product_id: number; is_available: boolean; can_add_to_cart: boolean; product: ApiProduct | null }[]; count: number }>("wishlist");
+  return { items: result.data, count: result.count };
+}
+export async function addWishlistProduct(productId: string): Promise<void> {
+  await apiRequest("wishlist", { method: "POST", body: JSON.stringify({ product_id: Number(productId) }) });
+}
+export async function removeWishlistProduct(productId: string): Promise<void> {
+  await apiRequest(`wishlist/${encodeURIComponent(productId)}`, { method: "DELETE" });
 }
 export type BehavioralRecommendationReason = { code: string; value: string };
 export type BehavioralRecommendation = { product: Product; effective_price: string; reasons: BehavioralRecommendationReason[] };

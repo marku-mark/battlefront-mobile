@@ -4,6 +4,7 @@ import { ActivityIndicator, Modal, Pressable, ScrollView, Switch, Text, TextInpu
 import { useEffect, useRef, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MockSignInSheet } from "@/components/account/MockSignInSheet";
+import { PasswordForm } from "@/components/account/PasswordForm";
 import { Chatbot } from "@/components/support/Chatbot";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { useSession } from "@/hooks/useSession";
@@ -43,6 +44,7 @@ export default function AccountScreen() {
   const [isSavingAddress, setIsSavingAddress] = useState(false);
   const [profileName, setProfileName] = useState("");
   const [profileEmail, setProfileEmail] = useState("");
+  const [profilePhone, setProfilePhone] = useState("");
   const [profileAddress, setProfileAddress] = useState("");
   const [personalizedRecommendationsEnabled, setPersonalizedRecommendationsEnabled] = useState(true);
   const [searchRecommendationsEnabled, setSearchRecommendationsEnabled] = useState(true);
@@ -80,6 +82,7 @@ export default function AccountScreen() {
       const user = await refreshProfile();
       if (getLocalUserId() !== owner) return;
       setProfileName(user.name); setProfileEmail(user.email); setProfileAddress(user.default_delivery_address ?? "");
+      setProfilePhone(user.default_delivery_contact_number ?? "");
       setPersonalizedRecommendationsEnabled(user.personalized_recommendations_enabled);
       setSearchRecommendationsEnabled(user.search_recommendations_enabled);
       setProductViewRecommendationsEnabled(user.product_view_recommendations_enabled);
@@ -96,6 +99,7 @@ export default function AccountScreen() {
       await saveProfile({
         name: profileName,
         email: profileEmail,
+        default_delivery_contact_number: profilePhone.trim() || null,
         personalized_recommendations_enabled: personalizedRecommendationsEnabled,
         search_recommendations_enabled: searchRecommendationsEnabled,
         product_view_recommendations_enabled: productViewRecommendationsEnabled,
@@ -369,14 +373,14 @@ export default function AccountScreen() {
                   <Text className="text-foreground text-sm font-medium">
                     {link.label}
                   </Text>
-                  {link.badge && <View className="rounded-full px-1.5 py-0.5 bg-secondary">
+                  {(link.label === "Wishlist" ? isMockAccount ? "Synced" : "Local" : link.badge) && <View className="rounded-full px-1.5 py-0.5 bg-secondary">
                     <Text className="text-[9px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
-                      {link.badge}
+                      {link.label === "Wishlist" ? isMockAccount ? "Synced" : "Local" : link.badge}
                     </Text>
                   </View>}
                 </View>
                 <Text className="text-muted-foreground text-xs mt-0.5">
-                  {link.detail}
+                  {link.label === "Wishlist" ? isMockAccount ? "Synced across devices" : "Saved on this device" : link.detail}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={isDark ? "#9ca3af" : "#68717e"} />
@@ -533,7 +537,10 @@ export default function AccountScreen() {
                   <Text className="text-foreground text-sm font-semibold">Name</Text>
                   <TextInput accessibilityLabel="Profile name" value={profileName} onChangeText={setProfileName} editable={!isSavingProfile} maxLength={255} className="mt-2 h-11 rounded-lg border border-border bg-secondary px-3 text-foreground text-sm" />
                   <Text className="text-foreground text-sm font-semibold mt-4">Email address</Text>
-                  <TextInput accessibilityLabel="Profile email" value={profileEmail} onChangeText={setProfileEmail} editable={!isSavingProfile} autoCapitalize="none" autoCorrect={false} keyboardType="email-address" maxLength={255} className="mt-2 h-11 rounded-lg border border-border bg-secondary px-3 text-foreground text-sm" />
+                  <Text selectable className="mt-2 text-foreground">{profileEmail}</Text>
+                  <Text className="mt-1 text-muted-foreground text-xs">Your account email cannot be changed.</Text>
+                  <Text className="mt-4 text-foreground text-sm font-semibold">Default contact number</Text>
+                  <TextInput accessibilityLabel="Default contact number" value={profilePhone} onChangeText={setProfilePhone} editable={!isSavingProfile} keyboardType="phone-pad" maxLength={30} className="mt-2 h-12 rounded-lg border border-border px-3 text-foreground" />
                   <Text className="text-foreground text-sm font-semibold mt-4">Default delivery address</Text>
                   <Text className="mt-2 text-foreground text-sm">{profileAddress || "No default address selected."}</Text>
                   <Pressable onPress={() => void openSavedAddresses()} className="mt-2 rounded-lg border border-border bg-secondary px-3 py-3"><Text className="text-primary text-sm font-semibold">Manage delivery addresses</Text></Pressable>
@@ -554,6 +561,7 @@ export default function AccountScreen() {
                     </View>
                   </View>
                   <Pressable disabled={isSavingProfile || !isProfileLoaded} onPress={() => void submitProfile()} className="mt-4 rounded-xl bg-primary items-center py-3"><Text className="text-primary-foreground text-sm font-semibold">{isSavingProfile ? "Saving..." : "Save changes"}</Text></Pressable>
+                  <PasswordForm key={customerId} />
                 </>}
                 {profileError ? <Text accessibilityRole="alert" className="text-danger text-xs mt-3">{profileError}</Text> : null}
                 {!isProfileLoading && !isProfileLoaded && <Pressable onPress={() => void openProfileSettings()} className="mt-3 py-2"><Text className="text-primary text-sm">Retry loading profile</Text></Pressable>}

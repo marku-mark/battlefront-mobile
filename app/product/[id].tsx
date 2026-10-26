@@ -1,7 +1,7 @@
 import { useActiveFocusEffect } from "@/hooks/useActiveScreen";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ProductDetails } from "@/components/products/ProductDetails";
@@ -10,6 +10,7 @@ import { addRecentlyViewedProduct } from "@/hooks/useRecentlyViewed";
 import { getProductById, getProductSnapshot } from "@/lib/api";
 import type { Product } from "@/lib/data";
 import { getProductStock } from "@/lib/productCatalog";
+import { recordProductDwell } from "@/lib/api";
 
 export default function ProductRoute() {
   const router = useRouter();
@@ -20,6 +21,7 @@ export default function ProductRoute() {
   const [hasLoadError, setHasLoadError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [quantity, setQuantity] = useState(1);
+  const dwellSeconds = useRef(0);
 
   useEffect(() => setQuantity(1), [id]);
   useEffect(() => {
@@ -30,6 +32,15 @@ export default function ProductRoute() {
 
   useActiveFocusEffect(useCallback(() => {
     let isActive = true;
+    const dwellTimer = setInterval(() => {
+      if (!product || !id) return;
+      dwellSeconds.current += 5;
+      if (dwellSeconds.current >= 5) {
+        const seconds = Math.min(3600, dwellSeconds.current);
+        dwellSeconds.current = 0;
+        void recordProductDwell(id, seconds).catch(() => undefined);
+      }
+    }, 5000);
     const cached = id ? getProductSnapshot(id) : null;
     setProduct(cached ?? null);
     setIsLoading(!cached);
@@ -63,8 +74,11 @@ export default function ProductRoute() {
 
     return () => {
       isActive = false;
+      clearInterval(dwellTimer);
+      if (dwellSeconds.current >= 5 && id) void recordProductDwell(id, Math.min(3600, dwellSeconds.current)).catch(() => undefined);
+      dwellSeconds.current = 0;
     };
-  }, [id, retryCount]));
+  }, [id, retryCount, Boolean(product)]));
 
   if (isLoading) {
     return <ProductRouteState label="Loading product" showSpinner />;

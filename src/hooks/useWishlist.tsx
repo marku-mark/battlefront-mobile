@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { useSession } from "@/hooks/useSession";
+import { addWishlistProduct, getSessionRevision, getWishlist, removeWishlistProduct } from "@/lib/api";
 
 type WishlistMode = "guest" | "customer";
 
@@ -36,7 +37,8 @@ type WishlistStore = {
 const WishlistStoreContext = createContext<WishlistStore | null>(null);
 type WishlistActions = {
   toggleWishlist: (productId: string) => void;
-  promoteGuestWishlistToMock: () => void;
+  importGuestWishlist: () => Promise<number>;
+  getGuestWishlist: () => string[];
 };
 const WishlistActionsContext = createContext<WishlistActions | null>(null);
 const MOCK_WISHLIST_STORAGE_KEY = "battlefront-customer-wishlist";
@@ -45,11 +47,9 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
   const { session } = useSession();
   const userKey = session.mode === "customer" ? session.user.id : "guest";
   const [store] = useState(createWishlistStore);
-  const [isMockWishlistLoaded, setIsMockWishlistLoaded] = useState(false);
-  const isMockWishlistLoadedRef = useRef(false);
+  const [isWishlistLoaded, setIsWishlistLoaded] = useState(false);
   const hydratedOwner = useRef<string | number | null>(null);
   const pendingMockToggles = useRef<string[]>([]);
-  const pendingGuestItems = useRef<string[]>([]);
   const subscribe = useCallback(
     (listener: Listener) => store.subscribe(session.mode, listener),
     [session.mode, store]
@@ -57,65 +57,75 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
   const getSnapshot = useCallback(() => store.getItems(session.mode), [session.mode, store]);
   const productIds = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   const toggleWishlist = useCallback((productId: string) => {
+    const wasSaved = store.isWishlisted(session.mode, productId);
     store.toggleWishlist(session.mode, productId);
-    if (session.mode === "customer" && !isMockWishlistLoadedRef.current) {
-      pendingMockToggles.current.push(productId);
+    if (session.mode === "customer") {
+      const revision = getSessionRevision();
+      const mutation = wasSaved ? removeWishlistProduct(productId) : addWishlistProduct(productId);
+      void mutation.catch(() => {
+        if (revision === getSessionRevision()) store.toggleWishlist(session.mode, productId);
+      });
+      return;
     }
-  }, [session.mode, store]);
-  const promoteGuestWishlistToMock = useCallback(() => {
+  }, [session.mode, store, userKey]);
+  const importGuestWishlist = useCallback(async () => {
     const guestItems = store.getItems("guest");
-    if (guestItems.length === 0) return;
-
-    if (!isMockWishlistLoadedRef.current) pendingGuestItems.current.push(...guestItems);
-    store.setItems("customer", Array.from(new Set([...store.getItems("customer"), ...guestItems])));
-    store.setItems("guest", []);
-  }, [store, userKey]);
+    if (guestItems.length === 0) return 0;
+    const revision = getSessionRevision();
+    const results = await Promise.allSettled(guestItems.map((productId) => addWishlistProduct(productId)));
+    if (revision !== getSessionRevision()) return 0;
+    const imported = guestItems.filter((_, index) => results[index]?.status === "fulfilled");
+    store.setItems("customer", Array.from(new Set([...store.getItems("customer"), ...imported])));
+    store.setItems("guest", store.getItems("guest").filter((productId) => !imported.includes(productId)));
+    return imported.length;
+  }, [store]);
 
   useEffect(() => {
     let active = true;
     store.setItems("customer", []);
-    isMockWishlistLoadedRef.current = false;
+    setIsWishlistLoaded(false);
     hydratedOwner.current = null;
-    setIsMockWishlistLoaded(false);
-    AsyncStorage.getItem(`${MOCK_WISHLIST_STORAGE_KEY}-api-${userKey}`)
+    setIsWishlistLoaded(false);
+    const localLoad = session.mode === "guest"
+      ? AsyncStorage.getItem(MOCK_WISHLIST_STORAGE_KEY)
+      : getWishlist().then((wishlist) => JSON.stringify(wishlist.items.map((item) => String(item.product_id))));
+    localLoad
       .then((storedWishlist) => {
         if (!active) return;
         const parsedWishlist: unknown = storedWishlist ? JSON.parse(storedWishlist) : [];
         if (!Array.isArray(parsedWishlist) || !parsedWishlist.every((id) => typeof id === "string")) return;
         const storedIds = parsedWishlist as string[];
-        const withGuestItems = Array.from(new Set([...storedIds, ...pendingGuestItems.current]));
-        const hydratedWishlist = pendingMockToggles.current.reduce((items, productId) => toggleId(items, productId), withGuestItems);
-        pendingGuestItems.current = [];
+        const hydratedWishlist = pendingMockToggles.current.reduce((items, productId) => toggleId(items, productId), storedIds);
         pendingMockToggles.current = [];
         store.setItems("customer", hydratedWishlist);
       })
       .catch(() => undefined)
       .finally(() => {
         if (!active) return;
-        isMockWishlistLoadedRef.current = true;
+        setIsWishlistLoaded(true);
         hydratedOwner.current = userKey;
-        setIsMockWishlistLoaded(true);
+        setIsWishlistLoaded(true);
       });
     return () => { active = false; };
   }, [store, userKey]);
 
   useEffect(() => {
-    if (!isMockWishlistLoaded || session.mode !== "customer" || hydratedOwner.current !== userKey) return;
-    AsyncStorage.setItem(`${MOCK_WISHLIST_STORAGE_KEY}-api-${userKey}`, JSON.stringify(store.getItems("customer"))).catch(() => undefined);
-  }, [isMockWishlistLoaded, productIds, session.mode, store, userKey]);
+    if (!isWishlistLoaded || session.mode !== "guest" || hydratedOwner.current !== userKey) return;
+    AsyncStorage.setItem(MOCK_WISHLIST_STORAGE_KEY, JSON.stringify(store.getItems("guest"))).catch(() => undefined);
+  }, [isWishlistLoaded, productIds, session.mode, store, userKey]);
 
   const value = useMemo<WishlistContextValue>(
     () => ({
       items: productIds,
-      isLoading: session.mode === "customer" && !isMockWishlistLoaded,
+      isLoading: session.mode === "customer" && !isWishlistLoaded,
       isWishlisted: (productId) => store.isWishlisted(session.mode, productId),
       toggleWishlist,
     }),
-    [isMockWishlistLoaded, productIds, session.mode, store, toggleWishlist]
+    [isWishlistLoaded, productIds, session.mode, store, toggleWishlist]
   );
   const actions = useMemo<WishlistActions>(
-    () => ({ toggleWishlist, promoteGuestWishlistToMock }),
-    [promoteGuestWishlistToMock, toggleWishlist]
+    () => ({ toggleWishlist, importGuestWishlist, getGuestWishlist: () => store.getItems("guest") }),
+    [importGuestWishlist, store, toggleWishlist]
   );
 
   return (
@@ -137,8 +147,9 @@ export function useWishlistActions(): (productId: string) => void {
   return useWishlistActionsContext().toggleWishlist;
 }
 
-export function usePromoteGuestWishlistToMock(): () => void {
-  return useWishlistActionsContext().promoteGuestWishlistToMock;
+export function useGuestWishlistImport() {
+  const actions = useWishlistActionsContext();
+  return { importGuestWishlist: actions.importGuestWishlist, getGuestWishlist: actions.getGuestWishlist };
 }
 
 export function useIsWishlisted(productId: string): boolean {

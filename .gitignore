@@ -7,3 +7,4 @@ web-build/
 .env
 *firebase-adminsdk*.json
 firebase-service-account*.json
+graphify-out/

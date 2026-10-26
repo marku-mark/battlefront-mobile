@@ -1,7 +1,8 @@
 export type PaymentProof = { uri: string; name: string; type: string };
-export type OrderInput = { cart_item_ids: number[]; recipient_name: string; contact_number: string; fulfillment_method: string; payment_method: string; delivery_destination?: string; delivery_region_code?: string; delivery_province_code?: string | null; delivery_city_code?: string; delivery_barangay_code?: string; delivery_address_details?: string; delivery_address?: string; payment_proof?: PaymentProof };
+export type OrderInput = { cart_item_ids: number[]; recipient_name: string; contact_number: string; fulfillment_method: string; payment_method: string; hosted_payment_method?: string; payment_channel?: string; checkout_submission_key?: string; delivery_destination?: string; delivery_region_code?: string; delivery_province_code?: string | null; delivery_city_code?: string; delivery_barangay_code?: string; delivery_address_details?: string; delivery_address?: string; payment_proof?: PaymentProof };
 type Request = <T>(path: string, options?: RequestInit) => Promise<T>;
 type NativeProofFile = { bytes: () => Promise<Uint8Array> };
+type Placed<T> = { data: T; payment?: { redirect_url?: string; status?: string } };
 
 export function createOrderSubmission<T>(request: Request, platform: "web" | "native", readNativeProof?: (proof: PaymentProof) => NativeProofFile | Promise<NativeProofFile>) {
   async function appendProof(body: FormData, proof: PaymentProof): Promise<void> {
@@ -17,9 +18,9 @@ export function createOrderSubmission<T>(request: Request, platform: "web" | "na
       body.append("payment_proof", { name: proof.name, type: proof.type, bytes: () => file.bytes() } as unknown as Blob);
     }
   }
-  let pendingPlacement: Promise<T> | null = null;
+  let pendingPlacement: Promise<Placed<T>> | null = null;
   const pendingProofs = new Set<string>();
-  async function submitOrder(input: OrderInput): Promise<T> {
+  async function submitOrder(input: OrderInput): Promise<Placed<T>> {
     let body: string | FormData;
     if (!input.payment_proof) {
       body = JSON.stringify(input);
@@ -33,10 +34,11 @@ export function createOrderSubmission<T>(request: Request, platform: "web" | "na
       await appendProof(formData, input.payment_proof);
       body = formData;
     }
-    return (await request<{ data: T }>("orders", { method: "POST", body })).data;
+    const result = await request<Placed<T>>("orders", { method: "POST", body });
+    return result;
   }
   return {
-    placeOrder(input: OrderInput): Promise<T> {
+    placeOrder(input: OrderInput): Promise<Placed<T>> {
       if (pendingPlacement) return Promise.reject(new Error("An order is still being submitted. Wait for its result before trying again."));
       const placement = submitOrder(input).finally(() => { if (pendingPlacement === placement) pendingPlacement = null; });
       pendingPlacement = placement;

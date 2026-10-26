@@ -1,14 +1,14 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useEffect, useRef, useState } from "react";
-import { AccessibilityInfo, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { AccessibilityInfo, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import Animated, { SlideInDown, SlideOutUp } from "react-native-reanimated";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCartActions } from "@/hooks/useCart";
 import { useSession } from "@/hooks/useSession";
-import { usePromoteGuestWishlistToMock } from "@/hooks/useWishlist";
 import { useTheme } from "@/theme/ThemeProvider";
 import { useToast } from "@/hooks/useToast";
+import { passwordResetUrl } from "@/lib/api";
 
 type MockSignInSheetProps = {
   visible: boolean;
@@ -27,7 +27,6 @@ export function MockSignInSheet({
   const { showToast } = useToast();
   const { signIn, signUp } = useSession();
   const { promoteGuestCartToMock } = useCartActions();
-  const promoteGuestWishlistToMock = usePromoteGuestWishlistToMock();
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [isRegistering, setIsRegistering] = useState(false);
@@ -73,7 +72,6 @@ export function MockSignInSheet({
       if (isRegistering) await signUp({ name, email, password, password_confirmation: passwordConfirmation });
       else await signIn(email, password);
       promoteGuestCartToMock();
-      promoteGuestWishlistToMock();
       setError("");
       dismissLoginFailureToast();
       setPassword("");
@@ -158,6 +156,10 @@ export function MockSignInSheet({
             onSubmitEditing={() => void handleSignIn()}
             className="bg-secondary border border-border rounded-xl px-3 h-12 text-foreground text-sm mt-3"
           />
+          {!isRegistering ? <Pressable accessibilityRole="button" disabled={isSubmitting} onPress={() => {
+            if (!email.trim()) { setError("Enter your email address first."); return; }
+            void (async () => { try { await Linking.openURL(passwordResetUrl(email)); } catch { setError("Could not open password recovery. Please try again."); } })();
+          }} className="self-end py-2"><Text className="text-primary text-xs font-semibold">Forgot password?</Text></Pressable> : null}
           {isRegistering && <TextInput accessibilityLabel="Confirm password" value={passwordConfirmation} onChangeText={setPasswordConfirmation} placeholder="Confirm password" secureTextEntry autoCapitalize="none" editable={!isSubmitting} className="bg-secondary border border-border rounded-xl px-3 h-12 text-foreground text-sm mt-3" />}
           {error.length > 0 && <Text accessibilityRole="alert" className="text-danger text-xs mt-3">{error}</Text>}
           <Pressable accessibilityLabel={isRegistering ? "Create account" : "Sign in"} disabled={isSubmitting} onPress={() => void handleSignIn()} className="bg-primary rounded-xl items-center py-3.5 mt-5">
