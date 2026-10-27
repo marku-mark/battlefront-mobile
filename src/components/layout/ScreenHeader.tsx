@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
+import { LogoMark } from "@/components/layout/LogoMark";
 
 type ScreenHeaderProps = {
   title: string;
@@ -35,6 +36,7 @@ export function ScreenHeader({ title, subtitle, onBack, right }: ScreenHeaderPro
           </Pressable>
         )}
 
+        {!onBack && <LogoMark variant="symbol" size={36} />}
         <View className="flex-1">
           <Text className="text-foreground text-2xl font-bold" numberOfLines={1}>
             {title}

@@ -1,17 +1,27 @@
-import { Image } from "react-native";
+import { Image } from "expo-image";
+import { useTheme } from "@/theme/ThemeProvider";
 
 type LogoMarkProps = {
   size?: number;
+  width?: number;
+  variant?: "wordmark" | "symbol";
 };
 
-export function LogoMark({ size = 48 }: LogoMarkProps) {
+export function LogoMark({ size = 40, width = 180, variant = "wordmark" }: LogoMarkProps) {
+  const { isDark } = useTheme();
+  const source = variant === "symbol"
+    ? require("../../../assets/battlefront-symbol.webp")
+    : isDark
+      ? require("../../../assets/battlefront-wordmark-dark.webp")
+      : require("../../../assets/battlefront-wordmark.webp");
   return (
     <Image
-      source={require("../../../assets/battlefront-logo.png")}
-      style={{ width: size, height: size }}
-      resizeMode="contain"
+      source={source}
+      style={variant === "symbol" ? { width: size, height: size } : { width, height: width * 303 / 1200, maxWidth: "100%" }}
+      contentFit="contain"
+      transition={0}
       accessible
-      accessibilityLabel="Battlefront logo"
+      accessibilityLabel="Battlefront Computer Trading"
     />
   );
 }

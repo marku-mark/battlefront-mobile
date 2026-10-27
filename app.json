@@ -5,9 +5,9 @@
     "scheme": "battlefront",
     "version": "1.0.0",
     "orientation": "default",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "light",
     "icon": "./assets/battlefront-app-icon.png",
-    "backgroundColor": "#090b10",
+    "backgroundColor": "#f4f0eb",
     "plugins": [
       "expo-router",
       "expo-font",
@@ -19,7 +19,7 @@
           "image": "./assets/battlefront-logo.png",
           "imageWidth": 260,
           "resizeMode": "contain",
-          "backgroundColor": "#090b10"
+          "backgroundColor": "#f4f0eb"
         }
       ],
       "expo-secure-store",
@@ -69,7 +69,7 @@
       "splash": {
         "image": "./assets/battlefront-logo.png",
         "resizeMode": "contain",
-        "backgroundColor": "#090b10"
+        "backgroundColor": "#f4f0eb"
       }
     },
     "extra": {

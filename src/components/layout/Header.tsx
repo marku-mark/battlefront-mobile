@@ -34,7 +34,7 @@ export function Header({ cartCount = 0, onCartPress, onNotificationPress, onSear
     >
       <View className="flex-row items-center gap-3 self-center w-full px-4 py-3.5" style={{ maxWidth: MAX_CONTENT_WIDTH }}>
         <View className="flex-1">
-          <LogoMark size={52} />
+          <LogoMark width={180} />
         </View>
 
         <Pressable
