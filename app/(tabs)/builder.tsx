@@ -47,6 +47,8 @@ export default function BuilderScreen() {
   const [shareInput, setShareInput] = useState("");
   const [hydratedOwner, setHydratedOwner] = useState<string | number | null>(null);
   const pending = useRef(false);
+  const scrollView = useRef<ScrollView>(null);
+  const summaryOffset = useRef(0);
   const processedShare = useRef("");
   const guestContinuation = useRef<BuildInput | null>(null);
   const selectionRevision = useRef(0);
@@ -148,7 +150,7 @@ export default function BuilderScreen() {
   const fanPositions = byId.get(components.find((item) => byId.get(item.product_id)?.component_type === "case")?.product_id ?? 0)?.specifications.fan_mounting_positions;
   return <SafeAreaView edges={["left", "right", "bottom"]} className="flex-1 bg-background">
     <ScreenHeader title="PC Builder" />
-    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16, paddingBottom: 40, maxWidth: 900, width: "100%", alignSelf: "center" }}>
+    <ScrollView ref={scrollView} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16, paddingBottom: 40, maxWidth: 900, width: "100%", alignSelf: "center" }}>
       <Text className="text-foreground text-2xl font-bold">Build your PC</Text>
       <Text className="mt-2 text-muted-foreground">Choose catalog parts and review compatibility based on verified hardware specifications.</Text>
       {error ? <View className="mt-4 gap-2"><Text accessibilityRole="alert" className="text-danger">{error}</Text><Action title="Refresh catalog and saved builds" disabled={busy} onPress={() => void run(async (current) => { const data = await pcBuilder.catalog(); current(); setCatalog(data); if (owner !== "guest") await reloadSaved(); })} /></View> : null}
@@ -156,14 +158,37 @@ export default function BuilderScreen() {
         <View className="mt-5 flex-row gap-2">{(["simple", "advanced"] as const).map((value) => <Action key={value} title={value === "simple" ? "Simple" : "Advanced"} primary={mode === value} disabled={busy} onPress={() => setMode(value)} />)}</View>
         <Text className="mt-4 text-foreground font-semibold">Build name</Text><TextInput accessibilityLabel="Build name" value={name} onChangeText={setName} editable={!busy} maxLength={120} className="mt-2 min-h-12 rounded-lg border border-border px-3 text-foreground" />
         <Text className="mt-4 text-foreground font-semibold">Budget (PHP, optional)</Text><TextInput accessibilityLabel="Build budget" value={budget} onChangeText={setBudget} editable={!busy} keyboardType="decimal-pad" placeholder="Enter a budget" className="mt-2 min-h-12 rounded-lg border border-border px-3 text-foreground" />
-        <View className="mt-5 gap-2"><Text className="text-foreground text-lg font-bold">Components</Text>{(mode === "simple" ? SIMPLE_TYPES : Object.keys(COMPONENT_LABELS)).map((type) => <Action key={type} title={`${COMPONENT_LABELS[type]} · ${components.filter((item) => (byId.get(item.product_id)?.component_type ?? item.component_type) === type).reduce((sum, item) => sum + item.quantity, 0)} selected`} disabled={busy} onPress={() => { setQuery(""); setBrand(""); setActiveType(type); }} />)}</View>
+        <View className="mt-6">
+          <Text className="text-foreground text-lg font-bold">Choose your components</Text>
+          <Text className="mt-1 mb-3 text-muted-foreground">Start with a processor, then build around it.</Text>
+          {(mode === "simple" ? SIMPLE_TYPES : Object.keys(COMPONENT_LABELS)).map((type, index) => {
+            const selected = components.filter((item) => (byId.get(item.product_id)?.component_type ?? item.component_type) === type);
+            const first = selected.length ? byId.get(selected[0].product_id) : null;
+            return <Pressable key={type} accessibilityRole="button" accessibilityLabel={`${selected.length ? "Change" : "Choose"} ${COMPONENT_LABELS[type]}`} accessibilityState={{ disabled: busy }} disabled={busy} onPress={() => { setQuery(""); setBrand(""); setActiveType(type); }} className="flex-row items-center gap-3 border-b border-border py-4" style={{ opacity: busy ? 0.45 : 1 }}>
+              <View className="h-12 w-12 items-center justify-center rounded-lg bg-secondary">
+                {first?.image_url ? <ProductImage source={{ uri: first.image_url }} style={{ width: 40, height: 40 }} resizeMode="contain" /> : <Text className="text-muted-foreground font-bold">{String(index + 1).padStart(2, "0")}</Text>}
+              </View>
+              <View className="flex-1">
+                <Text className="text-foreground font-semibold">{COMPONENT_LABELS[type]}</Text>
+                <Text numberOfLines={2} className="mt-1 text-sm text-muted-foreground">{selected.length ? first?.name ?? "Unavailable selection — replace part" : "No part selected"}</Text>
+                {selected.length > 1 && <Text className="mt-1 text-xs text-muted-foreground">+{selected.length - 1} more selections</Text>}
+              </View>
+              <Text className="text-primary font-semibold">{selected.length ? "Edit" : "+ Add"}</Text>
+            </Pressable>;
+          })}
+        </View>
+        {components.length > 0 && <Text className="mt-6 text-lg font-bold text-foreground">Your selected parts</Text>}
         <View className="mt-6 gap-4">{components.map((item) => { const product = byId.get(item.product_id); const type = product?.component_type ?? item.component_type; return <View key={item.key} className="border-b border-border pb-4">
           <Text className="text-foreground font-semibold">{product?.name ?? `Unavailable component #${item.product_id}`}</Text><Text className="mt-1 text-muted-foreground">{product ? money(Number(product.price) * item.quantity) : "Replace this selection"} · Qty {item.quantity}</Text>
           {product && !product.specifications_reviewed && <Text className="text-muted-foreground">Specifications await review. Compatibility may be unknown.</Text>}
           <View className="mt-2 flex-row flex-wrap gap-2"><Action title="−" disabled={busy || item.quantity <= 1} onPress={() => setComponents((rows) => rows.map((row) => row.key === item.key ? { ...row, quantity: row.quantity - 1 } : row))} /><Action title="+" disabled={busy || item.quantity >= Math.min(99, product?.stock_quantity ?? 0)} onPress={() => setComponents((rows) => rows.map((row) => row.key === item.key ? { ...row, quantity: row.quantity + 1 } : row))} /><Action title="Remove" disabled={busy} onPress={() => setComponents((rows) => rows.filter((row) => row.key !== item.key))} /></View>
           {type === "fan" && Array.isArray(fanPositions) && <View className="mt-2 gap-2"><Text className="text-foreground">Case mounting position</Text>{fanPositions.map((position: unknown) => typeof position === "string" ? <Action key={position} title={position} primary={item.configuration.mounting_position === position} disabled={busy} onPress={() => setComponents((rows) => rows.map((row) => row.key === item.key ? { ...row, configuration: { ...row.configuration, mounting_position: position } } : row))} /> : null)}</View>}
         </View>; })}</View>
-        <Text className="mt-5 text-foreground text-xl font-bold">Subtotal {money(subtotal)}</Text>{budget && subtotal > Number(budget) ? <Text className="mt-1 text-danger">Over budget by {money(subtotal - Number(budget))}</Text> : null}
+        <View onLayout={(event) => { summaryOffset.current = event.nativeEvent.layout.y; }} className="mt-6 border-t border-border pt-5">
+          <Text className="text-muted-foreground text-sm">Build subtotal</Text>
+          <Text className="mt-1 text-foreground text-3xl font-bold">{money(subtotal)}</Text>
+          {budget && Number(budget) > 0 ? <Text className={`mt-2 ${subtotal > Number(budget) ? "text-danger" : "text-muted-foreground"}`}>{subtotal > Number(budget) ? `Over budget by ${money(subtotal - Number(budget))}` : `${money(Number(budget) - subtotal)} remaining in budget`}</Text> : null}
+        </View>
         <Text className="mt-2 text-muted-foreground">Current catalog prices. Stock, price, and compatibility are checked again when adding to cart.</Text>
         <Text accessibilityLiveRegion="polite" className="mt-5 text-foreground font-bold">{checking ? "Checking compatibility…" : validation ? `Compatibility: ${validation.status}` : "Select components to check compatibility"}</Text>
         {validation?.required_components.length ? <Text className="mt-2 text-muted-foreground">Required: {validation.required_components.map((type) => COMPONENT_LABELS[type] ?? type).join(", ")}</Text> : null}
@@ -192,6 +217,10 @@ export default function BuilderScreen() {
         }} /></View>
       </>}{busy && <ActivityIndicator className="mt-4" accessibilityLabel="Updating build" />}
     </ScrollView>
+    {catalog && hydratedOwner === owner && <View className="flex-row items-center justify-between gap-3 border-t border-border bg-background px-4 py-3">
+      <View className="flex-1"><Text className="text-xs text-muted-foreground">Build subtotal · {components.reduce((sum, item) => sum + item.quantity, 0)} parts</Text><Text className="text-xl font-bold text-foreground">{money(subtotal)}</Text></View>
+      <Action title="Review build" onPress={() => scrollView.current?.scrollTo({ y: summaryOffset.current, animated: true })} />
+    </View>}
     <Modal visible={activeType !== null} animationType="slide" onRequestClose={() => setActiveType(null)}><SafeAreaView className="flex-1 bg-background"><View className="p-4 gap-3">
       <Action title="Back to build" onPress={() => setActiveType(null)} /><Text className="text-foreground text-xl font-bold">{COMPONENT_LABELS[activeType ?? ""]}</Text><TextInput accessibilityLabel="Search components" value={query} onChangeText={setQuery} placeholder="Search components" className="min-h-12 rounded-lg border border-border px-3 text-foreground" />
       <ScrollView horizontal contentContainerStyle={{ gap: 8 }}><Action title="All brands" primary={!brand} onPress={() => setBrand("")} />{[...new Set((catalog?.components[activeType ?? ""] ?? []).map((product) => product.brand).filter((value): value is string => Boolean(value)))].sort().map((value) => <Action key={value} title={value} primary={brand === value} onPress={() => setBrand(value)} />)}</ScrollView>
