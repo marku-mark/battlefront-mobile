@@ -1,684 +1,202 @@
-import { useActiveFocusEffect } from "@/hooks/useActiveScreen";
-import { ProductImage } from "@/components/products/ProductImage";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import Ionicons from "@expo/vector-icons/Ionicons";
-import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Modal,
-  Pressable,
-  ScrollView,
-  Share,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { ActivityIndicator, Alert, FlatList, Modal, Pressable, ScrollView, Share, Text, TextInput, View } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useCart } from "@/hooks/useCart";
-import { getBrands, getCatalogPreview, getCatalogSnapshot, subscribeCatalog } from "@/lib/api";
-import { getProductImageSource, type Brand, type Product } from "@/lib/data";
-import { useTheme } from "@/theme/ThemeProvider";
-import { LoadingMoreFooter } from "@/components/layout/LoadingMoreFooter";
-import { ConfirmClearModal } from "@/components/layout/ConfirmClearModal";
-import { MAX_CONTENT_WIDTH } from "@/lib/responsive";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useActiveFocusEffect } from "@/hooks/useActiveScreen";
+import { useSession } from "@/hooks/useSession";
+import { useCartActions } from "@/hooks/useCart";
+import { useToast } from "@/hooks/useToast";
+import { MockSignInSheet } from "@/components/account/MockSignInSheet";
+import { ScreenHeader } from "@/components/layout/ScreenHeader";
+import { ProductImage } from "@/components/products/ProductImage";
+import { getSessionRevision, getLocalUserId } from "@/lib/api";
+import { pcBuilder } from "@/lib/pcBuilder";
+import { buildSubtotal, COMPONENT_LABELS, SIMPLE_TYPES, migrateLocalBuild, readLegacyBuilds, type BuildComponent, type BuildInput, type BuildValidation, type BuilderCatalog, type BuilderProduct, type LocalBuild, type SavedBuild } from "@/lib/pcBuilderApi";
 
-const BUILD_STORAGE_KEY = "battlefront-api-saved-builds";
-const PARTS_PER_PAGE = 20;
-const PAGE_LOAD_DELAY_MS = 250;
-
-const BUILDER_SLOTS = [
-  { id: "cpu", label: "Processor", categoryId: "category-processor", required: true },
-  { id: "motherboard", label: "Motherboard", categoryId: "category-motherboard", required: true },
-  { id: "memory", label: "Memory", categoryId: "category-ram", required: true },
-  { id: "graphics", label: "Graphics card", categoryId: "category-graphics-card", required: false },
-  { id: "storage", label: "Storage", categoryId: "category-storage", required: true },
-  { id: "power", label: "Power supply", categoryId: "category-power-supply", required: true },
-  { id: "case", label: "Case", categoryId: "category-pc-case", required: true },
-  { id: "cooling", label: "Cooling", categoryId: "category-cooling-components", required: false },
-] as const;
-
-type BuilderSlot = (typeof BUILDER_SLOTS)[number];
-type BuilderSlotId = BuilderSlot["id"];
-type BuildSelection = Partial<Record<BuilderSlotId, Product>>;
-type SavedBuild = {
-  id: string;
-  name: string;
-  savedAt: string;
-  selections: Partial<Record<BuilderSlotId, string>>;
-};
-type BuilderNotice = { type: "success" | "warning" | "error"; message: string };
-
-function formatPrice(value: number): string {
-  return `₱${value.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-function haveSameComponents(
-  first: SavedBuild["selections"],
-  second: SavedBuild["selections"]
-): boolean {
-  const firstIds = Object.values(first).filter((id): id is string => Boolean(id)).sort();
-  const secondIds = Object.values(second).filter((id): id is string => Boolean(id)).sort();
-  return firstIds.length > 0 && firstIds.length === secondIds.length && firstIds.every((id, index) => id === secondIds[index]);
+const money = (value: number) => `₱${value.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const MULTIPLE_TYPES = ["memory", "storage", "fan", "monitor"];
+function Action({ title, onPress, disabled = false, primary = false }: { title: string; onPress: () => void; disabled?: boolean; primary?: boolean }) {
+  return <Pressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} className={`min-h-12 justify-center rounded-lg px-4 py-3 ${primary ? "bg-primary" : "border border-border bg-secondary"}`} style={{ opacity: disabled ? 0.45 : 1 }}><Text className={primary ? "text-primary-foreground font-semibold" : "text-foreground font-semibold"}>{title}</Text></Pressable>;
 }
 
 export default function BuilderScreen() {
   const router = useRouter();
-  const { isDark } = useTheme();
-  const { addItem } = useCart();
-  const [products, setProducts] = useState<Product[]>(() => getCatalogSnapshot().rows);
-  const [visiblePartCount, setVisiblePartCount] = useState(PARTS_PER_PAGE);
-  const [isLoadingMoreParts, setIsLoadingMoreParts] = useState(false);
-  const isLoadingMorePartsRef = useRef(false);
-  const loadMorePartsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [brands, setBrands] = useState<Brand[]>([]);
-  const [selection, setSelection] = useState<BuildSelection>({});
-  const [savedBuilds, setSavedBuilds] = useState<SavedBuild[]>([]);
-  const [buildToDelete, setBuildToDelete] = useState<SavedBuild | null>(null);
-  const [builderNotice, setBuilderNotice] = useState<BuilderNotice | null>(null);
-  const isSavingBuildRef = useRef(false);
-  const addingBuild = useRef(false);
-  const [isAddingBuild, setIsAddingBuild] = useState(false);
-  const builderNoticeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [activeSlot, setActiveSlot] = useState<BuilderSlot | null>(null);
-  const [isSavedBuildsOpen, setIsSavedBuildsOpen] = useState(false);
-  const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
-  const [partsAddedSummary, setPartsAddedSummary] = useState<{ count: number; subtotal: number } | null>(null);
+  const { shared } = useLocalSearchParams<{ shared?: string }>();
+  const { session } = useSession();
+  const owner = session.mode === "customer" ? session.user.id : "guest";
+  const { refreshCart } = useCartActions();
+  const { showToast } = useToast();
+  const [catalog, setCatalog] = useState<BuilderCatalog | null>(null);
+  const [saved, setSaved] = useState<SavedBuild[]>([]);
+  const [legacy, setLegacy] = useState<LocalBuild[]>([]);
+  const [components, setComponents] = useState<BuildComponent[]>([]);
+  const [name, setName] = useState("My PC build");
+  const [mode, setMode] = useState<"simple" | "advanced">("simple");
+  const [budget, setBudget] = useState("");
+  const [editing, setEditing] = useState<SavedBuild | null>(null);
+  const [validation, setValidation] = useState<BuildValidation | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [signIn, setSignIn] = useState(false);
+  const [activeType, setActiveType] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [isLoading, setIsLoading] = useState(() => getCatalogSnapshot().rows.length === 0);
-  const [hasLoadError, setHasLoadError] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
+  const [brand, setBrand] = useState("");
+  const [sort, setSort] = useState<"name" | "price_asc" | "price_desc">("name");
+  const [shareInput, setShareInput] = useState("");
+  const [hydratedOwner, setHydratedOwner] = useState<string | number | null>(null);
+  const pending = useRef(false);
+  const processedShare = useRef("");
+  const guestContinuation = useRef<BuildInput | null>(null);
+  const selectionRevision = useRef(0);
+  const products = useMemo(() => Object.values(catalog?.components ?? {}).flat(), [catalog]);
+  const byId = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
+  const subtotal = buildSubtotal(components, products);
+  const storageKey = `battlefront-builder-draft:${owner}`;
 
-  useActiveFocusEffect(useCallback(() => {
-    let isActive = true;
-    setIsLoading(getCatalogSnapshot().rows.length === 0);
-    setHasLoadError(false);
-
-    const unsubscribe = subscribeCatalog((snapshot) => {
-      if (!isActive) return;
-      if (snapshot.rows.length || snapshot.complete) { setProducts(snapshot.rows); setIsLoading(false); }
-      if (snapshot.error) setHasLoadError(true);
-    });
-    Promise.all([getCatalogPreview(), getBrands(), AsyncStorage.getItem(BUILD_STORAGE_KEY)])
-      .then(([catalog, catalogBrands, storedBuilds]) => {
-        if (!isActive) return;
-        setProducts(catalog);
-        setBrands(catalogBrands);
-        if (storedBuilds) {
-          const parsed = JSON.parse(storedBuilds) as SavedBuild[];
-          setSavedBuilds(Array.isArray(parsed) ? parsed : []);
-        }
-      })
-      .catch(() => {
-        if (isActive) setHasLoadError(true);
-      })
-      .finally(() => {
-        if (isActive) setIsLoading(false);
-      });
-
-    return () => {
-      isActive = false;
-      unsubscribe();
-    };
-  }, [retryCount]));
-
-  const visibleProducts = useMemo(() => {
-    if (!activeSlot) return [];
-    const normalizedQuery = query.trim().toLowerCase();
-    return products
-      .filter((product) => product.categorySlug === activeSlot.categoryId)
-      .filter((product) => !normalizedQuery || `${product.name} ${product.brandId}`.toLowerCase().includes(normalizedQuery))
-      .sort((left, right) => left.price - right.price);
-  }, [activeSlot, products, query]);
-  const visiblePartProducts = useMemo(
-    () => visibleProducts.slice(0, visiblePartCount),
-    [visiblePartCount, visibleProducts]
-  );
-
+  function loadDraft(input: BuildInput, build: SavedBuild | null = null) {
+    setComponents(input.components.map((item) => ({ ...item, configuration: { ...item.configuration } })));
+    setName(input.name); setMode(input.mode); setBudget(input.budget ?? ""); setEditing(build); setValidation(null); setError("");
+  }
+  async function reloadSaved() {
+    const revision = getSessionRevision(); const rows = await pcBuilder.list();
+    if (revision === getSessionRevision()) setSaved(rows);
+  }
   useEffect(() => {
-    if (loadMorePartsTimerRef.current) clearTimeout(loadMorePartsTimerRef.current);
-    loadMorePartsTimerRef.current = null;
-    isLoadingMorePartsRef.current = false;
-    setIsLoadingMoreParts(false);
-    setVisiblePartCount(PARTS_PER_PAGE);
-  }, [activeSlot, query]);
-
-  useEffect(() => () => {
-    if (loadMorePartsTimerRef.current) clearTimeout(loadMorePartsTimerRef.current);
-  }, []);
-
-  useEffect(() => () => {
-    if (builderNoticeTimeoutRef.current) clearTimeout(builderNoticeTimeoutRef.current);
-  }, []);
-
-  function showBuilderNotice(type: BuilderNotice["type"], message: string) {
-    if (builderNoticeTimeoutRef.current) clearTimeout(builderNoticeTimeoutRef.current);
-    setBuilderNotice({ type, message });
-    builderNoticeTimeoutRef.current = null;
-    if (type === "success") {
-      builderNoticeTimeoutRef.current = setTimeout(() => {
-        setBuilderNotice(null);
-        builderNoticeTimeoutRef.current = null;
-      }, 3000);
-    }
+    let active = true;
+    setHydratedOwner(null); setCatalog(null); setSaved([]); setEditing(null); setValidation(null); setError(""); setActiveType(null);
+    setComponents([]); setName("My PC build"); setMode("simple"); setBudget(""); processedShare.current = "";
+    void (async () => {
+      const [raw, old] = await Promise.all([AsyncStorage.getItem(storageKey), AsyncStorage.getItem("battlefront-api-saved-builds")]);
+      if (!active) return;
+      setLegacy(readLegacyBuilds(old));
+      try {
+        const draft = owner !== "guest" && guestContinuation.current ? guestContinuation.current : JSON.parse(raw ?? "null");
+        if (owner !== "guest") guestContinuation.current = null;
+        if (draft && Array.isArray(draft.components) && draft.components.length <= 32 && draft.components.every((item: BuildComponent) => item && typeof item.key === "string" && Number.isInteger(item.product_id) && Number.isInteger(item.quantity) && item.quantity > 0 && item.quantity <= 99 && item.configuration && typeof item.configuration === "object")) {
+          loadDraft({ name: typeof draft.name === "string" ? draft.name : "My PC build", mode: draft.mode === "advanced" ? "advanced" : "simple", budget: typeof draft.budget === "string" ? draft.budget : null, components: draft.components });
+        }
+      } catch { /* Invalid local data must not block the live builder. */ }
+    })().catch(() => { if (active) setError("Could not restore the local draft."); }).finally(() => { if (active) setHydratedOwner(owner); });
+    return () => { active = false; };
+  }, [owner, storageKey]);
+  useEffect(() => {
+    if (hydratedOwner !== owner) return;
+    const timer = setTimeout(() => { void AsyncStorage.setItem(storageKey, JSON.stringify({ name, mode, budget, components })).catch(() => undefined); }, 400);
+    return () => clearTimeout(timer);
+  }, [storageKey, hydratedOwner, owner, name, mode, budget, components]);
+  useActiveFocusEffect(useCallback(() => {
+    let active = true; const revision = getSessionRevision();
+    void pcBuilder.catalog().then((data) => { if (active && revision === getSessionRevision()) { setCatalog(data); setError(""); } }).catch((reason) => { if (active && revision === getSessionRevision()) setError(reason.message); });
+    if (owner !== "guest") void pcBuilder.list().then((rows) => { if (active && revision === getSessionRevision()) setSaved(rows); }).catch((reason) => { if (active && revision === getSessionRevision()) setError(reason.message); });
+    return () => { active = false; };
+  }, [owner]));
+  useEffect(() => {
+    const revision = ++selectionRevision.current; const sessionRevision = getSessionRevision();
+    setValidation(null);
+    if (!catalog || hydratedOwner !== owner || components.length === 0) { setChecking(false); return; }
+    setChecking(true);
+    const timer = setTimeout(() => {
+      void pcBuilder.validate(components).then((result) => { if (revision === selectionRevision.current && sessionRevision === getSessionRevision()) setValidation(result); })
+        .catch((reason) => { if (revision === selectionRevision.current && sessionRevision === getSessionRevision()) setError(reason.message); })
+        .finally(() => { if (revision === selectionRevision.current) setChecking(false); });
+    }, 900);
+    return () => { clearTimeout(timer); selectionRevision.current++; };
+  }, [components, catalog, hydratedOwner, owner]);
+  useEffect(() => {
+    if (!shared || !catalog || hydratedOwner !== owner || processedShare.current === shared) return;
+    const revision = getSessionRevision(); processedShare.current = shared;
+    void pcBuilder.shared(shared).then((build) => { if (revision === getSessionRevision()) loadDraft({ name: `${build.name} (copy)`.slice(0, 120), mode: build.mode, budget: build.budget, components: build.items }); })
+      .catch((reason) => { if (revision === getSessionRevision()) setError(reason.message); });
+  }, [shared, catalog, hydratedOwner, owner]);
+  async function run(task: (current: () => void) => Promise<void>) {
+    if (pending.current) return;
+    const revision = getSessionRevision();
+    const current = () => { if (revision !== getSessionRevision()) throw new Error("Your account changed. Reopen the builder."); };
+    pending.current = true; setBusy(true); setError("");
+    try { await task(current); }
+    catch (reason) { if (revision === getSessionRevision()) setError(reason instanceof Error ? reason.message : "Could not complete this action. Check your saved builds and cart before retrying."); }
+    finally { pending.current = false; setBusy(false); }
   }
-
-  function clearBuilderNotice() {
-    if (builderNoticeTimeoutRef.current) clearTimeout(builderNoticeTimeoutRef.current);
-    builderNoticeTimeoutRef.current = null;
-    setBuilderNotice(null);
+  function input(): BuildInput {
+    if (!name.trim() || name.trim().length > 120) throw new Error("Enter a build name of up to 120 characters.");
+    if (budget && (!Number.isFinite(Number(budget)) || Number(budget) < 0)) throw new Error("Enter a valid budget.");
+    return { name: name.trim(), mode, budget: budget || null, components, ...(editing ? { edit_version: editing.edit_version } : {}) };
   }
-
-  function loadMoreParts() {
-    if (isLoadingMorePartsRef.current || visiblePartCount >= visibleProducts.length) return;
-    isLoadingMorePartsRef.current = true;
-    setIsLoadingMoreParts(true);
-    loadMorePartsTimerRef.current = setTimeout(() => {
-      setVisiblePartCount((current) => Math.min(current + PARTS_PER_PAGE, visibleProducts.length));
-      setIsLoadingMoreParts(false);
-      isLoadingMorePartsRef.current = false;
-      loadMorePartsTimerRef.current = null;
-    }, PAGE_LOAD_DELAY_MS);
-  }
-
-  const selectedProducts = useMemo(
-    () => BUILDER_SLOTS.flatMap((slot) => selection[slot.id] ? [selection[slot.id]!] : []),
-    [selection]
-  );
-  const selectedRequiredCount = BUILDER_SLOTS.filter((slot) => slot.required && selection[slot.id]).length;
-  const requiredSlotCount = BUILDER_SLOTS.filter((slot) => slot.required).length;
-  const subtotal = selectedProducts.reduce((total, product) => total + product.price, 0);
-
-  function selectProduct(slot: BuilderSlot, product: Product) {
-    setSelection((current) => ({ ...current, [slot.id]: product }));
-    clearBuilderNotice();
-    setActiveSlot(null);
-    setQuery("");
-  }
-
-  function removeProduct(slotId: BuilderSlotId) {
-    setSelection((current) => {
-      const next = { ...current };
-      delete next[slotId];
-      return next;
-    });
-    clearBuilderNotice();
-  }
-
-  async function saveBuilds(nextBuilds: SavedBuild[]) {
-    if (isSavingBuildRef.current) return;
-    isSavingBuildRef.current = true;
-    try {
-      await AsyncStorage.setItem(BUILD_STORAGE_KEY, JSON.stringify(nextBuilds));
-      setSavedBuilds(nextBuilds);
-      showBuilderNotice("success", "Build saved on this device.");
-    } catch {
-      showBuilderNotice("error", "Could not save build. Check device storage and try again.");
-    } finally {
-      isSavingBuildRef.current = false;
-    }
-  }
-
-  async function deleteSavedBuild(build: SavedBuild) {
-    const nextBuilds = savedBuilds.filter((savedBuild) => savedBuild.id !== build.id);
-    try {
-      await AsyncStorage.setItem(BUILD_STORAGE_KEY, JSON.stringify(nextBuilds));
-      setSavedBuilds(nextBuilds);
-      setBuildToDelete(null);
-    } catch {
-      Alert.alert("Could not delete build", "Try again after checking device storage.");
-    }
-  }
-
-  function saveCurrentBuild() {
-    if (selectedProducts.length === 0) return;
-    const savedAt = new Date().toISOString();
-    const savedSelection = Object.fromEntries(
-      BUILDER_SLOTS.flatMap((slot) => selection[slot.id] ? [[slot.id, selection[slot.id]!.id]] : [])
-    ) as SavedBuild["selections"];
-    const duplicateBuild = savedBuilds.find((build) => haveSameComponents(build.selections, savedSelection));
-    if (duplicateBuild) {
-      showBuilderNotice("warning", `These components are already saved as ${duplicateBuild.name}. Change a component before saving another build.`);
-      return;
-    }
-
-    const build: SavedBuild = {
-      id: `${Date.now()}`,
-      name: `Build ${new Date(savedAt).toLocaleDateString("en-PH")}`,
-      savedAt,
-      selections: savedSelection,
-    };
-    void saveBuilds([build, ...savedBuilds]);
-  }
-
-  function loadBuild(build: SavedBuild) {
-    const nextSelection: BuildSelection = {};
-    for (const slot of BUILDER_SLOTS) {
-      const productId = build.selections[slot.id];
-      const product = products.find((candidate) => candidate.id === productId);
-      if (product) nextSelection[slot.id] = product;
-    }
-    setSelection(nextSelection);
-    setIsSavedBuildsOpen(false);
-  }
-
-  function clearBuild() {
-    setIsClearConfirmOpen(true);
-  }
-
-  async function shareBuild() {
-    const parts = BUILDER_SLOTS.flatMap((slot) => {
-      const product = selection[slot.id];
-      return product ? [`${slot.label}: ${product.name} (${formatPrice(product.price)})`] : [];
-    });
-    if (parts.length === 0) return;
-    await Share.share({
-      title: "My Battlefront PC build",
-      message: `My Battlefront PC build\n${parts.join("\n")}\nSubtotal: ${formatPrice(subtotal)}\nCompatibility and power estimates are unavailable.`,
+  function saveBuild(addToCart = false) {
+    if (owner === "guest") { guestContinuation.current = { name, mode, budget: budget || null, components }; setSignIn(true); return; }
+    void run(async (current) => {
+      const build = await pcBuilder.save(input(), editing?.uuid); current(); setEditing(build);
+      await reloadSaved(); current();
+      if (addToCart) {
+        await pcBuilder.addToCart(build.uuid); current(); await refreshCart(true); current();
+        showToast("Complete build added to your cart."); router.push("/(tabs)/cart");
+      } else showToast("Build saved to your account.");
     });
   }
-
-  async function addBuildToCart() {
-    if (selectedProducts.length === 0 || addingBuild.current) return;
-    addingBuild.current = true; setIsAddingBuild(true);
-    let count = 0;
-    let addedSubtotal = 0;
-    try {
-      for (const product of selectedProducts) {
-        if (!await addItem(product)) break;
-        count++; addedSubtotal += product.price;
-      }
-      if (count > 0) setPartsAddedSummary({ count, subtotal: addedSubtotal });
-    } finally { addingBuild.current = false; setIsAddingBuild(false); }
+  function choose(product: BuilderProduct) {
+    if (busy || (product.stock_quantity ?? 0) <= 0) return;
+    setComponents((rows) => {
+      if (rows.some((row) => row.product_id === product.id)) return rows;
+      const kept = MULTIPLE_TYPES.includes(product.component_type) ? rows : rows.filter((row) => (byId.get(row.product_id)?.component_type ?? row.component_type) !== product.component_type);
+      if (kept.length >= 32) return rows;
+      return [...kept, { key: `${product.component_type}-${product.id}`, product_id: product.id, component_type: product.component_type, quantity: 1, configuration: {} }];
+    }); setActiveType(null);
   }
-
-  return (
-    <SafeAreaView className="flex-1 bg-background">
-      <Pressable onPress={() => router.push("/recommendations")} className="px-4 py-3 border-b border-border"><Text className="text-primary font-semibold">Find products for your budget</Text></Pressable>
-      <View className="flex-row items-center gap-3 border-b border-border px-4 py-3">
-        <Pressable accessibilityLabel="Go back" onPress={() => router.back()} className="h-10 w-10 items-center justify-center rounded-lg bg-secondary">
-          <Ionicons name="arrow-back" size={21} color={isDark ? "#f8fafc" : "#30343b"} />
-        </Pressable>
-        <View className="flex-1">
-          <Text className="text-foreground text-lg font-bold">PC Builder</Text>
-          <Text className="text-muted-foreground text-xs">Select parts for your setup</Text>
-        </View>
-        <Pressable accessibilityLabel="Clear current build" onPress={clearBuild} disabled={selectedProducts.length === 0} className="h-10 w-10 items-center justify-center rounded-lg bg-secondary disabled:opacity-40">
-          <Ionicons name="trash-outline" size={19} color={isDark ? "#cbd5e1" : "#59616d"} />
-        </Pressable>
-      </View>
-
-      {isLoading ? (
-        <View className="flex-1 items-center justify-center gap-3">
-          <ActivityIndicator color="#ef1b1b" />
-          <Text className="text-muted-foreground text-sm">Loading parts catalog</Text>
-        </View>
-      ) : hasLoadError && products.length === 0 ? (
-        <View className="flex-1 items-center justify-center px-8">
-          <Ionicons name="cloud-offline-outline" size={30} color={isDark ? "#9ca3af" : "#68717e"} />
-          <Text className="mt-3 text-foreground text-base font-semibold">Could not load the catalog</Text>
-          <Text className="mt-1 text-center text-muted-foreground text-sm">Load the product catalog to browse available parts.</Text>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => setRetryCount((count) => count + 1)}
-            className="mt-5 rounded-xl bg-primary px-5 py-3"
-          >
-            <Text className="text-primary-foreground text-sm font-semibold">Try again</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <>
-          <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 28, width: "100%", maxWidth: 960, alignSelf: "center" }}>
-            <View className="mb-4 flex-row items-center justify-between">
-              <View>
-                <Text className="text-muted-foreground text-[10px] font-semibold uppercase tracking-[0.12em]">Required components</Text>
-                <Text className="mt-1 text-foreground text-sm font-bold">{selectedRequiredCount} of {requiredSlotCount} selected</Text>
-              </View>
-              <View className="flex-row gap-2">
-                <ActionButton icon="folder-open-outline" label="Load" onPress={() => setIsSavedBuildsOpen(true)} disabled={savedBuilds.length === 0} />
-                <ActionButton icon="save-outline" label="Save" onPress={saveCurrentBuild} disabled={selectedProducts.length === 0} />
-              </View>
-            </View>
-
-            {builderNotice && (
-              <View className={`mb-4 flex-row items-start gap-2 rounded-lg border px-3 py-2.5 ${builderNotice.type === "success" ? "border-success/40 bg-success/10" : builderNotice.type === "warning" ? "border-primary/40 bg-primary/10" : "border-danger/40 bg-danger/10"}`}>
-                <Ionicons
-                  name={builderNotice.type === "success" ? "checkmark-circle-outline" : "alert-circle-outline"}
-                  size={17}
-                  color={builderNotice.type === "success" ? "#16a34a" : builderNotice.type === "warning" ? "#ef1b1b" : "#ef4444"}
-                />
-                <Text accessibilityRole="alert" className="flex-1 text-foreground text-xs leading-5">
-                  {builderNotice.message}
-                </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Dismiss build message"
-                  onPress={clearBuilderNotice}
-                  hitSlop={8}
-                >
-                  <Ionicons name="close" size={17} color={isDark ? "#cbd5e1" : "#59616d"} />
-                </Pressable>
-              </View>
-            )}
-
-            <View className="gap-2">
-              {BUILDER_SLOTS.map((slot) => (
-                <BuilderSlotCard
-                  key={slot.id}
-                  slot={slot}
-                  product={selection[slot.id]}
-                  isDark={isDark}
-                  onSelect={() => { setActiveSlot(slot); setQuery(""); }}
-                  onRemove={() => removeProduct(slot.id)}
-                />
-              ))}
-            </View>
-
-            <View className="mt-5 rounded-xl border border-border bg-card p-4">
-              <View className="flex-row items-center justify-between">
-                <Text className="text-foreground text-base font-bold">Build summary</Text>
-                <Text className="text-muted-foreground text-xs">{selectedProducts.length} parts</Text>
-              </View>
-              <View className="mt-4 flex-row gap-2">
-                <SummaryMetric icon="flash-outline" label="Estimated power" value="Unavailable" />
-                <SummaryMetric icon="git-branch-outline" label="Compatibility" value="Not checked" />
-              </View>
-              <Text className="mt-3 text-muted-foreground text-xs leading-5">
-                The catalog does not include structured hardware specifications yet. Compatibility and power cannot be verified for these parts.
-              </Text>
-              <View className="mt-4 flex-row items-center justify-between border-t border-border pt-3">
-                <Text className="text-foreground text-sm font-semibold">Parts subtotal</Text>
-                <Text className="text-primary text-base font-bold">{formatPrice(subtotal)}</Text>
-              </View>
-            </View>
-
-            <View className="mt-4 flex-row gap-2">
-              <Pressable accessibilityRole="button" accessibilityLabel="Share build" onPress={() => void shareBuild()} disabled={selectedProducts.length === 0} className="h-12 w-12 items-center justify-center rounded-lg border border-border bg-secondary disabled:opacity-40">
-                <Ionicons name="share-outline" size={19} color={isDark ? "#f8fafc" : "#30343b"} />
-              </Pressable>
-              <Pressable accessibilityRole="button" onPress={addBuildToCart} disabled={selectedProducts.length === 0 || isAddingBuild} accessibilityState={{ disabled: selectedProducts.length === 0 || isAddingBuild, busy: isAddingBuild }} className="h-12 flex-1 flex-row items-center justify-center gap-2 rounded-lg bg-primary disabled:opacity-40">
-                <Ionicons name="cart-outline" size={18} color="#fff" />
-                <Text className="text-primary-foreground text-sm font-bold">{isAddingBuild ? "Adding parts..." : "Add selected parts to cart"}</Text>
-              </Pressable>
-            </View>
-          </ScrollView>
-        </>
-      )}
-
-      <Modal visible={activeSlot !== null} animationType="slide" onRequestClose={() => setActiveSlot(null)}>
-        <SafeAreaView className="flex-1 bg-background">
-          <View className="flex-row items-center gap-3 border-b border-border px-4 py-3">
-            <Pressable accessibilityLabel="Close part selector" onPress={() => setActiveSlot(null)} className="h-10 w-10 items-center justify-center rounded-lg bg-secondary">
-              <Ionicons name="close" size={22} color={isDark ? "#f8fafc" : "#30343b"} />
-            </Pressable>
-            <View className="flex-1">
-              <Text className="text-foreground text-base font-bold">Choose {activeSlot?.label.toLowerCase()}</Text>
-              <Text className="text-muted-foreground text-xs">{visibleProducts.length} available parts</Text>
-            </View>
-            {activeSlot && selection[activeSlot.id] && (
-              <Pressable onPress={() => removeProduct(activeSlot.id)} className="px-2 py-2">
-                <Text className="text-primary text-xs font-semibold">Remove</Text>
-              </Pressable>
-            )}
-          </View>
-          <View className="mx-4 mt-4 h-11 flex-row items-center gap-2 rounded-lg border border-border bg-secondary px-3">
-            <Ionicons name="search-outline" size={18} color={isDark ? "#cbd5e1" : "#68717e"} />
-            <TextInput value={query} onChangeText={setQuery} placeholder="Search parts" placeholderTextColor="#94a3b8" autoCapitalize="none" returnKeyType="search" className="flex-1 text-foreground text-sm" />
-            {query.length > 0 && <Pressable accessibilityLabel="Clear search" onPress={() => setQuery("")}><Ionicons name="close-circle" size={18} color={isDark ? "#9ca3af" : "#68717e"} /></Pressable>}
-          </View>
-          <FlatList
-            data={visiblePartProducts}
-            keyExtractor={(product) => product.id}
-            onEndReached={loadMoreParts}
-            onEndReachedThreshold={0.4}
-            ListFooterComponent={isLoadingMoreParts ? <LoadingMoreFooter /> : null}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ padding: 16, paddingBottom: 32, flexGrow: 1, width: "100%", maxWidth: MAX_CONTENT_WIDTH, alignSelf: "center" }}
-            ItemSeparatorComponent={() => <View className="h-2" />}
-            ListEmptyComponent={<View className="flex-1 items-center justify-center px-8"><Ionicons name="cube-outline" size={30} color={isDark ? "#9ca3af" : "#68717e"} /><Text className="mt-3 text-foreground text-sm font-semibold">No matching parts</Text><Text className="mt-1 text-center text-muted-foreground text-xs">Try another search or check back when this category has catalog items.</Text></View>}
-            renderItem={({ item }) => (
-              <PartOption
-                product={item}
-                brandName={brands.find((brand) => brand.id === item.brandId)?.name ?? item.brandId}
-                selected={activeSlot ? selection[activeSlot.id]?.id === item.id : false}
-                isDark={isDark}
-                onPress={() => activeSlot && selectProduct(activeSlot, item)}
-              />
-            )}
-          />
-        </SafeAreaView>
-      </Modal>
-
-      <Modal visible={isSavedBuildsOpen} animationType="slide" onRequestClose={() => setIsSavedBuildsOpen(false)}>
-        <SafeAreaView className="flex-1 bg-background">
-          <View className="flex-row items-center gap-3 border-b border-border px-4 py-3">
-            <Pressable accessibilityLabel="Close saved builds" onPress={() => setIsSavedBuildsOpen(false)} className="h-10 w-10 items-center justify-center rounded-lg bg-secondary">
-              <Ionicons name="close" size={22} color={isDark ? "#f8fafc" : "#30343b"} />
-            </Pressable>
-            <View className="flex-1">
-              <Text className="text-foreground text-base font-bold">Saved builds</Text>
-              <Text className="text-muted-foreground text-xs mt-0.5">
-                {savedBuilds.length} saved {savedBuilds.length === 1 ? "configuration" : "configurations"}
-              </Text>
-            </View>
-          </View>
-          <ScrollView contentContainerStyle={{ padding: 16, gap: 12, width: "100%", maxWidth: 760, alignSelf: "center" }}>
-            {savedBuilds.length === 0 ? (
-              <View className="items-center py-16 px-6">
-                <View className="h-14 w-14 items-center justify-center rounded-xl border border-border bg-secondary">
-                  <Ionicons name="desktop-outline" size={26} color={isDark ? "#9ca3af" : "#68717e"} />
-                </View>
-                <Text className="mt-4 text-foreground text-base font-semibold">No saved builds yet</Text>
-                <Text className="mt-1 text-center text-muted-foreground text-sm">
-                  Save your current parts selection to find it here later.
-                </Text>
-              </View>
-            ) : savedBuilds.map((build) => {
-              const buildProducts = BUILDER_SLOTS.flatMap((slot) => {
-                const productId = build.selections[slot.id];
-                const product = products.find((item) => item.id === productId);
-                return product ? [product] : [];
-              });
-              const partCount = Object.keys(build.selections).length;
-              const buildSubtotal = buildProducts.reduce((total, product) => total + product.price, 0);
-              const previewNames = buildProducts.slice(0, 2).map((product) => product.name).join(" · ");
-              return (
-                <View key={build.id} className="rounded-xl border border-border bg-card p-4">
-                  <View className="flex-row items-start gap-3">
-                    <View className="h-10 w-10 items-center justify-center rounded-lg bg-secondary">
-                      <Ionicons name="desktop-outline" size={20} color={isDark ? "#cbd5e1" : "#59616d"} />
-                    </View>
-                    <View className="flex-1">
-                      <Text className="text-foreground text-sm font-semibold">{build.name}</Text>
-                      <Text className="mt-1 text-muted-foreground text-xs">
-                        Saved {new Date(build.savedAt).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}
-                      </Text>
-                    </View>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`Delete saved build ${build.name}`}
-                      onPress={() => setBuildToDelete(build)}
-                      className="h-9 w-9 items-center justify-center rounded-lg border border-border"
-                      style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
-                    >
-                      <Ionicons name="trash-outline" size={17} color="#ef1b1b" />
-                    </Pressable>
-                  </View>
-                  <Text numberOfLines={2} className="mt-3 text-muted-foreground text-xs leading-5">
-                    {previewNames || "Some saved parts are no longer in the catalog"}
-                    {buildProducts.length > 2 ? ` · +${buildProducts.length - 2} more` : ""}
-                  </Text>
-                  <View className="mt-3 flex-row items-center justify-between border-t border-border pt-3">
-                    <Text className="text-muted-foreground text-xs">
-                      {partCount} {partCount === 1 ? "part" : "parts"}
-                    </Text>
-                    <Text className="text-foreground text-sm font-bold">{formatPrice(buildSubtotal)}</Text>
-                  </View>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Load saved build ${build.name}`}
-                    onPress={() => loadBuild(build)}
-                    className="mt-3 h-10 flex-row items-center justify-center gap-2 rounded-lg bg-primary"
-                  >
-                    <Ionicons name="folder-open-outline" size={16} color="#fff" />
-                    <Text className="text-primary-foreground text-xs font-bold">Load build</Text>
-                  </Pressable>
-                </View>
-              );
-            })}
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
-      <PartsAddedSheet
-        visible={partsAddedSummary !== null}
-        itemCount={partsAddedSummary?.count ?? 0}
-        subtotal={partsAddedSummary?.subtotal ?? 0}
-        onKeepBuilding={() => setPartsAddedSummary(null)}
-        onViewCart={() => {
-          setPartsAddedSummary(null);
-          router.push("/cart");
-        }}
-      />
-      <ConfirmClearModal
-        visible={isClearConfirmOpen}
-        title="Clear this build?"
-        description={`This will remove all ${selectedProducts.length} selected ${selectedProducts.length === 1 ? "part" : "parts"} from your current build.`}
-        detail="Saved builds on this device will not be affected."
-        confirmLabel="Clear build"
-        onCancel={() => setIsClearConfirmOpen(false)}
-        onConfirm={() => {
-          setSelection({});
-          setIsClearConfirmOpen(false);
-        }}
-      />
-      <ConfirmClearModal
-        visible={buildToDelete !== null}
-        title="Delete saved build?"
-        description={buildToDelete ? `Delete ${buildToDelete.name} from your saved builds?` : "Delete this saved build?"}
-        detail="This only removes the saved build from this device."
-        confirmLabel="Delete build"
-        onCancel={() => setBuildToDelete(null)}
-        onConfirm={() => {
-          if (buildToDelete) void deleteSavedBuild(buildToDelete);
-        }}
-      />
-    </SafeAreaView>
-  );
-}
-
-function PartsAddedSheet({ visible, itemCount, subtotal, onKeepBuilding, onViewCart }: { visible: boolean; itemCount: number; subtotal: number; onKeepBuilding: () => void; onViewCart: () => void }) {
-  const insets = useSafeAreaInsets();
-
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onKeepBuilding}>
-      <View className="flex-1 justify-end bg-black/55">
-        <Pressable accessibilityLabel="Dismiss parts added confirmation" onPress={onKeepBuilding} className="absolute inset-0" />
-        <View
-          accessibilityViewIsModal
-          className="w-full max-w-[560px] self-center rounded-t-2xl border-t border-border bg-background px-5 pt-3"
-          style={{ paddingBottom: Math.max(insets.bottom, 16) }}
-        >
-          <View className="mb-5 h-1 w-10 self-center rounded-full bg-muted-foreground/40" />
-          <View className="mb-4 h-12 w-12 items-center justify-center rounded-full bg-success/10">
-            <Ionicons name="checkmark-circle" size={27} color="#16a34a" />
-          </View>
-          <Text className="text-foreground text-lg font-bold">Parts added to cart</Text>
-          <Text className="mt-2 text-muted-foreground text-sm leading-5">
-            {itemCount} selected {itemCount === 1 ? "part is" : "parts are"} now in your cart. Your build is still here if you want to keep editing.
-          </Text>
-          <View className="mt-4 flex-row items-center justify-between rounded-lg border border-border bg-card px-3 py-3">
-            <View className="flex-row items-center gap-2">
-              <Ionicons name="hardware-chip-outline" size={17} color="#16a34a" />
-              <Text className="text-muted-foreground text-xs">Parts added</Text>
-            </View>
-            <Text className="text-foreground text-xs font-semibold">{itemCount}</Text>
-          </View>
-          <View className="mt-2 flex-row items-center justify-between rounded-lg border border-border bg-card px-3 py-3">
-            <Text className="text-muted-foreground text-xs">Parts subtotal</Text>
-            <Text className="text-foreground text-sm font-bold">{formatPrice(subtotal)}</Text>
-          </View>
-          <View className="mt-5 flex-row gap-3">
-            <Pressable
-              accessibilityRole="button"
-              onPress={onKeepBuilding}
-              className="h-12 flex-1 items-center justify-center rounded-lg border border-border bg-secondary"
-              style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
-            >
-              <Text className="text-foreground text-sm font-semibold">Keep building</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              onPress={onViewCart}
-              className="h-12 flex-1 flex-row items-center justify-center gap-2 rounded-lg bg-primary"
-              style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
-            >
-              <Ionicons name="cart-outline" size={17} color="#fff" />
-              <Text className="text-primary-foreground text-sm font-bold">View cart</Text>
-            </Pressable>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-function BuilderSlotCard({ slot, product, isDark, onSelect, onRemove }: { slot: BuilderSlot; product?: Product; isDark: boolean; onSelect: () => void; onRemove: () => void }) {
-  return (
-    <View className={`flex-row items-center gap-3 rounded-xl border p-3 ${product ? "border-primary/50 bg-card" : "border-border bg-card"}`}>
-      <Pressable accessibilityRole="button" accessibilityState={{ selected: Boolean(product) }} accessibilityLabel={`${product ? "Replace" : "Select"} ${slot.label}`} onPress={onSelect} className="min-h-[52px] flex-1 flex-row items-center gap-3">
-        <View className={`h-10 w-10 items-center justify-center rounded-lg ${product ? "bg-primary/10" : "bg-secondary"}`}>
-          <Ionicons name={product ? "checkmark" : "add"} size={21} color={product ? "#ef1b1b" : isDark ? "#cbd5e1" : "#59616d"} />
-        </View>
-        <View className="flex-1">
-          <Text className="text-muted-foreground text-[10px] font-semibold uppercase tracking-[0.1em]">{slot.label}{slot.required ? "" : " (Optional)"}</Text>
-          <Text numberOfLines={2} className={`mt-1 text-sm ${product ? "text-foreground font-semibold" : "text-muted-foreground"}`}>{product?.name ?? "Select a part"}</Text>
-          {product && <Text className="mt-1 text-primary text-xs font-bold">{formatPrice(product.price)}</Text>}
-        </View>
-      </Pressable>
-      {product ? (
-        <Pressable accessibilityLabel={`Remove ${slot.label}`} onPress={onRemove} className="h-9 w-9 items-center justify-center rounded-lg bg-secondary">
-          <Ionicons name="close" size={18} color={isDark ? "#cbd5e1" : "#59616d"} />
-        </Pressable>
-      ) : (
-        <Pressable accessibilityLabel={`Browse ${slot.label}`} onPress={onSelect} className="h-9 w-9 items-center justify-center rounded-lg bg-secondary">
-          <Ionicons name="chevron-forward" size={17} color={isDark ? "#cbd5e1" : "#59616d"} />
-        </Pressable>
-      )}
-    </View>
-  );
-}
-
-function PartOption({ product, brandName, selected, isDark, onPress }: { product: Product; brandName: string; selected: boolean; isDark: boolean; onPress: () => void }) {
-  return (
-    <Pressable accessibilityRole="button" accessibilityState={{ selected }} onPress={onPress} className={`flex-row items-center gap-3 rounded-xl border p-3 ${selected ? "border-primary bg-primary/10" : "border-border bg-card"}`}>
-      <ProductImage source={getProductImageSource(product.image)} className="h-14 w-14 rounded-lg bg-secondary" resizeMode="cover" />
-      <View className="flex-1">
-        <Text numberOfLines={2} className="text-foreground text-xs font-semibold">{product.name}</Text>
-        <Text className="mt-1 text-muted-foreground text-[10px]">{brandName}</Text>
-        <Text className="mt-1 text-primary text-sm font-bold">{formatPrice(product.price)}</Text>
-      </View>
-      <Ionicons name={selected ? "checkmark-circle" : "add-circle-outline"} size={22} color={selected ? "#ef1b1b" : isDark ? "#9ca3af" : "#68717e"} />
-    </Pressable>
-  );
-}
-
-function ActionButton({ icon, label, onPress, disabled }: { icon: "folder-open-outline" | "save-outline"; label: string; onPress: () => void; disabled: boolean }) {
-  return (
-    <Pressable accessibilityRole="button" onPress={onPress} disabled={disabled} className="h-9 flex-row items-center gap-1.5 rounded-lg border border-border bg-secondary px-2.5 disabled:opacity-40">
-      <Ionicons name={icon} size={15} color="#ef1b1b" />
-      <Text className="text-foreground text-[11px] font-semibold">{label}</Text>
-    </Pressable>
-  );
-}
-
-function SummaryMetric({ icon, label, value }: { icon: "flash-outline" | "git-branch-outline"; label: string; value: string }) {
-  return (
-    <View className="flex-1 rounded-lg bg-secondary p-3">
-      <View className="flex-row items-center gap-1.5"><Ionicons name={icon} size={14} color="#ef1b1b" /><Text className="text-muted-foreground text-[10px]">{label}</Text></View>
-      <Text className="mt-1.5 text-foreground text-xs font-bold">{value}</Text>
-    </View>
-  );
+  const availableProducts = useMemo(() => (catalog?.components[activeType ?? ""] ?? []).filter((product) => (!brand || product.brand === brand) && `${product.name} ${product.brand ?? ""}`.toLowerCase().includes(query.trim().toLowerCase())).sort((a, b) => sort === "name" ? a.name.localeCompare(b.name) : sort === "price_asc" ? Number(a.price) - Number(b.price) : Number(b.price) - Number(a.price)), [catalog, activeType, brand, query, sort]);
+  const fanPositions = byId.get(components.find((item) => byId.get(item.product_id)?.component_type === "case")?.product_id ?? 0)?.specifications.fan_mounting_positions;
+  return <SafeAreaView edges={["left", "right", "bottom"]} className="flex-1 bg-background">
+    <ScreenHeader title="PC Builder" />
+    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16, paddingBottom: 40, maxWidth: 900, width: "100%", alignSelf: "center" }}>
+      <Text className="text-foreground text-2xl font-bold">Build your PC</Text>
+      <Text className="mt-2 text-muted-foreground">Choose catalog parts and review compatibility based on verified hardware specifications.</Text>
+      {error ? <View className="mt-4 gap-2"><Text accessibilityRole="alert" className="text-danger">{error}</Text><Action title="Refresh catalog and saved builds" disabled={busy} onPress={() => void run(async (current) => { const data = await pcBuilder.catalog(); current(); setCatalog(data); if (owner !== "guest") await reloadSaved(); })} /></View> : null}
+      {!catalog || hydratedOwner !== owner ? <ActivityIndicator accessibilityLabel="Loading PC builder" className="my-6" /> : <>
+        <View className="mt-5 flex-row gap-2">{(["simple", "advanced"] as const).map((value) => <Action key={value} title={value === "simple" ? "Simple" : "Advanced"} primary={mode === value} disabled={busy} onPress={() => setMode(value)} />)}</View>
+        <Text className="mt-4 text-foreground font-semibold">Build name</Text><TextInput accessibilityLabel="Build name" value={name} onChangeText={setName} editable={!busy} maxLength={120} className="mt-2 min-h-12 rounded-lg border border-border px-3 text-foreground" />
+        <Text className="mt-4 text-foreground font-semibold">Budget (PHP, optional)</Text><TextInput accessibilityLabel="Build budget" value={budget} onChangeText={setBudget} editable={!busy} keyboardType="decimal-pad" placeholder="Enter a budget" className="mt-2 min-h-12 rounded-lg border border-border px-3 text-foreground" />
+        <View className="mt-5 gap-2"><Text className="text-foreground text-lg font-bold">Components</Text>{(mode === "simple" ? SIMPLE_TYPES : Object.keys(COMPONENT_LABELS)).map((type) => <Action key={type} title={`${COMPONENT_LABELS[type]} · ${components.filter((item) => (byId.get(item.product_id)?.component_type ?? item.component_type) === type).reduce((sum, item) => sum + item.quantity, 0)} selected`} disabled={busy} onPress={() => { setQuery(""); setBrand(""); setActiveType(type); }} />)}</View>
+        <View className="mt-6 gap-4">{components.map((item) => { const product = byId.get(item.product_id); const type = product?.component_type ?? item.component_type; return <View key={item.key} className="border-b border-border pb-4">
+          <Text className="text-foreground font-semibold">{product?.name ?? `Unavailable component #${item.product_id}`}</Text><Text className="mt-1 text-muted-foreground">{product ? money(Number(product.price) * item.quantity) : "Replace this selection"} · Qty {item.quantity}</Text>
+          {product && !product.specifications_reviewed && <Text className="text-muted-foreground">Specifications await review. Compatibility may be unknown.</Text>}
+          <View className="mt-2 flex-row flex-wrap gap-2"><Action title="−" disabled={busy || item.quantity <= 1} onPress={() => setComponents((rows) => rows.map((row) => row.key === item.key ? { ...row, quantity: row.quantity - 1 } : row))} /><Action title="+" disabled={busy || item.quantity >= Math.min(99, product?.stock_quantity ?? 0)} onPress={() => setComponents((rows) => rows.map((row) => row.key === item.key ? { ...row, quantity: row.quantity + 1 } : row))} /><Action title="Remove" disabled={busy} onPress={() => setComponents((rows) => rows.filter((row) => row.key !== item.key))} /></View>
+          {type === "fan" && Array.isArray(fanPositions) && <View className="mt-2 gap-2"><Text className="text-foreground">Case mounting position</Text>{fanPositions.map((position: unknown) => typeof position === "string" ? <Action key={position} title={position} primary={item.configuration.mounting_position === position} disabled={busy} onPress={() => setComponents((rows) => rows.map((row) => row.key === item.key ? { ...row, configuration: { ...row.configuration, mounting_position: position } } : row))} /> : null)}</View>}
+        </View>; })}</View>
+        <Text className="mt-5 text-foreground text-xl font-bold">Subtotal {money(subtotal)}</Text>{budget && subtotal > Number(budget) ? <Text className="mt-1 text-danger">Over budget by {money(subtotal - Number(budget))}</Text> : null}
+        <Text className="mt-2 text-muted-foreground">Current catalog prices. Stock, price, and compatibility are checked again when adding to cart.</Text>
+        <Text accessibilityLiveRegion="polite" className="mt-5 text-foreground font-bold">{checking ? "Checking compatibility…" : validation ? `Compatibility: ${validation.status}` : "Select components to check compatibility"}</Text>
+        {validation?.required_components.length ? <Text className="mt-2 text-muted-foreground">Required: {validation.required_components.map((type) => COMPONENT_LABELS[type] ?? type).join(", ")}</Text> : null}
+        {validation && <Text className="mt-2 text-muted-foreground">Estimated power: {validation.estimated_power_w === null ? "Unknown" : `${validation.estimated_power_w} W`} · Ruleset {validation.ruleset_version}</Text>}
+        {validation?.findings.map((finding, index) => <Text key={`${finding.rule}-${index}`} className={`mt-2 ${finding.status === "incompatible" ? "text-danger" : "text-muted-foreground"}`}>{finding.status}: {finding.message}</Text>)}
+        <View className="mt-5 gap-2"><Action title={editing ? "Save changes" : owner === "guest" ? "Sign in to save build" : "Save build"} primary disabled={busy || components.length === 0 || hydratedOwner !== owner} onPress={() => saveBuild()} /><Action title="Save and add complete build to cart" disabled={busy || checking || !validation?.complete} onPress={() => saveBuild(true)} /><Action title="New build" disabled={busy} onPress={() => Alert.alert("Start a new build?", "Your current draft will be replaced. Account builds remain saved.", [{ text: "Keep draft", style: "cancel" }, { text: "New build", onPress: () => loadDraft({ name: "My PC build", mode: "simple", budget: null, components: [] }) }])} /></View>
+        <Text className="mt-8 text-foreground text-lg font-bold">Build templates</Text>{catalog.templates.length === 0 ? <Text className="mt-2 text-muted-foreground">No verified templates are currently available.</Text> : catalog.templates.map((template) => <View key={template.uuid} className="mt-3 gap-2"><Text className="text-foreground font-semibold">{template.name}</Text><Text className="text-muted-foreground">{template.description}</Text><Action title="Use template" disabled={busy} onPress={() => loadDraft({ name: template.name, mode: "simple", budget: template.budget, components: template.components })} /></View>)}
+        <Text className="mt-8 text-foreground text-lg font-bold">Saved builds</Text>
+        {owner === "guest" ? <Action title="Sign in to load your saved builds" onPress={() => setSignIn(true)} /> : saved.length === 0 ? <Text className="mt-2 text-muted-foreground">No builds saved to this account yet.</Text> : saved.map((build) => <View key={build.uuid} className="mt-4 border-b border-border pb-4 gap-2"><Text className="text-foreground font-semibold">{build.name}{editing?.uuid === build.uuid ? " · Editing" : ""}</Text><View className="flex-row flex-wrap gap-2">
+          <Action title="Open" disabled={busy} onPress={() => loadDraft({ name: build.name, mode: build.mode, budget: build.budget, components: build.items }, build)} />
+          <Action title="Duplicate" disabled={busy} onPress={() => void run(async (current) => { await pcBuilder.duplicate(build.uuid); current(); await reloadSaved(); })} />
+          <Action title="Share" disabled={busy} onPress={() => void run(async (current) => { const result = await pcBuilder.share(build.uuid); current(); await reloadSaved(); current(); await Share.share({ message: `${build.name}\n${result.url}` }); })} />
+          {build.share_enabled && <Action title="Stop sharing" disabled={busy} onPress={() => void run(async (current) => { await pcBuilder.stopSharing(build.uuid); current(); await reloadSaved(); })} />}
+          <Action title="Delete" disabled={busy} onPress={() => Alert.alert("Delete saved build?", build.name, [{ text: "Keep", style: "cancel" }, { text: "Delete", style: "destructive", onPress: () => void run(async (current) => { await pcBuilder.remove(build.uuid); current(); if (editing?.uuid === build.uuid) setEditing(null); await reloadSaved(); }) }])} />
+        </View></View>)}
+        {legacy.length > 0 && <View className="mt-8 gap-3"><Text className="text-foreground text-lg font-bold">Previous local builds</Text><Text className="text-muted-foreground">Import a copy to this account. Original local builds stay on this device.</Text>{legacy.map((build) => <Action key={build.id} title={`Import ${build.name}`} disabled={busy} onPress={() => {
+          if (owner === "guest") { setSignIn(true); return; }
+          const result = migrateLocalBuild(build, catalog);
+          Alert.alert("Import local build?", result.missing.length ? `Unavailable selections need replacing: ${result.missing.join(", ")}. The original stays unchanged.` : "Create an account copy of this local build?", [{ text: "Cancel", style: "cancel" }, { text: "Import copy", onPress: () => void run(async (current) => { const created = await pcBuilder.save(result.input); current(); loadDraft({ ...result.input, components: created.items }, created); await reloadSaved(); showToast("Local build copied to your account."); }) }]);
+        }} />)}</View>}
+        <Text className="mt-8 text-foreground text-lg font-bold">Open a shared build</Text><TextInput accessibilityLabel="Shared build link" value={shareInput} onChangeText={setShareInput} editable={!busy} autoCapitalize="none" placeholder="Paste a Battlefront build link" className="mt-2 min-h-12 rounded-lg border border-border px-3 text-foreground" />
+        <View className="mt-2"><Action title="Open as a new draft" disabled={busy} onPress={() => {
+          const token = shareInput.trim().split(/[/?#]/).filter(Boolean).find((part) => /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(part));
+          if (!token) { setError("Paste a valid shared build link or token."); return; }
+          void run(async (current) => { const build = await pcBuilder.shared(token); current(); loadDraft({ name: `${build.name} (copy)`.slice(0, 120), mode: build.mode, budget: build.budget, components: build.items }); });
+        }} /></View>
+      </>}{busy && <ActivityIndicator className="mt-4" accessibilityLabel="Updating build" />}
+    </ScrollView>
+    <Modal visible={activeType !== null} animationType="slide" onRequestClose={() => setActiveType(null)}><SafeAreaView className="flex-1 bg-background"><View className="p-4 gap-3">
+      <Action title="Back to build" onPress={() => setActiveType(null)} /><Text className="text-foreground text-xl font-bold">{COMPONENT_LABELS[activeType ?? ""]}</Text><TextInput accessibilityLabel="Search components" value={query} onChangeText={setQuery} placeholder="Search components" className="min-h-12 rounded-lg border border-border px-3 text-foreground" />
+      <ScrollView horizontal contentContainerStyle={{ gap: 8 }}><Action title="All brands" primary={!brand} onPress={() => setBrand("")} />{[...new Set((catalog?.components[activeType ?? ""] ?? []).map((product) => product.brand).filter((value): value is string => Boolean(value)))].sort().map((value) => <Action key={value} title={value} primary={brand === value} onPress={() => setBrand(value)} />)}</ScrollView>
+      <View className="flex-row gap-2">{(["name", "price_asc", "price_desc"] as const).map((value) => <Action key={value} title={value === "name" ? "Name" : value === "price_asc" ? "Price ↑" : "Price ↓"} primary={sort === value} onPress={() => setSort(value)} />)}</View>
+    </View><FlatList data={availableProducts} keyExtractor={(product) => String(product.id)} keyboardShouldPersistTaps="handled" ListEmptyComponent={<Text className="p-4 text-muted-foreground">No matching components.</Text>} contentContainerStyle={{ padding: 16 }} renderItem={({ item: product }) => <View className="mb-4 border-b border-border pb-4 gap-2">{product.image_url ? <ProductImage source={{ uri: product.image_url }} style={{ width: 96, height: 96 }} resizeMode="contain" /> : null}<Text className="text-foreground font-semibold">{product.name}</Text><Text className="text-primary">{money(Number(product.price))}</Text><Text className="text-muted-foreground">{(product.stock_quantity ?? 0) > 0 ? `${product.stock_quantity} in stock` : "Out of stock"} · {product.specifications_reviewed ? "Reviewed specifications" : "Specifications pending review"}</Text><Text className="text-muted-foreground text-xs">{Object.entries(product.specifications).slice(0, 6).map(([key, value]) => `${key.replace(/_/g, " ")}: ${typeof value === "object" ? JSON.stringify(value) : String(value)}`).join(" · ")}</Text><Action title={components.some((item) => item.product_id === product.id) ? "Selected" : "Select component"} primary disabled={busy || (product.stock_quantity ?? 0) <= 0 || components.some((item) => item.product_id === product.id)} onPress={() => choose(product)} /></View>} /></SafeAreaView></Modal>
+    <MockSignInSheet visible={signIn} onClose={() => { if (getLocalUserId() === "guest") guestContinuation.current = null; setSignIn(false); }} />
+  </SafeAreaView>;
 }

@@ -2,7 +2,6 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import Animated, { SlideInDown, SlideOutUp } from "react-native-reanimated";
-import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCartActions } from "@/hooks/useCart";
 import { useSession } from "@/hooks/useSession";
@@ -21,11 +20,19 @@ export function MockSignInSheet({
   onClose,
   message = "Sign in with your Battlefront customer account.",
 }: MockSignInSheetProps) {
-  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isDark, reducedMotion } = useTheme();
   const { showToast } = useToast();
-  const { signIn, signUp } = useSession();
+  const { signIn, signUp, verification, clearVerification, confirmEmail, resendEmail } = useSession();
+  const [code, setCode] = useState("");
+  const [clock, setClock] = useState(Date.now());
+  const [resendUntil, setResendUntil] = useState(0);
+  useEffect(() => {
+    if (!verification) return;
+    const timer = setInterval(() => setClock(Date.now()), 1000);
+    setResendUntil(Math.max(Date.now() + verification.retry_after * 1000, Date.parse(verification.resend_available_at ?? "") || 0));
+    return () => clearInterval(timer);
+  }, [verification]);
   const { promoteGuestCartToMock } = useCartActions();
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
@@ -53,11 +60,22 @@ export function MockSignInSheet({
     setError("");
     setPassword("");
     setPasswordConfirmation("");
+    clearVerification(); setCode("");
     onClose();
   }
 
   async function handleSignIn() {
     if (isSubmitting) return;
+    if (verification) {
+      if (!/^\d{6}$/.test(code)) { setError("Enter the six-digit verification code."); return; }
+      setIsSubmitting(true); setError("");
+      try {
+        await confirmEmail(code); setCode(""); setPassword(""); setPasswordConfirmation(""); setIsRegistering(false);
+        showToast("Email verified. Sign in to continue.");
+      } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not verify this code."); }
+      finally { setIsSubmitting(false); }
+      return;
+    }
     if (!email.trim() || !password) {
       setError("Enter your email and password to continue.");
       return;
@@ -69,18 +87,17 @@ export function MockSignInSheet({
     const createdAccount = isRegistering;
     setIsSubmitting(true);
     try {
-      if (isRegistering) await signUp({ name, email, password, password_confirmation: passwordConfirmation });
-      else await signIn(email, password);
+      const authenticated = isRegistering ? await signUp({ name, email, password, password_confirmation: passwordConfirmation }) : await signIn(email, password);
+      if (!authenticated) { setError(""); setPassword(""); setPasswordConfirmation(""); return; }
       promoteGuestCartToMock();
       setError("");
       dismissLoginFailureToast();
       setPassword("");
       setPasswordConfirmation("");
       onClose();
-      router.replace("/");
       showToast(createdAccount ? "Account created successfully." : "Logged in successfully.");
     } catch (error) {
-      if (createdAccount) {
+      if (createdAccount || !(error instanceof Error) || !("status" in error) || error.status !== 401) {
         setError(error instanceof Error ? error.message : "Could not create your account.");
       } else {
         setError("");
@@ -121,14 +138,15 @@ export function MockSignInSheet({
         >
           <View className="flex-row items-center justify-between">
             <View>
-              <Text className="text-foreground text-xl font-bold">{isRegistering ? "Create account" : "Sign in"}</Text>
-              <Text className="text-muted-foreground text-xs mt-1">{isRegistering ? "Create your Battlefront customer account." : message}</Text>
+              <Text className="text-foreground text-xl font-bold">{verification ? "Verify email" : isRegistering ? "Create account" : "Sign in"}</Text>
+              <Text className="text-muted-foreground text-xs mt-1">{verification ? `Enter the code sent to ${verification.masked_email}.` : isRegistering ? "Create your Battlefront customer account." : message}</Text>
             </View>
             <Pressable accessibilityLabel="Close account form" disabled={isSubmitting} onPress={closeSheet} hitSlop={8} className="w-9 h-9 items-center justify-center">
               <Ionicons name="close" size={22} color={isDark ? "#f8fafc" : "#30343b"} />
             </Pressable>
           </View>
           {isRegistering && <TextInput accessibilityLabel="Customer name" value={name} onChangeText={setName} placeholder="Full name" editable={!isSubmitting} autoComplete="name" className="bg-secondary border border-border rounded-xl px-3 h-12 text-foreground text-sm mt-6" />}
+          <View style={verification ? { display: "none" } : undefined}>
           <TextInput
             accessibilityLabel="Customer email"
             value={email}
@@ -161,11 +179,24 @@ export function MockSignInSheet({
             void (async () => { try { await Linking.openURL(passwordResetUrl(email)); } catch { setError("Could not open password recovery. Please try again."); } })();
           }} className="self-end py-2"><Text className="text-primary text-xs font-semibold">Forgot password?</Text></Pressable> : null}
           {isRegistering && <TextInput accessibilityLabel="Confirm password" value={passwordConfirmation} onChangeText={setPasswordConfirmation} placeholder="Confirm password" secureTextEntry autoCapitalize="none" editable={!isSubmitting} className="bg-secondary border border-border rounded-xl px-3 h-12 text-foreground text-sm mt-3" />}
+          </View>
+          {verification && <View className="mt-5">
+            <TextInput accessibilityLabel="Email verification code" value={code} onChangeText={(value) => setCode(value.replace(/\D/g, "").slice(0, 6))} keyboardType="number-pad" autoComplete="one-time-code" maxLength={6} editable={!isSubmitting} placeholder="Six-digit code" className="bg-secondary border border-border rounded-xl px-3 h-12 text-foreground" />
+            <Text className="mt-2 text-muted-foreground text-xs">{verification.delivery_status === "failed" ? "Email delivery failed. Request another code when available." : "Codes expire after five minutes. Verification does not sign you in."}</Text>
+            <Pressable disabled={isSubmitting || clock < resendUntil} onPress={() => {
+              setIsSubmitting(true); setError("");
+              void resendEmail().then(() => { setCode(""); showToast("Verification email requested."); }).catch((reason) => {
+                setError(reason instanceof Error ? reason.message : "Could not resend email.");
+                if (reason?.retryAfter) setResendUntil(Date.now() + reason.retryAfter * 1000);
+              }).finally(() => setIsSubmitting(false));
+            }} className="py-3"><Text className="text-primary">{clock < resendUntil ? `Resend in ${Math.ceil((resendUntil - clock) / 1000)}s` : "Resend code"}</Text></Pressable>
+            <Pressable disabled={isSubmitting} onPress={() => { clearVerification(); setIsRegistering(false); setCode(""); setError(""); }} className="py-2"><Text className="text-primary">Return to sign in</Text></Pressable>
+          </View>}
           {error.length > 0 && <Text accessibilityRole="alert" className="text-danger text-xs mt-3">{error}</Text>}
-          <Pressable accessibilityLabel={isRegistering ? "Create account" : "Sign in"} disabled={isSubmitting} onPress={() => void handleSignIn()} className="bg-primary rounded-xl items-center py-3.5 mt-5">
-            <Text className="text-primary-foreground text-sm font-bold">{isSubmitting ? (isRegistering ? "Creating account..." : "Signing in...") : (isRegistering ? "Create account" : "Sign in")}</Text>
+          <Pressable accessibilityLabel={verification ? "Verify email" : isRegistering ? "Create account" : "Sign in"} disabled={isSubmitting} onPress={() => void handleSignIn()} className="bg-primary rounded-xl items-center py-3.5 mt-5">
+            <Text className="text-primary-foreground text-sm font-bold">{isSubmitting ? "Please wait..." : verification ? "Verify email" : isRegistering ? "Create account" : "Sign in"}</Text>
           </Pressable>
-          <Pressable disabled={isSubmitting} onPress={() => { setIsRegistering((current) => !current); setError(""); setPassword(""); setPasswordConfirmation(""); }} className="items-center py-3">
+          <Pressable disabled={isSubmitting} style={verification ? { display: "none" } : undefined} onPress={() => { setIsRegistering((current) => !current); setError(""); setPassword(""); setPasswordConfirmation(""); }} className="items-center py-3">
             <Text className="text-primary text-sm font-semibold">{isRegistering ? "Already have an account? Sign in" : "Create a customer account"}</Text>
           </Pressable>
           <Pressable onPress={closeSheet} className="items-center py-3">

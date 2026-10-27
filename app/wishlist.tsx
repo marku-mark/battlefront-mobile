@@ -18,6 +18,8 @@ function formatPrice(value: number): string {
   return `₱${value.toLocaleString("en-PH")}`;
 }
 
+import { wishlistRows } from "@/lib/wishlistRows";
+
 export default function WishlistScreen() {
   const router = useRouter();
   const isScreenActive = useScreenActive();
@@ -134,7 +136,7 @@ export default function WishlistScreen() {
           </Pressable>
         </View>
       ) : (
-        <FlatList data={products} keyExtractor={(product) => product.id} initialNumToRender={8} maxToRenderPerBatch={6} windowSize={5} onEndReached={() => { if (isScreenActive() && !isCatalogLoading && !loadingMore.current && visibleCount < wishlistIds.length) { loadingMore.current = true; setVisibleCount((count) => count + 12); } }} onEndReachedThreshold={0.4} ListFooterComponent={<Text className="text-muted-foreground text-center py-3">{isCatalogLoading ? "Loading saved products…" : hasCatalogError ? "Some products could not be updated." : visibleCount < wishlistIds.length ? "Scroll for more saved products" : ""}</Text>} showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: layout.horizontalPadding, paddingBottom: 28, width: "100%", maxWidth: 860, alignSelf: "center" }} ListHeaderComponent={removedProduct ? (
+        <FlatList data={hasCatalogError ? products : wishlistRows(wishlistIds.slice(0, visibleCount), products)} keyExtractor={(product) => product.id} initialNumToRender={8} maxToRenderPerBatch={6} windowSize={5} onEndReached={() => { if (isScreenActive() && !isCatalogLoading && !loadingMore.current && visibleCount < wishlistIds.length) { loadingMore.current = true; setVisibleCount((count) => count + 12); } }} onEndReachedThreshold={0.4} ListFooterComponent={<Text className="text-muted-foreground text-center py-3">{isCatalogLoading ? "Loading saved products…" : hasCatalogError ? "Some products could not be updated." : visibleCount < wishlistIds.length ? "Scroll for more saved products" : ""}</Text>} showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: layout.horizontalPadding, paddingBottom: 28, width: "100%", maxWidth: 860, alignSelf: "center" }} ListHeaderComponent={removedProduct ? (
             <View className="flex-row items-center justify-between rounded-xl border border-primary/30 bg-primary/10 px-3 py-3 mb-3">
               <Text className="flex-1 text-foreground text-xs">{removedProduct.name} removed</Text>
               <Pressable
@@ -148,7 +150,9 @@ export default function WishlistScreen() {
                 <Text className="text-primary text-xs font-bold">Undo</Text>
               </Pressable>
             </View>
-          ) : null} renderItem={({ item: product }) => (
+          ) : null} renderItem={({ item: product }) => "unavailable" in product ? (
+            <View className="mb-3 border-b border-border p-3"><Text className="text-foreground">{isCatalogLoading ? "Loading saved product…" : `Saved product #${product.id} is currently unavailable.`}</Text><Pressable disabled={isCatalogLoading} onPress={() => toggleWishlist(product.id)} className="min-h-12 justify-center"><Text className="text-primary">Remove from wishlist</Text></Pressable></View>
+          ) : (
             <View key={product.id} className="flex-row bg-card border border-border rounded-2xl p-3 mb-3 shadow-soft">
               <Pressable
                 accessibilityLabel={`View details for ${product.name}`}

@@ -1,8 +1,9 @@
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { vars } from "nativewind";
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { View } from "react-native";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Alert, View } from "react-native";
+import { useSession } from "@/hooks/useSession";
 
 type ThemeMode = "dark" | "light";
 
@@ -23,7 +24,7 @@ type ThemeContextValue = {
 };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
-const THEME_STORAGE_KEY = "battlefront-theme";
+const THEME_STORAGE_KEY = "battlefront-guest-theme";
 
 const themes = {
   dark: {
@@ -69,14 +70,17 @@ const themes = {
 } as const;
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
+  const { session, saveProfile } = useSession();
+  const saving = useRef(false);
   const reducedMotion = useReducedMotion();
   const [isHydrated, setIsHydrated] = useState(false);
-  const [mode, setMode] = useState<ThemeMode>("dark");
+  const [guestMode, setGuestMode] = useState<ThemeMode>("light");
+  const mode = session.mode === "customer" ? session.user.appearance ?? "light" : guestMode;
 
   useEffect(() => {
     let active = true;
     AsyncStorage.getItem(THEME_STORAGE_KEY).then((storedMode) => {
-      if (active && (storedMode === "light" || storedMode === "dark")) setMode(storedMode);
+      if (active && (storedMode === "light" || storedMode === "dark")) setGuestMode(storedMode);
     }).catch(() => undefined).finally(() => { if (active) setIsHydrated(true); });
     return () => { active = false; };
   }, []);
@@ -89,14 +93,20 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       isDark: mode === "dark",
       colors: themes[mode].colors,
       toggleMode: () => {
-        setMode((current) => {
-          const nextMode = current === "dark" ? "light" : "dark";
-          AsyncStorage.setItem(THEME_STORAGE_KEY, nextMode).catch(() => undefined);
-          return nextMode;
-        });
+        const nextMode = mode === "dark" ? "light" : "dark";
+        if (session.mode === "customer") {
+          if (saving.current) return;
+          saving.current = true;
+          void saveProfile({ name: session.user.name, email: session.user.email, appearance: nextMode }, session.user.id)
+            .catch((error) => Alert.alert("Could not save appearance", error instanceof Error ? error.message : "Try again."))
+            .finally(() => { saving.current = false; });
+        } else {
+          setGuestMode(nextMode);
+          void AsyncStorage.setItem(THEME_STORAGE_KEY, nextMode).catch(() => undefined);
+        }
       },
     }),
-    [mode, isHydrated, reducedMotion]
+    [mode, isHydrated, reducedMotion, session, saveProfile]
   );
 
   return (

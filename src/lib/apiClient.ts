@@ -2,8 +2,9 @@ export class ApiError extends Error {
   status: number;
   errors: Record<string, string[]>;
   retryAfter: number | null;
-  constructor(message: string, status: number, errors: Record<string, string[]> = {}, retryAfter: number | null = null) {
-    super(message); this.status = status; this.errors = errors; this.retryAfter = retryAfter;
+  data: unknown;
+  constructor(message: string, status: number, errors: Record<string, string[]> = {}, retryAfter: number | null = null, data?: unknown) {
+    super(message); this.status = status; this.errors = errors; this.retryAfter = retryAfter; this.data = data;
   }
 }
 
@@ -25,7 +26,7 @@ export function createApiClient(baseUrl: string, getToken: () => string | null =
     try {
       const response = await send(`${root}/${path.replace(/^\//, "")}`, { ...options, headers, signal: controller.signal });
       if (response.status === 204) return undefined as T;
-      let payload: { message?: string; errors?: Record<string, string[]> } = {};
+      let payload: { message?: string; errors?: Record<string, string[]>; data?: unknown } = {};
       let validJson = false;
       try {
         const parsed = JSON.parse(await response.text());
@@ -37,14 +38,14 @@ export function createApiClient(baseUrl: string, getToken: () => string | null =
           const seconds = header === null ? 60 : Number(header);
           const cooldown = Number.isFinite(seconds) && seconds >= 0 ? Math.ceil(seconds) : 60;
           blockedUntil = Math.max(blockedUntil, now() + cooldown * 1000);
-          throw new ApiError(`Battlefront is receiving too many requests. Try again in ${Math.ceil((blockedUntil - now()) / 1000)} seconds.`, 429, {}, cooldown);
+          throw new ApiError(`Battlefront is receiving too many requests. Try again in ${Math.ceil((blockedUntil - now()) / 1000)} seconds.`, 429, {}, cooldown, payload.data);
         }
         if (response.status === 401 && token && getToken() === token) onUnauthorized();
         const errors = payload.errors ?? {};
         const fallback = response.status === 413 ? "Payment proof is too large for the server. Choose a smaller image."
           : `Battlefront could not complete the request (HTTP ${response.status}). Please try again or contact the store.`;
         const message = Object.values(errors).flat().join("\n") || payload.message || fallback;
-        throw new ApiError(String(message), response.status, errors, response.headers.has("Retry-After") ? Number(response.headers.get("Retry-After")) : null);
+        throw new ApiError(String(message), response.status, errors, response.headers.has("Retry-After") ? Number(response.headers.get("Retry-After")) : null, payload.data);
       }
       if (!validJson) throw new ApiError("Battlefront returned an unexpected response. If you submitted an order, check My orders before trying again.", response.status);
       return payload as T;

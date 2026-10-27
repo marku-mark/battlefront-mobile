@@ -4,6 +4,7 @@ export type ApiCart = {
   items: {
     id: number;
     quantity: number;
+    pc_build_group?: { uuid: string; name: string } | null;
     product: { id: number; name: string; brand: string | null; image_url: string | null; category: string; price: string; discount_price: string | null };
     availability: { status: string; available_quantity: number | null };
     unit_price: string;
@@ -13,12 +14,19 @@ export type ApiCart = {
   total_quantity: number;
   conflict_count: number;
 };
-export type CartItem = { product: Product; quantity: number; variant?: string | null; serverId?: number; lineTotal: number };
+export type CartItem = { product: Product; quantity: number; variant?: string | null; serverId?: number; lineTotal: number; buildGroup?: { uuid: string; name: string } | null };
+export function cartItemKey(item: CartItem): string { return item.serverId ? `cart:${item.serverId}` : item.product.id; }
+function matchesItem(item: CartItem, id: string) { return id.startsWith("cart:") ? cartItemKey(item) === id : item.product.id === id && !item.buildGroup; }
+export function toggleCartSelection(items: CartItem[], current: number[], id: number): number[] {
+  const group = items.find((item) => item.serverId === id)?.buildGroup;
+  const ids = group ? items.filter((item) => item.buildGroup?.uuid === group.uuid).flatMap((item) => item.serverId ? [item.serverId] : []) : [id];
+  return current.includes(id) ? current.filter((selected) => !ids.includes(selected)) : [...new Set([...current, ...ids])];
+}
 
 export function cartSnapshot(cart: ApiCart) {
   return {
     items: cart.items.map((row): CartItem => ({
-      serverId: row.id, quantity: row.quantity, variant: null, lineTotal: Number(row.line_total),
+      serverId: row.id, quantity: row.quantity, variant: null, lineTotal: Number(row.line_total), buildGroup: row.pc_build_group ?? null,
       product: {
         id: String(row.product.id), name: row.product.name, categoryId: "",
         categorySlug: `category-${row.product.category.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`,
@@ -51,13 +59,14 @@ export function createOptimisticCart() {
       return operation;
     },
     settle(operation: symbol) { pending.delete(operation); },
-    find(productId: string) { return confirmed.items.find((item) => item.product.id === productId); },
+    find(productId: string) { return confirmed.items.find((item) => matchesItem(item, productId)); },
     snapshot() {
       let items = confirmed.items;
       for (const { productId, quantity } of pending.values()) {
+        const removedGroup = quantity <= 0 ? items.find((row) => matchesItem(row, productId))?.buildGroup?.uuid : undefined;
         items = quantity <= 0
-          ? items.filter((item) => item.product.id !== productId)
-          : items.map((item) => item.product.id === productId
+          ? items.filter((item) => !matchesItem(item, productId) && (!removedGroup || item.buildGroup?.uuid !== removedGroup))
+          : items.map((item) => matchesItem(item, productId)
             ? { ...item, quantity, lineTotal: Math.round(item.product.price * 100) * quantity / 100 }
             : item);
       }

@@ -1,6 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { cartSnapshot, createCartQueue, createOptimisticCart } from "../src/lib/cartState.ts";
+import { cartSnapshot, createCartQueue, createOptimisticCart, cartItemKey, toggleCartSelection } from "../src/lib/cartState.ts";
+
+test("identical products in separate builds keep independent cart identities and grouped removal", () => {
+  const row = cart().items[0];
+  const response = cart({ items: [{ ...row, id: 1 }, { ...row, id: 2, pc_build_group: { uuid: "build-a", name: "PC A" } }, { ...row, id: 3, pc_build_group: { uuid: "build-a", name: "PC A" } }, { ...row, id: 4, pc_build_group: { uuid: "build-b", name: "PC B" } }] });
+  const state = createOptimisticCart(); state.confirm(response);
+  assert.deepEqual(state.snapshot().items.map(cartItemKey), ["cart:1", "cart:2", "cart:3", "cart:4"]);
+  assert.equal(state.find("42").serverId, 1);
+  assert.equal(state.find("cart:4").buildGroup.uuid, "build-b");
+  const token = state.begin("cart:2", 0);
+  assert.deepEqual(state.snapshot().items.map(cartItemKey), ["cart:1", "cart:4"]);
+  state.settle(token);
+  assert.equal(state.snapshot().items.length, 4);
+  assert.deepEqual(toggleCartSelection(state.snapshot().items, [], 2), [2, 3]);
+  assert.deepEqual(toggleCartSelection(state.snapshot().items, [1, 2, 3, 4], 3), [1, 4]);
+});
 
 function cart(overrides = {}) {
   return {

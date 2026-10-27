@@ -8,7 +8,7 @@ import { PasswordForm } from "@/components/account/PasswordForm";
 import { Chatbot } from "@/components/support/Chatbot";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { useSession } from "@/hooks/useSession";
-import { getLocalUserId, getNegrosDeliveryLocations, getDeliveryLocations } from "@/lib/api";
+import { getLocalUserId, getNegrosDeliveryLocations, getDeliveryLocations, resolveDeliveryLocation } from "@/lib/api";
 import { DeliveryAddressFields } from "@/components/addresses/DeliveryAddressFields";
 import { EMPTY_DELIVERY_ADDRESS, formatDeliveryAddress, isCompleteDeliveryAddress, type DeliveryAddress, type DeliveryBarangay, type DeliveryLocation } from "@/lib/deliveryAddress";
 import { loadSavedAddresses, persistSavedAddresses, type SavedAddress } from "@/lib/savedAddresses";
@@ -18,7 +18,7 @@ import { useToast } from "@/hooks/useToast";
 const accountLinks = [
   { icon: "receipt-outline", label: "My orders", detail: "View your order history", badge: null },
   { icon: "location-outline", label: "Delivery addresses", detail: "Sync your default address for checkout", badge: null },
-  { icon: "heart-outline", label: "Wishlist", detail: "Saved on this device", badge: "Local" },
+  { icon: "heart-outline", label: "Wishlist", detail: "Saved to your customer account", badge: null },
 ] as const;
 
 export default function AccountScreen() {
@@ -115,11 +115,13 @@ export default function AccountScreen() {
     setIsSavingAddress(true); setAddressError("");
     try {
       const user = await refreshProfile();
-      if (address && (!locations.some((item) => item.code === address.delivery_destination) || !address.delivery_barangay_code || !address.delivery_address_details)) throw new Error("Recreate this address with a city and barangay before setting it as default.");
+      if (address && (!address.delivery_destination || !address.delivery_barangay_code || !address.delivery_address_details)) throw new Error("Recreate this address with a city and barangay before setting it as default.");
+      const city = address?.delivery_destination ? await resolveDeliveryLocation(address.delivery_destination) : null;
+      if (getLocalUserId() !== owner) return;
       await saveProfile(address ? {
         name: user.name, email: user.email, default_delivery_address_action: "save",
-        default_delivery_region_code: "1800000000",
-        default_delivery_province_code: locations.find((item) => item.code === address.delivery_destination)?.province?.code ?? null,
+        default_delivery_region_code: city?.region_code,
+        default_delivery_province_code: city?.province?.code ?? null,
         default_delivery_city_code: address.delivery_destination,
         default_delivery_barangay_code: address.delivery_barangay_code,
         default_delivery_address_details: address.delivery_address_details,
@@ -492,7 +494,7 @@ export default function AccountScreen() {
                       keyboardType="phone-pad"
                       className="mt-2 h-11 rounded-lg border border-border bg-background px-3 text-foreground text-sm"
                     />
-                    <DeliveryAddressFields value={newAddress} locations={locations} onChange={setNewAddress} disabled={isSavingAddress} />
+                    <DeliveryAddressFields value={newAddress} locations={locations} onLocation={(city) => setLocations((rows) => [...rows.filter((row) => row.code !== city.code), city])} onChange={setNewAddress} disabled={isSavingAddress} />
                     <View className="mt-3 flex-row gap-2">
                       <Pressable
                         accessibilityRole="button"

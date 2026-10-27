@@ -38,9 +38,9 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <ThemeProvider>
-          <ToastProvider>
-            <SessionProvider>
+        <SessionProvider>
+          <ThemeProvider>
+            <ToastProvider>
               <NotificationProvider>
                 <CartProvider>
                   <WishlistProvider>
@@ -48,9 +48,9 @@ export default function RootLayout() {
                   </WishlistProvider>
                 </CartProvider>
               </NotificationProvider>
-            </SessionProvider>
-          </ToastProvider>
-        </ThemeProvider>
+            </ToastProvider>
+          </ThemeProvider>
+        </SessionProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

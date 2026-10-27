@@ -1,7 +1,7 @@
 import { useActiveFocusEffect } from "@/hooks/useActiveScreen";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, Text, TextInput, View, Linking } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCart } from "@/hooks/useCart";
@@ -14,6 +14,7 @@ import { useTheme } from "@/theme/ThemeProvider";
 import * as Clipboard from "expo-clipboard";
 import { useToast } from "@/hooks/useToast";
 import { authenticatedMediaSource } from "@/lib/api";
+import { shouldRefreshOnlineOrder } from "@/lib/paymentRecovery";
 
 const statusSteps = [
   { key: "pending", label: "Pending", detail: "Your order is awaiting staff processing." },
@@ -44,6 +45,10 @@ export default function OrderDetailScreen() {
   const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
   const [refundProofUrl, setRefundProofUrl] = useState<string | null>(null);
   const uploadingProof = useRef(false);
+  const continuingPayment = useRef(false);
+  const [isContinuingPayment, setIsContinuingPayment] = useState(false);
+  const returnPending = useRef(false);
+  useEffect(() => { setReturnDraft(null); setRefundProofUrl(null); }, [id, owner]);
 
   async function copyTrackingReference(reference: string) {
     if (isCopyingTrackingReference || !reference.trim()) return;
@@ -100,6 +105,21 @@ export default function OrderDetailScreen() {
     };
   }, [id, owner]));
 
+  const refreshOnlinePayment = shouldRefreshOnlineOrder(order);
+  useActiveFocusEffect(useCallback(() => {
+    if (!id || owner === null || !refreshOnlinePayment) return;
+    let active = true; let inFlight = false;
+    const revision = getSessionRevision();
+    const timer = setInterval(() => {
+      if (inFlight) return;
+      inFlight = true;
+      void getOrderById(id, true).then((updated) => { if (active && revision === getSessionRevision()) setOrder(updated); })
+        .catch(() => { /* Preserve the last server-confirmed state until a later read succeeds. */ })
+        .finally(() => { inFlight = false; });
+    }, 15_000);
+    return () => { active = false; clearInterval(timer); };
+  }, [id, owner, refreshOnlinePayment]));
+
   const currentStepIndex = order ? statusSteps.findIndex((step) => step.key === order.statusValue) : -1;
 
   async function cancelOrder() {
@@ -136,17 +156,24 @@ export default function OrderDetailScreen() {
   }
 
   function requestCancellation() {
+    const revision = getSessionRevision();
     Alert.alert("Request cancellation", "Battlefront will review this request before changing order or payment status.", [
       { text: "Keep order", style: "cancel" },
-      { text: "Submit request", onPress: () => { void requestOrderCancellation(order!.id).then(setOrder).catch((error) => Alert.alert("Could not request cancellation", error.message)); } },
+      { text: "Submit request", onPress: () => {
+        if (revision !== getSessionRevision()) return;
+        void requestOrderCancellation(order!.id).then((updated) => { if (revision === getSessionRevision()) setOrder(updated); }).catch((error) => { if (revision === getSessionRevision()) Alert.alert("Could not request cancellation", error.message); });
+      } },
     ]);
   }
   async function continuePayment() {
-    if (!order) return;
+    if (!order || continuingPayment.current) return;
+    const revision = getSessionRevision();
+    continuingPayment.current = true; setIsContinuingPayment(true);
     try {
       let result: { redirect_url?: string; status?: string } | undefined = order.payment.checkout_url ? { redirect_url: order.payment.checkout_url } : undefined;
       if (!result) {
         const retried = await retryHostedPayment(order.id);
+        if (revision !== getSessionRevision()) return;
         if (retried.payment?.status === "qrph_ready") {
           setOrder(await getOrderById(order.id, true));
           return;
@@ -155,7 +182,8 @@ export default function OrderDetailScreen() {
       }
       if (result?.redirect_url) await Linking.openURL(result.redirect_url);
       else Alert.alert("Payment update pending", "Check your order again shortly. Battlefront is reconciling the payment status.");
-    } catch (error) { Alert.alert("Could not open payment", error instanceof Error ? error.message : "Please try again."); }
+    } catch (error) { if (revision === getSessionRevision()) Alert.alert("Could not open payment", error instanceof Error ? error.message : "Please try again."); }
+    finally { continuingPayment.current = false; setIsContinuingPayment(false); }
   }
   function requestReturn(itemId: number, itemName: string, quantity: number) {
     if (!order) return;
@@ -166,24 +194,42 @@ export default function OrderDetailScreen() {
   }
 
   async function submitReturn() {
-    if (!order || !returnDraft || !returnReason || isSubmittingReturn) return;
+    if (!order || !returnDraft || !returnReason || returnPending.current) return;
+    const revision = getSessionRevision();
     if (returnReason === "other" && returnExplanation.trim().length < 5) {
       Alert.alert("Add a short explanation", "For Other, enter at least five characters.");
       return;
     }
-    setIsSubmittingReturn(true);
+    returnPending.current = true; setIsSubmittingReturn(true);
     try {
       await submitReturnRequest(order.id, { order_item_id: returnDraft.itemId, quantity: returnQuantity, reason_code: returnReason, reason: returnReason === "other" ? returnExplanation.trim() : undefined });
-      setOrder(await getOrderById(order.id, true));
+      if (revision !== getSessionRevision()) return;
+      const updated = await getOrderById(order.id, true);
+      if (revision !== getSessionRevision()) return;
+      setOrder(updated);
       setReturnDraft(null);
       showToast("Return request submitted");
     } catch (error) {
-      Alert.alert("Could not request return", error instanceof Error ? error.message : "Please try again.");
-    } finally { setIsSubmittingReturn(false); }
+      if (revision === getSessionRevision()) Alert.alert("Could not request return", error instanceof Error ? error.message : "Please try again.");
+    } finally { returnPending.current = false; setIsSubmittingReturn(false); }
+  }
+
+  async function withdrawReturn(requestId: number) {
+    if (!order || returnPending.current) return;
+    const revision = getSessionRevision();
+    returnPending.current = true; setIsSubmittingReturn(true);
+    try {
+      await withdrawReturnRequest(order.id, requestId);
+      if (revision !== getSessionRevision()) return;
+      const updated = await getOrderById(order.id, true);
+      if (revision === getSessionRevision()) setOrder(updated);
+    } catch (error) { if (revision === getSessionRevision()) Alert.alert("Could not withdraw request", error instanceof Error ? error.message : "Please try again."); }
+    finally { returnPending.current = false; setIsSubmittingReturn(false); }
   }
 
   async function buyAgain() {
     if (!order?.productLines?.length || isReordering) return;
+    const revision = getSessionRevision();
     setIsReordering(true);
     try {
       const loadedItems = await Promise.all(order.productLines.map(async (line) => {
@@ -197,10 +243,13 @@ export default function OrderDetailScreen() {
         }
       }));
       const availableItems = loadedItems.filter((item): item is NonNullable<typeof item> => item !== null);
+      if (revision !== getSessionRevision()) return;
       let addedCount = 0;
       for (const { product, line } of availableItems) {
+        if (revision !== getSessionRevision()) return;
         if (await addItem(product, line.quantity, line.variant)) addedCount++;
       }
+      if (revision !== getSessionRevision()) return;
       const unavailableCount = order.productLines.length - addedCount;
       const message = unavailableCount > 0
         ? `${addedCount} item(s) added. ${unavailableCount} item(s) could not be added.`
@@ -323,7 +372,7 @@ export default function OrderDetailScreen() {
         {order.paymentRejection ? <View className="mt-4 rounded-xl border border-danger/40 bg-danger/10 p-4"><Text className="text-foreground text-sm font-semibold">Payment proof rejected</Text><Text className="text-muted-foreground text-xs mt-2">{order.paymentRejection.reason}</Text>{order.paymentRejection.note ? <Text className="text-muted-foreground text-xs mt-1">{order.paymentRejection.note}</Text> : null}</View> : null}
         {order.canResubmitProof ? <Pressable accessibilityRole="button" accessibilityState={{ disabled: isUploadingProof }} disabled={isUploadingProof} onPress={() => void replaceProof()} className="mt-3 min-h-12 justify-center rounded-xl bg-primary px-4"><Text className="text-center text-primary-foreground font-semibold">{isUploadingProof ? "Uploading proof..." : "Replace rejected payment proof"}</Text></Pressable> : null}
         {order.paymentNotice ? <Text className="text-muted-foreground mt-4">{order.paymentNotice}</Text> : null}
-        {order.payment.checkout_url || order.payment.can_retry_hosted || order.payment.qr_can_retry || order.payment.can_retry ? <Pressable accessibilityRole="button" onPress={() => void continuePayment()} className="mt-3 min-h-12 justify-center rounded-xl bg-primary px-4"><Text className="text-center text-primary-foreground font-semibold">{order.payment.qr_can_retry ? "Generate QR code" : order.payment.can_retry ? "Retry bank payment" : order.payment.can_retry_hosted ? "Retry online payment" : "Continue payment"}</Text></Pressable> : null}
+        {order.payment.checkout_url || order.payment.can_retry_hosted || order.payment.qr_can_retry || order.payment.can_retry ? <Pressable accessibilityRole="button" disabled={isContinuingPayment} accessibilityState={{ disabled: isContinuingPayment }} onPress={() => void continuePayment()} className="mt-3 min-h-12 justify-center rounded-xl bg-primary px-4"><Text className="text-center text-primary-foreground font-semibold">{order.payment.qr_can_retry ? "Generate QR code" : order.payment.can_retry ? "Retry bank payment" : order.payment.can_retry_hosted ? "Retry online payment" : "Continue payment"}</Text></Pressable> : null}
         {order.payment.qr_code_image_url ? <View className="mt-4 items-center rounded-xl border border-border bg-card p-4"><Text className="self-start text-foreground font-semibold">Scan to pay with QR Ph</Text><Image source={{ uri: order.payment.qr_code_image_url }} accessibilityLabel="PayMongo QR Ph payment code" resizeMode="contain" style={{ width: 240, height: 240, marginTop: 12 }} />{order.payment.qr_expires_at ? <Text className="mt-2 text-muted-foreground text-xs">Expires {new Date(order.payment.qr_expires_at).toLocaleString("en-PH")}</Text> : null}</View> : null}
 
         {order.canCancel && (
@@ -343,7 +392,7 @@ export default function OrderDetailScreen() {
         {order.canRequestReturn && order.productLines?.filter((line) => line.orderItemId && line.canRequestReturn).map((line) => <Pressable key={line.orderItemId} accessibilityRole="button" onPress={() => requestReturn(line.orderItemId!, line.productName ?? line.productId, line.remainingReturnable ?? line.quantity)} className="mt-2 min-h-12 justify-center rounded-xl border border-border px-4"><Text className="text-center text-foreground">Request return for {line.productName ?? line.productId} · {line.remainingReturnable ?? line.quantity} available</Text></Pressable>)}
         {order.canRequestReturn || order.returnRequests.length > 0 ? <View className="mt-4 rounded-xl border border-border bg-card p-4"><Text className="text-foreground font-semibold">Returns and refunds</Text><Text className="mt-1 text-muted-foreground text-xs">Requests are reviewed after the item is received. Approval and refunds are not guaranteed.</Text>{order.returnEligibility?.received_at ? <Text className="mt-2 text-muted-foreground text-xs">Received {new Date(order.returnEligibility.received_at).toLocaleDateString("en-PH")}.</Text> : <Text className="mt-2 text-muted-foreground text-xs">Receipt date unconfirmed; Battlefront will review eligibility.</Text>}{order.returnEligibility?.deadline_at ? <Text className="mt-1 text-muted-foreground text-xs">{order.returnEligibility.window_approved ? "Change-of-mind deadline" : `Proposed ${order.returnEligibility.window_days}-day deadline`}: {new Date(order.returnEligibility.deadline_at).toLocaleDateString("en-PH")}.</Text> : null}{order.returnRequests.some((request) => request.status?.value === "submitted") && order.returnInstructions ? <View className="mt-3 border-t border-border pt-3"><Text className="text-foreground text-sm font-medium">{order.returnInstructions.label}</Text><Text className="mt-1 text-muted-foreground text-xs leading-5">{order.returnInstructions.message}</Text>{order.returnInstructions.branch ? <Text className="mt-1 text-muted-foreground text-xs">{order.returnInstructions.branch.name} · {order.returnInstructions.branch.city} · {order.returnInstructions.branch.address}{order.returnInstructions.branch.contact_number ? ` · ${order.returnInstructions.branch.contact_number}` : ""}</Text> : null}</View> : null}</View> : null}
         {order.cancellation ? <View className="mt-4 border-t border-border pt-3"><Text className="text-foreground font-semibold">Cancellation request</Text><Text className="mt-1 text-muted-foreground">{order.cancellation.status?.label ?? order.cancellation.notice ?? "Under review"}</Text></View> : null}
-        {order.returnRequests.map((request) => <View key={request.id} className="mt-4 border-t border-border pt-3"><Text className="text-foreground font-semibold">Return request</Text><Text className="mt-1 text-muted-foreground">{request.status?.label ?? "Submitted"} · {request.product?.name ?? "Item"} · Qty {request.quantity} · {request.reason_label ?? request.reason}</Text>{request.feedback ? <Text className="mt-1 text-muted-foreground">{request.feedback}</Text> : null}{request.can_withdraw ? <Pressable onPress={() => void withdrawReturnRequest(order.id, request.id).then(() => getOrderById(order.id, true)).then(setOrder).catch((error) => Alert.alert("Could not withdraw request", error.message))} className="mt-2 py-2"><Text className="text-primary">Withdraw return request</Text></Pressable> : null}</View>)}
+        {order.returnRequests.map((request) => <View key={request.id} className="mt-4 border-t border-border pt-3"><Text className="text-foreground font-semibold">Return request</Text><Text className="mt-1 text-muted-foreground">{request.status?.label ?? "Submitted"} · {request.product?.name ?? "Item"} · Qty {request.quantity} · {request.reason_label ?? request.reason}</Text>{request.feedback ? <Text className="mt-1 text-muted-foreground">{request.feedback}</Text> : null}{request.can_withdraw ? <Pressable disabled={isSubmittingReturn} onPress={() => void withdrawReturn(request.id)} className="mt-2 py-2"><Text className="text-primary">Withdraw return request</Text></Pressable> : null}</View>)}
         {order.refundPayments.map((refund) => <View key={refund.id} className="mt-4 border-t border-border pt-3"><Text className="text-foreground font-semibold">Refund payment · {refund.amount ? `₱${refund.amount}` : ""}</Text><Text className="mt-1 text-muted-foreground">{refund.payment_method ?? "Recorded"}{refund.paid_at ? ` · ${new Date(refund.paid_at).toLocaleDateString("en-PH")}` : ""}</Text>{refund.proof ? <Pressable accessibilityRole="button" onPress={() => setRefundProofUrl(refund.proof!.url)} className="mt-2 min-h-10 justify-center"><Text className="text-primary text-sm font-semibold">View payment proof</Text></Pressable> : <Text className="mt-2 text-muted-foreground text-xs">Payment proof unavailable. Contact Battlefront for help.</Text>}</View>)}
 
         <View className="mt-5 rounded-2xl border border-border bg-card p-4">
@@ -383,6 +432,7 @@ export default function OrderDetailScreen() {
           <Text className="text-muted-foreground text-xs mt-2">{order.shipment.notice}</Text>
           {order.shipment.history_notice ? <Text className="text-muted-foreground text-xs mt-2">{order.shipment.history_notice}</Text> : null}
         </View> : null}
+        {order.productLines?.some((line) => line.buildGroup) ? <View className="mt-4 border-t border-border pt-4"><Text className="text-foreground font-semibold">PC build components</Text>{order.productLines.filter((line) => line.buildGroup).map((line) => <Text key={line.orderItemId} className="mt-2 text-muted-foreground">{line.buildGroup?.name} · {line.quantity} × {line.productName}</Text>)}<Text className="mt-2 text-muted-foreground text-xs">Reorder adds individual products. Review a complete configuration in PC Builder before purchasing it as a build.</Text></View> : null}
         {order.productLines && order.productLines.length > 0 && (
           <Pressable
             accessibilityRole="button"

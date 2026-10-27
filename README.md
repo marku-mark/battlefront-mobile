@@ -74,8 +74,27 @@ src/
 - The mobile API is customer-facing. Inventory administration, payment
   verification, reports, forecasting, and chatbot knowledge management remain
   in the web application.
-- Wishlist items, extra saved addresses, and recently viewed display are stored
-  locally. Notification history and read state use Laravel's customer API.
+- Customer wishlists, saved PC builds, appearance, and notification history
+  synchronize with Laravel. Guest wishlists, builder drafts, extra saved addresses,
+  recently viewed display, and explicitly labelled local reviews stay on the device.
+- Registration and unverified login open email OTP verification. Verification
+  requires a separate normal login before any bearer token is saved. Guest cart
+  additions resume once after login; closing the account sheet cancels that intent.
+- Delivery entry supports the nationwide PSGC hierarchy, including independent
+  cities without a province. Laravel determines delivery coverage, fees, payment
+  eligibility, and the address snapshots saved with placed orders.
+- PC Builder uses the shared catalog, published templates, compatibility engine,
+  account saves, sharing, and atomic build-to-cart API. Local builds can be imported
+  explicitly without deleting their originals. Grouped cart rows retain server IDs;
+  selecting or removing one part affects the complete build, and quantities are locked.
+- Online payment opens the provider externally. Returning to the app refreshes
+  the order; pending online orders refresh while their detail screen is active.
+  Only the backend can confirm payment. Payment writes are never automatically retried.
+
+Run `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test` for the mobile
+contract/state tests and `node node_modules/typescript/bin/tsc --noEmit` for types.
+An Expo export validates bundling; physical-device uploads, payment return,
+remote push, and iOS behavior still require the documented native integration run.
 
 ## Push notifications
 

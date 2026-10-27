@@ -15,6 +15,7 @@ import { ConfirmClearModal } from "@/components/layout/ConfirmClearModal";
 
 import { getProductImageSource } from "@/lib/data";
 import { getResponsiveLayout } from "@/lib/responsive";
+import { cartItemKey, toggleCartSelection } from "@/lib/cartState";
 
 function formatPrice(value: number): string {
   return `₱${value.toLocaleString("en-PH")}`;
@@ -52,7 +53,7 @@ export default function CartScreen() {
   const selectedConflict = selectedItems.some((item) => item.product.availability !== "available");
   const allSelected = items.length > 0 && selectedItems.length === items.length;
   function toggleSelectedItem(id: number) {
-    setSelectedCartItemIds((current) => current.includes(id) ? current.filter((itemId) => itemId !== id) : [...current, id]);
+    setSelectedCartItemIds((current) => toggleCartSelection(items, current, id));
   }
   useActiveFocusEffect(useCallback(() => {
     if (customerId !== null) void refreshCart(false).catch(() => undefined);
@@ -156,8 +157,8 @@ export default function CartScreen() {
           <Text className="mt-1 text-muted-foreground text-xs">Unselected products stay in your cart. Battlefront checks prices and stock again at checkout.</Text>
         </View>
 
-        {items.map(({ product, quantity, variant, lineTotal, serverId }) => (
-          <View key={product.id} className="flex-row bg-card border border-border rounded-2xl p-3 mb-3 shadow-soft">
+        {items.map((item) => { const { product, quantity, variant, lineTotal, serverId, buildGroup } = item; const rowKey = cartItemKey(item); return (
+          <View key={rowKey} className="flex-row bg-card border border-border rounded-2xl p-3 mb-3 shadow-soft">
             <Pressable accessibilityRole="checkbox" accessibilityLabel={`Select ${product.name} for checkout`} accessibilityState={{ checked: serverId ? selectedCartItemIds.includes(serverId) : false }} disabled={!serverId} onPress={() => serverId && toggleSelectedItem(serverId)} className="w-9 items-center justify-center mr-1">
               <Ionicons name={serverId && selectedCartItemIds.includes(serverId) ? "checkbox" : "square-outline"} size={20} color={serverId && selectedCartItemIds.includes(serverId) ? "#ef1b1b" : "#94a3b8"} />
             </Pressable>
@@ -179,15 +180,16 @@ export default function CartScreen() {
                 <Pressable
                   accessibilityLabel={`Remove ${product.name}`}
                   disabled={isUpdating}
-                  onPress={() => void runAction(() => removeItem(product.id, variant), () => {
+                  onPress={() => void runAction(() => removeItem(rowKey, variant), () => {
                     setRemovedItemAction("removed");
-                    setRemovedItem({ product, quantity, variant, lineTotal });
+                    if (!buildGroup) setRemovedItem({ product, quantity, variant, lineTotal });
                   })}
                   hitSlop={8}
                 >
                   <Ionicons name="trash-outline" size={17} color="#94a3b8" />
                 </Pressable>
               </View>
+              {buildGroup && <Text className="text-primary text-xs mt-1">PC build · {buildGroup.name}. Removing a part removes this complete build.</Text>}
               {variant && <Text className="text-muted-foreground text-xs mt-1">Option: {variant}</Text>}
               <Text className="text-primary text-sm font-bold mt-2">{formatPrice(product.price)}</Text>
               {product.availability !== "available" && <Text className="text-danger text-xs mt-1">{product.availability === "insufficient_stock" ? `Only ${product.stockQuantity ?? 0} available; reduce quantity.` : "Currently unavailable"}</Text>}
@@ -195,8 +197,8 @@ export default function CartScreen() {
                 <View className="flex-row items-center border border-border rounded-xl overflow-hidden bg-secondary">
                   <Pressable
                     accessibilityLabel={`Decrease ${product.name} quantity`}
-                    disabled={isUpdating}
-                    onPress={() => void runAction(() => updateQuantity(product.id, quantity - 1, variant))}
+                    disabled={isUpdating || Boolean(buildGroup)}
+                    onPress={() => !buildGroup && void runAction(() => updateQuantity(rowKey, quantity - 1, variant))}
                     className="w-12 h-12 items-center justify-center"
                   >
                     <Ionicons name="remove" size={14} color="#f8fafc" />
@@ -204,9 +206,9 @@ export default function CartScreen() {
                   <Text className="text-foreground text-xs font-bold min-w-[34px] text-center">{quantity}</Text>
                   <Pressable
                     accessibilityLabel={`Increase ${product.name} quantity`}
-                    accessibilityState={{ disabled: isUpdating || product.availability !== "available" || quantity >= (product.stockQuantity ?? 0) }}
-                    disabled={isUpdating || product.availability !== "available" || quantity >= (product.stockQuantity ?? 0)}
-                    onPress={() => void runAction(() => updateQuantity(product.id, quantity + 1, variant))}
+                    accessibilityState={{ disabled: isUpdating || Boolean(buildGroup) || product.availability !== "available" || quantity >= (product.stockQuantity ?? 0) }}
+                    disabled={isUpdating || Boolean(buildGroup) || product.availability !== "available" || quantity >= (product.stockQuantity ?? 0)}
+                    onPress={() => !buildGroup && void runAction(() => updateQuantity(rowKey, quantity + 1, variant))}
                     className="w-12 h-12 items-center justify-center"
                     style={({ pressed }) => ({ opacity: isUpdating || product.availability !== "available" || quantity >= (product.stockQuantity ?? 0) ? 0.4 : pressed ? 0.7 : 1 })}
                   >
@@ -219,8 +221,8 @@ export default function CartScreen() {
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`Save ${product.name} for later`}
-                  disabled={isUpdating}
-                  onPress={() => void runAction(() => removeItem(product.id, variant), () => {
+                  disabled={isUpdating || Boolean(buildGroup)}
+                  onPress={() => !buildGroup && void runAction(() => removeItem(rowKey, variant), () => {
                     if (!isWishlisted(product.id)) toggleWishlist(product.id);
                     setRemovedItemAction("saved");
                     setRemovedItem({ product, quantity, variant, lineTotal });
@@ -234,7 +236,7 @@ export default function CartScreen() {
               </View>
             </View>
           </View>
-        ))}
+        ); })}
 
         {removedItem && (
           <View className="flex-row items-center justify-between rounded-xl border border-primary/30 bg-primary/10 px-3 py-3 mb-3">

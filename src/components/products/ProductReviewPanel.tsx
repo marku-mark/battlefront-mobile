@@ -3,6 +3,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { useEffect, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { useTheme } from "@/theme/ThemeProvider";
+import { useSession } from "@/hooks/useSession";
 
 type ProductReview = { id: string; author: string; title: string; body: string; rating: number };
 
@@ -22,16 +23,19 @@ export function ProductReviewPanel({
   onSignIn,
 }: ProductReviewPanelProps) {
   const { colors } = useTheme();
+  const { session } = useSession();
   const [localReviews, setLocalReviews] = useState<ProductReview[]>([]);
   const [isWriting, setIsWriting] = useState(false);
   const [selectedRating, setSelectedRating] = useState(5);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [error, setError] = useState("");
-  const storageKey = `battlefront-product-reviews-${productId}`;
+  const owner = session.mode === "customer" ? session.user.id : "guest";
+  const storageKey = `battlefront-product-reviews-${owner}-${productId}`;
 
   useEffect(() => {
     let isActive = true;
+    setLocalReviews([]); setIsWriting(false); setTitle(""); setBody(""); setError("");
     AsyncStorage.getItem(storageKey)
       .then((storedReviews) => {
         if (!storedReviews) return;
@@ -84,8 +88,8 @@ export function ProductReviewPanel({
     <View className="mt-6 border-t border-border pt-5">
       <View className="mb-4 flex-row items-center justify-between">
         <View>
-          <Text className="text-foreground text-base font-semibold">Reviews</Text>
-          <Text className="text-muted-foreground text-xs mt-1">{totalReviewCount} reviews</Text>
+          <Text className="text-foreground text-base font-semibold">Reviews on this device</Text>
+          <Text className="text-muted-foreground text-xs mt-1">{totalReviewCount} local reviews · These are not published to Battlefront.</Text>
         </View>
         <Pressable
           accessibilityRole="button"

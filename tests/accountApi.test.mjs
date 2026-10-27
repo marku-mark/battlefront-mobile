@@ -6,16 +6,30 @@ import { ApiError, createApiClient } from "../src/lib/apiClient.ts";
 const user = { id: 5, name: "Customer", email: "customer@example.com", default_delivery_address: null };
 const result = { user, token: "customer-token", expires_at: "2026-11-01T00:00:00Z" };
 
-test("registration sends confirmed credentials and returns the customer session", async (t) => {
+const verification = { status: "verification_required", verification_token: "opaque-context", masked_email: "c***@example.com", retry_after: 60 };
+test("registration sends confirmed credentials and returns verification without a customer token", async (t) => {
   t.mock.method(globalThis, "fetch", async (url, options) => {
     assert.equal(url, "http://backend.test/api/v1/auth/register");
     assert.equal(options.method, "POST");
     assert.equal(options.headers.has("Authorization"), false);
     assert.deepEqual(JSON.parse(options.body), { name: "Customer", email: "customer@example.com", password: " password ", password_confirmation: " password ", device_name: "Battlefront Expo" });
-    return Response.json({ data: result }, { status: 201 });
+    return Response.json({ data: verification }, { status: 201 });
   });
   const account = createAccountApi(createApiClient("http://backend.test/api/v1"));
-  assert.deepEqual(await account.register({ name: " Customer ", email: " customer@example.com ", password: " password ", password_confirmation: " password " }), result);
+  assert.deepEqual(await account.register({ name: " Customer ", email: " customer@example.com ", password: " password ", password_confirmation: " password " }), verification);
+});
+
+test("unverified login preserves the verification context from a 403 response", async () => {
+  const request = createApiClient("http://backend.test/api/v1", undefined, undefined, undefined, async () => Response.json({ data: verification }, { status: 403 }));
+  assert.deepEqual(await createAccountApi(request).login(user.email, "password"), verification);
+});
+
+test("verification and resend use the opaque context without authenticating", async () => {
+  const calls = [];
+  const account = createAccountApi(async (path, options) => { calls.push([path, JSON.parse(options.body)]); return { data: { status: "verified" } }; });
+  await account.verifyEmail("opaque-context", "123456");
+  await account.resendVerification("opaque-context");
+  assert.deepEqual(calls, [["auth/email/verify", { verification_token: "opaque-context", code: "123456" }], ["auth/email/resend", { verification_token: "opaque-context" }]]);
 });
 
 test("duplicate email registration exposes validation feedback and does not retry", async (t) => {

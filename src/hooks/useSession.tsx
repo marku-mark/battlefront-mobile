@@ -1,16 +1,19 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { getLocalUserId, getProfile, login, logout, register, updateProfile, onSessionExpired, setAccessToken, type ApiUser, type AuthResult, type ProfileInput, type RegistrationInput } from "@/lib/api";
 import * as SecureStore from "expo-secure-store";
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 import { createProfileActions } from "@/lib/accountApi";
 import { revokePushDevice } from "@/lib/pushDevice";
+import { isVerificationContext, type VerificationContext } from "@/lib/accountApi";
+import { verifyEmail, resendVerification } from "@/lib/api";
 
 export type Session = { mode: "guest" } | { mode: "customer"; user: ApiUser & { displayName: string } };
-type SessionContextValue = { session: Session; isHydrated: boolean; signIn: (email: string, password: string) => Promise<boolean>; signUp: (fields: RegistrationInput) => Promise<boolean>; signOut: () => Promise<void>; saveProfile: (fields: ProfileInput, owner?: number) => Promise<ApiUser>; refreshProfile: () => Promise<ApiUser> };
+type SessionContextValue = { session: Session; isHydrated: boolean; verification: VerificationContext | null; clearVerification: () => void; confirmEmail: (code: string) => Promise<void>; resendEmail: () => Promise<void>; signIn: (email: string, password: string) => Promise<boolean>; signUp: (fields: RegistrationInput) => Promise<boolean>; signOut: () => Promise<void>; saveProfile: (fields: ProfileInput, owner?: number) => Promise<ApiUser>; refreshProfile: () => Promise<ApiUser> };
 const SessionContext = createContext<SessionContextValue | null>(null);
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session>({ mode: "guest" });
   const [isHydrated, setIsHydrated] = useState(false);
+  const [verification, setVerification] = useState<VerificationContext | null>(null);
   useEffect(() => {
     let active = true;
     async function restoreSession() {
@@ -39,22 +42,50 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setSession({ mode: "customer", user: { ...result.user, displayName: result.user.name } });
     return true;
   }, []);
-  const signIn = useCallback(async (email: string, password: string) => acceptAuthentication(await login(email, password)), [acceptAuthentication]);
-  const signUp = useCallback(async (fields: RegistrationInput) => acceptAuthentication(await register(fields)), [acceptAuthentication]);
-  const { refreshProfile, saveProfile } = useMemo(() => createProfileActions({ getProfile, updateProfile }, getLocalUserId, (user) => {
+  const signIn = useCallback(async (email: string, password: string) => {
+    const result = await login(email, password);
+    if (isVerificationContext(result)) { setVerification(result); return false; }
+    setVerification(null);
+    return acceptAuthentication(result);
+  }, [acceptAuthentication]);
+  const signUp = useCallback(async (fields: RegistrationInput) => {
+    const result = await register(fields);
+    if (!isVerificationContext(result)) throw new Error("The server did not return an email verification request.");
+    setVerification(result);
+    return false;
+  }, []);
+  const clearVerification = useCallback(() => setVerification(null), []);
+  const confirmEmail = useCallback(async (code: string) => {
+    if (!verification) throw new Error("Return to sign in to request a verification code.");
+    await verifyEmail(verification.verification_token, code);
+    setVerification(null);
+  }, [verification]);
+  const resendEmail = useCallback(async () => {
+    if (!verification) throw new Error("Return to sign in to request a verification code.");
+    const current = verification;
+    const details = await resendVerification(current.verification_token);
+    setVerification((value) => value?.verification_token === current.verification_token ? { ...current, ...details } : value);
+  }, [verification]);
+  const { refreshProfile, saveProfile } = useMemo(() => createProfileActions({ getProfile: () => getProfile(true), updateProfile }, getLocalUserId, (user) => {
     setSession((current) => current.mode === "customer" && current.user.id === user.id ? { mode: "customer", user: { ...user, displayName: user.name } } : current);
   }), []);
+  const customerId = session.mode === "customer" ? session.user.id : null;
+  useEffect(() => {
+    if (customerId === null) return;
+    const subscription = AppState.addEventListener("change", (state) => { if (state === "active") void refreshProfile().catch(() => undefined); });
+    return () => subscription.remove();
+  }, [customerId, refreshProfile]);
   const signOut = useCallback(async () => {
     try {
       await revokePushDevice().catch(() => undefined);
       await logout();
     }
     finally {
-      setAccessToken(null); setSession({ mode: "guest" });
+      setAccessToken(null); setSession({ mode: "guest" }); setVerification(null);
       if (Platform.OS !== "web") await SecureStore.deleteItemAsync("battlefront-api-token");
     }
   }, []);
-  const value = useMemo(() => ({ session, isHydrated, signIn, signUp, signOut, saveProfile, refreshProfile }), [session, isHydrated, signIn, signUp, signOut, saveProfile, refreshProfile]);
+  const value = useMemo(() => ({ session, isHydrated, verification, clearVerification, confirmEmail, resendEmail, signIn, signUp, signOut, saveProfile, refreshProfile }), [session, isHydrated, verification, clearVerification, confirmEmail, resendEmail, signIn, signUp, signOut, saveProfile, refreshProfile]);
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
 export function useSession() {

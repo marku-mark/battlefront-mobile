@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Alert, AppState } from "react-native";
 import {
   createContext,
   useCallback,
@@ -50,6 +51,8 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
   const [isWishlistLoaded, setIsWishlistLoaded] = useState(false);
   const hydratedOwner = useRef<string | number | null>(null);
   const pendingMockToggles = useRef<string[]>([]);
+  const mutationTail = useRef(Promise.resolve());
+  const mutationVersion = useRef(0);
   const subscribe = useCallback(
     (listener: Listener) => store.subscribe(session.mode, listener),
     [session.mode, store]
@@ -59,15 +62,38 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
   const toggleWishlist = useCallback((productId: string) => {
     const wasSaved = store.isWishlisted(session.mode, productId);
     store.toggleWishlist(session.mode, productId);
+    if (session.mode === "guest" && hydratedOwner.current !== userKey) pendingMockToggles.current.push(productId);
     if (session.mode === "customer") {
       const revision = getSessionRevision();
-      const mutation = wasSaved ? removeWishlistProduct(productId) : addWishlistProduct(productId);
-      void mutation.catch(() => {
-        if (revision === getSessionRevision()) store.toggleWishlist(session.mode, productId);
-      });
+      const version = ++mutationVersion.current;
+      mutationTail.current = mutationTail.current.then(async () => {
+        if (revision !== getSessionRevision()) return;
+        let failed = false;
+        try { await (wasSaved ? removeWishlistProduct(productId) : addWishlistProduct(productId)); }
+        catch { failed = true; }
+        if (revision !== getSessionRevision() || version !== mutationVersion.current) return;
+        try {
+          const result = await getWishlist();
+          if (revision === getSessionRevision() && version === mutationVersion.current) store.setItems("customer", result.items.map((item) => String(item.product_id)));
+        } catch { if (failed && revision === getSessionRevision() && version === mutationVersion.current) store.toggleWishlist("customer", productId); }
+        if (failed && revision === getSessionRevision()) Alert.alert("Could not update wishlist", "Your saved products have been refreshed. Please check the wishlist before trying again.");
+      }).catch(() => undefined);
       return;
     }
   }, [session.mode, store, userKey]);
+  useEffect(() => {
+    if (session.mode !== "customer") return;
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state !== "active") return;
+      const revision = getSessionRevision(); const version = mutationVersion.current;
+      void mutationTail.current.then(async () => {
+        if (revision !== getSessionRevision()) return;
+        const result = await getWishlist();
+        if (revision === getSessionRevision() && version === mutationVersion.current) store.setItems("customer", result.items.map((item) => String(item.product_id)));
+      }).catch(() => undefined);
+    });
+    return () => subscription.remove();
+  }, [session.mode, userKey, store]);
   const importGuestWishlist = useCallback(async () => {
     const guestItems = store.getItems("guest");
     if (guestItems.length === 0) return 0;
@@ -82,6 +108,7 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
+    const version = mutationVersion.current;
     store.setItems("customer", []);
     setIsWishlistLoaded(false);
     hydratedOwner.current = null;
@@ -97,7 +124,7 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
         const storedIds = parsedWishlist as string[];
         const hydratedWishlist = pendingMockToggles.current.reduce((items, productId) => toggleId(items, productId), storedIds);
         pendingMockToggles.current = [];
-        store.setItems("customer", hydratedWishlist);
+        if (session.mode === "guest" || version === mutationVersion.current) store.setItems(session.mode, hydratedWishlist);
       })
       .catch(() => undefined)
       .finally(() => {

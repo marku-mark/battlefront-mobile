@@ -1,10 +1,11 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Alert } from "react-native";
 import type { Product } from "@/lib/data";
-import { addCartItem, changeCartItem, deleteCartItem, getCart, type ApiCart } from "@/lib/api";
+import { addCartItem, changeCartItem, deleteCartItem, getCart, getLocalUserId, type ApiCart } from "@/lib/api";
 import { createOptimisticCart, createCartQueue, type CartItem } from "@/lib/cartState";
 import { useSession } from "@/hooks/useSession";
 import { createPendingActions } from "@/lib/pendingActions";
+import { MockSignInSheet } from "@/components/account/MockSignInSheet";
 
 export type { CartItem } from "@/lib/cartState";
 type CartActions = { addItem: (product: Product, quantity?: number, variant?: string | null) => Promise<boolean>; updateQuantity: (id: string, quantity: number, variant?: string | null) => Promise<boolean>; removeItem: (id: string, variant?: string | null) => Promise<boolean>; clearCart: () => Promise<boolean>; refreshCart: (force?: boolean) => Promise<void>; promoteGuestCartToMock: () => void };
@@ -26,6 +27,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const optimistic = useRef(createOptimisticCart());
   const pendingAdds = useRef(createPendingActions<boolean>()).current;
   const pendingRefresh = useRef(createPendingActions<void>()).current;
+  const deferredAdd = useRef<{ product: Product; quantity: number } | null>(null);
+  const [signInOpen, setSignInOpen] = useState(false);
   function publish() {
     const snapshot = optimistic.current.snapshot();
     setItems(snapshot.items); setSubtotal(snapshot.subtotal); setConflictCount(snapshot.conflictCount);
@@ -53,12 +56,18 @@ export function CartProvider({ children }: { children: ReactNode }) {
     optimistic.current = createOptimisticCart();
     setItems([]); setSubtotal(0); setConflictCount(0); setError(null); setPendingUpdates(0);
     if (identity === null) { setIsLoading(false); return; }
+    const deferred = deferredAdd.current;
+    deferredAdd.current = null;
     let active = true;
     setIsLoading(true);
     enqueue(async () => {
       if (!active) return;
       const cart = await getCart();
       if (active) apply(cart, identity);
+      if (active && deferred) {
+        const updated = await addCartItem(deferred.product.id, deferred.quantity);
+        if (active) apply(updated, identity);
+      }
     }).catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : "Cannot load cart."); }).finally(() => { if (active) setIsLoading(false); });
     return () => { active = false; };
   }, [identity]);
@@ -100,7 +109,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }
   const value: CartValue = {
     items, subtotal, itemCount: items.reduce((sum, item) => sum + item.quantity, 0), isLoading, isUpdating: pendingUpdates > 0, error, conflictCount, refreshCart,
-    addItem: (product, quantity = 1) => pendingAdds.run(`${identity}:${product.id}`, () => mutate(() => addCartItem(product.id, quantity))),
+    addItem: (product, quantity = 1) => {
+      if (identity === null) { deferredAdd.current = { product, quantity }; setSignInOpen(true); return Promise.resolve(false); }
+      return pendingAdds.run(`${identity}:${product.id}`, () => mutate(() => addCartItem(product.id, quantity)));
+    },
     updateQuantity: (id, quantity) => mutate(async () => {
       const item = optimistic.current.find(id);
       if (!item?.serverId) throw new Error("Refresh the cart and try again.");
@@ -113,8 +125,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }, { productId: id, quantity: 0 }),
     clearCart: () => mutate(async () => {
       let cart = await getCart();
-      for (const row of cart.items) {
-        cart = await deleteCartItem(row.id);
+      while (cart.items.length > 0) {
+        cart = await deleteCartItem(cart.items[0].id);
         apply(cart, identity);
       }
       return cart;
@@ -131,7 +143,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     refreshCart: (force) => pendingRefresh.run(String(identityRef.current), () => currentActions.current.refreshCart(force)),
     promoteGuestCartToMock: () => currentActions.current.promoteGuestCartToMock(),
   }), []);
-  return <CartActionsContext.Provider value={actions}><CartContext.Provider value={value}>{children}</CartContext.Provider></CartActionsContext.Provider>;
+  return <CartActionsContext.Provider value={actions}><CartContext.Provider value={value}>{children}<MockSignInSheet visible={signInOpen} onClose={() => { if (getLocalUserId() === "guest") deferredAdd.current = null; setSignInOpen(false); }} message="Sign in to add your selected product to the cart." /></CartContext.Provider></CartActionsContext.Provider>;
 }
 export function useCart() { const context = useContext(CartContext); if (!context) throw new Error("useCart must be used inside CartProvider"); return context; }
 export function useCartActions(): CartActions { const actions = useContext(CartActionsContext); if (!actions) throw new Error("useCartActions must be used inside CartProvider"); return actions; }
