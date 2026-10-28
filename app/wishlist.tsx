@@ -78,7 +78,7 @@ export default function WishlistScreen() {
       </View>
 
       {session.mode === "customer" && guestWishlistCount > 0 ? (
-        <View className="mx-4 mt-3 flex-row items-center gap-3 rounded-xl border border-border bg-card p-3">
+        <View className="mx-4 mt-3 flex-row items-center gap-3 rounded-lg border border-border bg-card p-3">
           <View className="flex-1">
             <Text className="text-foreground text-sm font-semibold">Saved on this device</Text>
             <Text className="mt-1 text-muted-foreground text-xs">Import {guestWishlistCount} guest item{guestWishlistCount === 1 ? "" : "s"} into this account?</Text>
@@ -113,7 +113,7 @@ export default function WishlistScreen() {
             Save products you love so they are ready when you want to buy.
           </Text>
           {removedProduct && (
-            <View className="flex-row items-center rounded-xl border border-primary/30 bg-primary/10 px-3 py-3 mt-5">
+            <View className="flex-row items-center rounded-lg border border-primary/30 bg-primary/10 px-3 py-3 mt-5">
               <Text className="text-foreground text-xs">{removedProduct.name} removed</Text>
               <Pressable
                 accessibilityLabel="Undo remove wishlist item"
@@ -129,7 +129,7 @@ export default function WishlistScreen() {
           )}
           <Pressable
             onPress={() => router.replace("/")}
-            className="bg-primary rounded-xl px-5 py-3 mt-6"
+            className="bg-primary rounded-lg px-5 py-3 mt-6"
             style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
           >
             <Text className="text-primary-foreground text-sm font-semibold">Browse products</Text>
@@ -137,7 +137,7 @@ export default function WishlistScreen() {
         </View>
       ) : (
         <FlatList data={hasCatalogError ? products : wishlistRows(wishlistIds.slice(0, visibleCount), products)} keyExtractor={(product) => product.id} initialNumToRender={8} maxToRenderPerBatch={6} windowSize={5} onEndReached={() => { if (isScreenActive() && !isCatalogLoading && !loadingMore.current && visibleCount < wishlistIds.length) { loadingMore.current = true; setVisibleCount((count) => count + 12); } }} onEndReachedThreshold={0.4} ListFooterComponent={<Text className="text-muted-foreground text-center py-3">{isCatalogLoading ? "Loading saved products…" : hasCatalogError ? "Some products could not be updated." : visibleCount < wishlistIds.length ? "Scroll for more saved products" : ""}</Text>} showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: layout.horizontalPadding, paddingBottom: 28, width: "100%", maxWidth: 860, alignSelf: "center" }} ListHeaderComponent={removedProduct ? (
-            <View className="flex-row items-center justify-between rounded-xl border border-primary/30 bg-primary/10 px-3 py-3 mb-3">
+            <View className="flex-row items-center justify-between rounded-lg border border-primary/30 bg-primary/10 px-3 py-3 mb-3">
               <Text className="flex-1 text-foreground text-xs">{removedProduct.name} removed</Text>
               <Pressable
                 accessibilityLabel="Undo remove wishlist item"
@@ -153,12 +153,12 @@ export default function WishlistScreen() {
           ) : null} renderItem={({ item: product }) => "unavailable" in product ? (
             <View className="mb-3 border-b border-border p-3"><Text className="text-foreground">{isCatalogLoading ? "Loading saved product…" : `Saved product #${product.id} is currently unavailable.`}</Text><Pressable disabled={isCatalogLoading} onPress={() => toggleWishlist(product.id)} className="min-h-12 justify-center"><Text className="text-primary">Remove from wishlist</Text></Pressable></View>
           ) : (
-            <View key={product.id} className="flex-row bg-card border border-border rounded-2xl p-3 mb-3 shadow-soft">
+            <View key={product.id} className="flex-row bg-card border border-border rounded-lg p-3 mb-3 ">
               <Pressable
                 accessibilityLabel={`View details for ${product.name}`}
                 onPress={() => router.push({ pathname: "/product/[id]", params: { id: product.id } })}
               >
-                <ProductImage source={getProductImageSource(product.image)} className="w-20 h-20 rounded-xl bg-secondary" />
+                <ProductImage source={getProductImageSource(product.image)} className="w-20 h-20 rounded-lg bg-secondary" />
               </Pressable>
               <View className="flex-1 ml-3">
                 <View className="flex-row items-start gap-2">
@@ -184,7 +184,7 @@ export default function WishlistScreen() {
                 <Text className="text-primary text-sm font-bold mt-2">{formatPrice(product.price)}</Text>
 
                 <View className="flex-row items-center justify-between mt-3">
-                  <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.12em]">
+                  <Text className="text-muted-foreground text-xs uppercase tracking-[0.12em]">
                     Ready to ship
                   </Text>
                   <Pressable
@@ -198,7 +198,7 @@ export default function WishlistScreen() {
                     className="bg-primary rounded-lg px-3 py-2"
                     style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
                   >
-                    <Text className="text-primary-foreground text-[11px] font-bold">{cartItems.some((item) => item.product.id === product.id) ? "Add another" : "Add to cart"}</Text>
+                    <Text className="text-primary-foreground text-xs font-bold">{cartItems.some((item) => item.product.id === product.id) ? "Add another" : "Add to cart"}</Text>
                   </Pressable>
                 </View>
               </View>

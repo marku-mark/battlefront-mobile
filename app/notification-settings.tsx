@@ -122,14 +122,14 @@ export default function NotificationSettingsScreen() {
   return <SafeAreaView edges={["left", "right", "bottom"]} className="flex-1 bg-background">
     <ScreenHeader title="Order notifications" subtitle="Manage alerts on this device" onBack={() => router.back()} />
     <ScrollView className="flex-1" contentContainerClassName="p-4 pb-8">
-      <View className="rounded-2xl border border-border bg-card p-5">
-        <View className="h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+      <View className="rounded-lg border border-border bg-card p-5">
+        <View className="h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
           <Ionicons name="notifications-outline" size={24} color="#ef1b1b" />
         </View>
         <Text className="mt-4 text-foreground text-lg font-bold">Stay up to date on your orders</Text>
         <Text className="mt-2 text-muted-foreground text-sm leading-6">Order updates appear in your inbox. Allow device alerts to see them while Battlefront is in the background.</Text>
 
-        <View className="mt-5 flex-row items-center gap-3 rounded-xl border border-border bg-secondary p-3">
+        <View className="mt-5 flex-row items-center gap-3 rounded-lg border border-border bg-secondary p-3">
           {busy ? <ActivityIndicator color={statusColor} /> : <Ionicons name={pushStatus === "enabled" || pushStatus === "allowed" ? "checkmark-circle" : pushStatus === "error" || pushStatus === "denied" || pushStatus === "muted" ? "alert-circle" : "notifications-off-outline"} size={20} color={statusColor} />}
           <View className="flex-1">
             <Text className="text-foreground text-sm font-semibold">{statusLabel}</Text>
@@ -137,12 +137,12 @@ export default function NotificationSettingsScreen() {
           </View>
         </View>
 
-        {pushStatus === "denied" || pushStatus === "muted" ? <Pressable onPress={() => void Linking.openSettings()} className="mt-4 min-h-12 flex-row items-center justify-center gap-2 rounded-xl bg-primary px-4">
+        {pushStatus === "denied" || pushStatus === "muted" ? <Pressable onPress={() => void Linking.openSettings()} className="mt-4 min-h-12 flex-row items-center justify-center gap-2 rounded-lg bg-primary px-4">
           <Text className="text-primary-foreground text-sm font-bold">Open device settings</Text>
           <Ionicons name="open-outline" size={16} color="#ffffff" />
         </Pressable> : null}
 
-        {pushStatus !== "denied" && pushStatus !== "muted" && pushStatus !== "unsupported" && Platform.OS !== "web" ? <Pressable accessibilityRole="button" onPress={() => void Linking.openSettings()} className="mt-2 min-h-11 items-center justify-center rounded-xl border border-border px-4">
+        {pushStatus !== "denied" && pushStatus !== "muted" && pushStatus !== "unsupported" && Platform.OS !== "web" ? <Pressable accessibilityRole="button" onPress={() => void Linking.openSettings()} className="mt-2 min-h-11 items-center justify-center rounded-lg border border-border px-4">
           <Text className="text-foreground text-sm font-semibold">Manage in device settings</Text>
         </Pressable> : null}
 
@@ -151,7 +151,7 @@ export default function NotificationSettingsScreen() {
           accessibilityState={{ disabled: isSendingTest }}
           disabled={isSendingTest}
           onPress={() => void sendTestNotification(false)}
-          className="mt-2 min-h-11 flex-row items-center justify-center gap-2 rounded-xl border border-border px-4"
+          className="mt-2 min-h-11 flex-row items-center justify-center gap-2 rounded-lg border border-border px-4"
           style={({ pressed }) => ({ opacity: isSendingTest ? 0.6 : pressed ? 0.75 : 1 })}
         >
           {isSendingTest ? <ActivityIndicator size="small" color={statusColor} /> : <Ionicons name="paper-plane-outline" size={16} color={statusColor} />}
@@ -163,14 +163,14 @@ export default function NotificationSettingsScreen() {
           accessibilityState={{ disabled: isSendingTest }}
           disabled={isSendingTest}
           onPress={() => void sendTestNotification(true)}
-          className="mt-2 min-h-11 items-center justify-center rounded-xl border border-border px-4"
+          className="mt-2 min-h-11 items-center justify-center rounded-lg border border-border px-4"
         >
           <Text className="text-foreground text-sm font-semibold">Test while phone is locked</Text>
         </Pressable> : null}
 
         {pushStatus === "unsupported" && Platform.OS === "web" ? <Text className="mt-3 text-muted-foreground text-xs leading-5">Install the Battlefront iOS or Android app to receive push alerts.</Text> : null}
       </View>
-      <View className="mt-4 rounded-2xl border border-border bg-card p-5">
+      <View className="mt-4 rounded-lg border border-border bg-card p-5">
         <Text className="text-foreground text-base font-bold">Device checks</Text>
         <Text className="mt-1 text-muted-foreground text-xs leading-5">These checks show which part of notification delivery needs attention.</Text>
         <View className="mt-3">
@@ -184,10 +184,10 @@ export default function NotificationSettingsScreen() {
           <DetailRow label="Latest remote push" value={providerResult} />
         </View>
         {checkError ? <Text accessibilityRole="alert" className="mt-2 text-sm text-primary">{checkError}</Text> : null}
-        <Pressable accessibilityRole="button" disabled={isInspecting} onPress={() => void inspectDevice()} className="mt-3 min-h-11 items-center justify-center rounded-xl bg-primary px-4">
+        <Pressable accessibilityRole="button" disabled={isInspecting} onPress={() => void inspectDevice()} className="mt-3 min-h-11 items-center justify-center rounded-lg bg-primary px-4">
           <Text className="text-primary-foreground text-sm font-bold">{isInspecting ? "Checking..." : "Re-register and check device"}</Text>
         </Pressable>
-        <Pressable accessibilityRole="button" disabled={isCheckingUpdate} onPress={() => void checkForAppUpdate()} className="mt-2 min-h-11 items-center justify-center rounded-xl border border-border px-4">
+        <Pressable accessibilityRole="button" disabled={isCheckingUpdate} onPress={() => void checkForAppUpdate()} className="mt-2 min-h-11 items-center justify-center rounded-lg border border-border px-4">
           <Text className="text-foreground text-sm font-semibold">{isCheckingUpdate ? "Checking for update..." : "Check for app update"}</Text>
         </Pressable>
       </View>

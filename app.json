@@ -19,7 +19,13 @@
           "image": "./assets/battlefront-logo.png",
           "imageWidth": 260,
           "resizeMode": "contain",
-          "backgroundColor": "#f4f0eb"
+          "backgroundColor": "#f4f0eb",
+          "android": {
+            "image": "./assets/battlefront-adaptive-icon.png",
+            "imageWidth": 200,
+            "resizeMode": "contain",
+            "backgroundColor": "#f4f0eb"
+          }
         }
       ],
       "expo-secure-store",
@@ -61,7 +67,8 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/battlefront-adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "softwareKeyboardLayoutMode": "resize"
     },
     "web": {
       "bundler": "metro",

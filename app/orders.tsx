@@ -67,13 +67,13 @@ export default function OrdersScreen() {
           <Pressable
             key={order.id}
             accessibilityRole="button"
-            className="mb-4 rounded-2xl border border-border bg-card p-4"
+            className="mb-4 rounded-lg border border-border bg-card p-4"
             onPress={() => router.push({ pathname: "/orders/[id]", params: { id: order.id } })}
           >
             <View className="flex-row items-center justify-between">
               <Text className="text-foreground text-sm font-bold">{order.reference}</Text>
               <View className="rounded-full bg-primary/10 px-2 py-1">
-                <Text className="text-primary text-[10px] font-bold uppercase tracking-[0.08em]">{order.status}</Text>
+                <Text className="text-primary text-xs font-bold uppercase tracking-[0.08em]">{order.status}</Text>
               </View>
             </View>
 
@@ -82,7 +82,7 @@ export default function OrdersScreen() {
             <Text className="text-primary text-sm font-bold mt-3">{order.total}</Text>
 
             <View className="flex-row items-center justify-between mt-4 pt-3 border-t border-border">
-              <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.12em]">View order details</Text>
+              <Text className="text-muted-foreground text-xs uppercase tracking-[0.12em]">View order details</Text>
               <Ionicons name="chevron-forward" size={16} color="#94a3b8" />
             </View>
           </Pressable>
@@ -93,7 +93,7 @@ export default function OrdersScreen() {
           <Ionicons name="receipt-outline" size={32} color="#94a3b8" />
           <Text className="mt-4 text-foreground text-base font-semibold">{owner === null ? "Sign in to see your orders" : "No orders yet"}</Text>
           <Text className="mt-2 text-center text-muted-foreground text-sm">{owner === null ? "Your purchase history and updates appear here after sign-in." : "When you place an order, its status and details will appear here."}</Text>
-          <Pressable accessibilityRole="button" onPress={() => router.push(owner === null ? "/account" : "/categories")} className="mt-5 min-h-12 justify-center rounded-xl bg-primary px-5">
+          <Pressable accessibilityRole="button" onPress={() => router.push(owner === null ? "/account" : "/categories")} className="mt-5 min-h-12 justify-center rounded-lg bg-primary px-5">
             <Text className="text-primary-foreground text-sm font-semibold">{owner === null ? "Go to account" : "Browse products"}</Text>
           </Pressable>
         </View>}

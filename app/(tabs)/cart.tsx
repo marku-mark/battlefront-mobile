@@ -76,7 +76,7 @@ export default function CartScreen() {
       <View className="flex-1 items-center justify-center px-6">
         <Text className="text-foreground text-lg font-semibold">Cannot load your cart</Text>
         <Text className="text-muted-foreground text-sm text-center mt-2">{error}</Text>
-        <Pressable disabled={isUpdating} onPress={() => void refreshCart().catch(() => undefined)} className="bg-primary rounded-xl px-5 py-3 mt-6"><Text className="text-primary-foreground">{isUpdating ? "Retrying…" : "Retry"}</Text></Pressable>
+        <Pressable disabled={isUpdating} onPress={() => void refreshCart().catch(() => undefined)} className="bg-primary rounded-lg px-5 py-3 mt-6"><Text className="text-primary-foreground">{isUpdating ? "Retrying…" : "Retry"}</Text></Pressable>
       </View>
     </SafeAreaView>;
   }
@@ -111,10 +111,10 @@ export default function CartScreen() {
           <Text className="text-muted-foreground text-sm text-center mt-2 max-w-[280px]">
             {session.mode === "guest" ? "Sign in to add products and load your saved cart." : "Add parts, peripherals, and upgrades to see them here."}
           </Text>
-          {session.mode === "guest" && <Pressable onPress={() => setIsSignInOpen(true)} className="bg-primary rounded-xl px-5 py-3 mt-6"><Text className="text-primary-foreground font-semibold">Sign in</Text></Pressable>}
+          {session.mode === "guest" && <Pressable onPress={() => setIsSignInOpen(true)} className="bg-primary rounded-lg px-5 py-3 mt-6"><Text className="text-primary-foreground font-semibold">Sign in</Text></Pressable>}
           <Pressable
             onPress={() => router.replace("/")}
-            className="bg-primary rounded-xl px-5 py-3 mt-6"
+            className="bg-primary rounded-lg px-5 py-3 mt-6"
             style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
           >
             <Text className="text-primary-foreground text-sm font-semibold">Browse products</Text>
@@ -145,8 +145,8 @@ export default function CartScreen() {
         {error && <View className="mb-3"><Text accessibilityRole="alert" className="text-danger">{error}</Text><Pressable accessibilityRole="button" disabled={isUpdating} onPress={() => void refreshCart().catch(() => undefined)} className="min-h-12 justify-center"><Text className="text-primary font-semibold">Refresh cart</Text></Pressable></View>}
         {isUpdating && <View className="flex-row items-center gap-2 mb-3"><ActivityIndicator size="small" color="#ef1b1b" /><Text className="text-muted-foreground text-xs">Updating cart…</Text></View>}
         {conflictCount > 0 && <Text className="text-danger mb-3">Some items are unavailable or exceed current stock. Update or remove them before checkout.</Text>}
-        <View className="flex-row items-center justify-between mb-3 rounded-xl border border-border bg-card px-3 py-2">
-          <Pressable accessibilityRole="checkbox" accessibilityLabel="Select all cart items" accessibilityState={{ checked: allSelected }} onPress={() => setSelectedCartItemIds(allSelected ? [] : items.flatMap((item) => item.serverId ? [item.serverId] : []))} className="min-h-11 flex-row items-center gap-2 px-1">
+        <View className="flex-row items-center justify-between mb-3 rounded-lg border border-border bg-card px-3 py-2">
+          <Pressable accessibilityRole="checkbox" accessibilityLabel="Select all cart items" accessibilityState={{ checked: allSelected }} onPress={() => setSelectedCartItemIds(allSelected ? [] : items.flatMap((item) => item.serverId ? [item.serverId] : []))} className="min-h-12 flex-row items-center gap-2 px-1">
             <Ionicons name={allSelected ? "checkbox" : "square-outline"} size={20} color={allSelected ? "#ef1b1b" : "#94a3b8"} />
             <Text className="text-foreground text-sm font-semibold">Select all</Text>
           </Pressable>
@@ -158,7 +158,7 @@ export default function CartScreen() {
         </View>
 
         {items.map((item) => { const { product, quantity, variant, lineTotal, serverId, buildGroup } = item; const rowKey = cartItemKey(item); return (
-          <View key={rowKey} className="flex-row bg-card border border-border rounded-2xl p-3 mb-3 shadow-soft">
+          <View key={rowKey} className="flex-row bg-card border border-border rounded-lg p-3 mb-3 ">
             <Pressable accessibilityRole="checkbox" accessibilityLabel={`Select ${product.name} for checkout`} accessibilityState={{ checked: serverId ? selectedCartItemIds.includes(serverId) : false }} disabled={!serverId} onPress={() => serverId && toggleSelectedItem(serverId)} className="w-9 items-center justify-center mr-1">
               <Ionicons name={serverId && selectedCartItemIds.includes(serverId) ? "checkbox" : "square-outline"} size={20} color={serverId && selectedCartItemIds.includes(serverId) ? "#ef1b1b" : "#94a3b8"} />
             </Pressable>
@@ -166,7 +166,7 @@ export default function CartScreen() {
               accessibilityLabel={`View details for ${product.name}`}
               onPress={() => router.push({ pathname: "/product/[id]", params: { id: product.id } })}
             >
-              <ProductImage source={getProductImageSource(product.image)} className="w-20 h-20 rounded-xl bg-secondary" />
+              <ProductImage source={getProductImageSource(product.image)} className="w-20 h-20 rounded-lg bg-secondary" />
             </Pressable>
             <View className="flex-1 ml-3">
               <View className="flex-row items-start gap-2">
@@ -194,7 +194,7 @@ export default function CartScreen() {
               <Text className="text-primary text-sm font-bold mt-2">{formatPrice(product.price)}</Text>
               {product.availability !== "available" && <Text className="text-danger text-xs mt-1">{product.availability === "insufficient_stock" ? `Only ${product.stockQuantity ?? 0} available; reduce quantity.` : "Currently unavailable"}</Text>}
               <View className="flex-row items-center justify-between mt-2">
-                <View className="flex-row items-center border border-border rounded-xl overflow-hidden bg-secondary">
+                <View className="flex-row items-center border border-border rounded-lg overflow-hidden bg-secondary">
                   <Pressable
                     accessibilityLabel={`Decrease ${product.name} quantity`}
                     disabled={isUpdating || Boolean(buildGroup)}
@@ -239,7 +239,7 @@ export default function CartScreen() {
         ); })}
 
         {removedItem && (
-          <View className="flex-row items-center justify-between rounded-xl border border-primary/30 bg-primary/10 px-3 py-3 mb-3">
+          <View className="flex-row items-center justify-between rounded-lg border border-primary/30 bg-primary/10 px-3 py-3 mb-3">
             <Text className="flex-1 text-foreground text-xs">
               {removedItem.product.name} {removedItemAction === "saved" ? "saved for later" : "removed"}
             </Text>
@@ -247,23 +247,19 @@ export default function CartScreen() {
               accessibilityLabel="Undo remove item"
               disabled={isUpdating}
               onPress={() => void runAction(() => addItem(removedItem.product, removedItem.quantity, removedItem.variant), () => setRemovedItem(null))}
-              className="px-2 py-1"
+              className="px-3 min-h-12 justify-center"
             >
               <Text className="text-primary text-xs font-bold">Undo</Text>
             </Pressable>
           </View>
         )}
 
-        <View className="bg-card border border-border rounded-2xl p-4 mt-4 shadow-soft">
+        <View className="bg-card border border-border rounded-lg p-4 mt-4 ">
           <View className="flex-row justify-between mb-2">
             <Text className="text-muted-foreground text-sm">Products</Text>
             <Text className="text-foreground text-base font-bold">{selectedItems.length}</Text>
           </View>
           <View className="flex-row justify-between mb-2"><Text className="text-muted-foreground text-sm">Units</Text><Text className="text-foreground text-base font-bold">{selectedUnits}</Text></View>
-          <View className="border-t border-border pt-3 mt-1 flex-row justify-between">
-            <Text className="text-foreground text-base font-bold">Selected subtotal</Text>
-            <Text className="text-primary text-base font-bold">{formatPrice(selectedSubtotal)}</Text>
-          </View>
           <Text className="text-muted-foreground text-xs mt-3">Only selected items will be purchased. Review delivery fees at checkout.</Text>
           {selectedConflict && <Text className="text-danger text-xs mt-3">Resolve stock issues or deselect unavailable items before checkout.</Text>}
         </View>
@@ -280,7 +276,7 @@ export default function CartScreen() {
             ? router.push({ pathname: "/checkout", params: { cart_item_ids: selectedCartItemIds.join(",") } })
             : setIsSignInOpen(true)}
           disabled={selectedItems.length === 0 || isUpdating || selectedConflict || !!error}
-          className="min-h-12 items-center justify-center rounded-xl bg-primary px-4"
+          className="min-h-12 items-center justify-center rounded-lg bg-primary px-4"
           style={({ pressed }) => ({ opacity: selectedItems.length === 0 || isUpdating || selectedConflict || !!error ? 0.5 : pressed ? 0.8 : 1 })}
         >
           <Text className="text-primary-foreground text-sm font-bold">

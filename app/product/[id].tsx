@@ -93,14 +93,14 @@ export default function ProductRoute() {
         {hasLoadError && (
           <Pressable
             onPress={() => setRetryCount((count) => count + 1)}
-            className="bg-primary rounded-xl px-5 py-3 mt-5"
+            className="bg-primary rounded-lg px-5 py-3 mt-5"
           >
             <Text className="text-primary-foreground text-sm font-semibold">Try again</Text>
           </Pressable>
         )}
         <Pressable
           onPress={() => router.back()}
-          className="bg-primary rounded-xl px-5 py-3 mt-5"
+          className="bg-primary rounded-lg px-5 py-3 mt-5"
         >
           <Text className="text-primary-foreground text-sm font-semibold">Go back</Text>
         </Pressable>

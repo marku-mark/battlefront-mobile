@@ -83,7 +83,7 @@ export function NotificationPreview({ visible, onClose, onViewAll }: { visible: 
   return <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
     <View className="flex-1">
       <Pressable className="absolute inset-0 bg-background/70" accessibilityLabel="Close notification preview" onPress={onClose} />
-      <View accessibilityViewIsModal className="self-center max-w-[520px] overflow-hidden rounded-xl border border-border bg-card" style={{ marginTop: insets.top + 72, width: "92%", elevation: 12 }}>
+      <View accessibilityViewIsModal className="self-center max-w-[520px] overflow-hidden rounded-lg border border-border bg-card" style={{ marginTop: insets.top + 72, width: "92%", elevation: 12 }}>
         <View className="flex-row items-center justify-between border-b border-border px-4 py-3">
           <Text accessibilityRole="header" className="text-foreground text-base font-bold">Recent updates</Text>
           <Pressable accessibilityRole="button" accessibilityLabel="Close notification preview" onPress={onClose} hitSlop={10}>

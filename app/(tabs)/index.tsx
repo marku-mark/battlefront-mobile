@@ -12,7 +12,6 @@ import { Categories } from "@/components/sections/Categories";
 import { FlashDeals } from "@/components/sections/FlashDeals";
 import { SulitPicks } from "@/components/sections/SulitPicks";
 import { Brands } from "@/components/sections/Brands";
-import { Chatbot } from "@/components/support/Chatbot";
 import { ProductSearch } from "@/components/search/ProductSearch";
 import { useCart } from "@/hooks/useCart";
 import { useRecentlyViewedProducts } from "@/hooks/useRecentlyViewed";
@@ -28,7 +27,6 @@ type HomeRow = { id: string; kind: "products"; products: Product[] } | { id: str
 export default function HomeScreen() {
   const router = useRouter();
   const isScreenActive = useScreenActive();
-  const [isChatOpen, setIsChatOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const returnToSearch = useRef(false);
   useActiveFocusEffect(useCallback(() => {
@@ -131,10 +129,6 @@ export default function HomeScreen() {
       ListEmptyComponent={catalog.loading ? <View><LoadingCategories /><LoadingProductRail /></View> : !catalog.error ? <View className="px-6 py-12"><Text className="text-foreground text-base">No products available</Text><Text className="text-muted-foreground mt-2">Pull down to refresh the catalog.</Text></View> : null}
       ListFooterComponent={catalog.loading && catalog.rows.length ? <LoadingMoreFooter /> : catalog.error && catalog.rows.length ? <Pressable accessibilityRole="button" onPress={retry} className="p-4"><Text className="text-primary text-center">Retry loading products</Text></Pressable> : null}
     />
-    <Pressable accessibilityRole="button" accessibilityLabel="Open Battlefront Support chat" onPress={() => setIsChatOpen(true)} className="absolute right-4 bottom-5 w-14 h-14 rounded-full bg-primary items-center justify-center" style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}>
-      <Ionicons name="chatbubble-ellipses" size={24} color="#f8fafc" />
-    </Pressable>
-    {isChatOpen && <Chatbot visible onClose={() => setIsChatOpen(false)} />}
     <ProductSearch visible={isSearchOpen} products={catalog.rows} onClose={() => setIsSearchOpen(false)} onSelectProduct={(product) => { returnToSearch.current = true; openProduct(product); }} />
   </View>;
 }
@@ -153,11 +147,11 @@ function ContinueCartBanner({
       <Pressable
         accessibilityRole="button"
         onPress={onPress}
-        className="flex-row items-center justify-between rounded-2xl border border-primary/30 bg-primary/10 px-4 py-3"
+        className="flex-row items-center justify-between rounded-lg border border-primary/30 bg-primary/10 px-4 py-3"
       >
         <View className="flex-1">
           <Text className="text-foreground text-sm font-bold">Continue your cart</Text>
-          <Text className="text-muted-foreground text-[11px] mt-0.5">
+          <Text className="text-muted-foreground text-xs mt-0.5">
             {itemCount} item{itemCount === 1 ? "" : "s"} · ₱{subtotal.toLocaleString("en-PH")}
           </Text>
         </View>
@@ -189,7 +183,7 @@ function RecentlyViewedSection({
             key={product.id}
             accessibilityRole="button"
             onPress={() => onSelectProduct(product)}
-            className="w-[150px] overflow-hidden rounded-2xl border border-border bg-card"
+            className="w-[150px] overflow-hidden rounded-lg border border-border bg-card"
           >
             <ProductImage source={getProductImageSource(product.image)} className="w-[150px] h-[120px] bg-secondary" resizeMode="cover" />
             <View className="px-2.5 py-2.5">
@@ -224,7 +218,7 @@ function LoadingCategories() {
       >
         {Array.from({ length: 5 }).map((_, index) => (
           <View key={index} className="items-center w-[74px]">
-            <View className="w-14 h-14 rounded-2xl bg-secondary border border-border" />
+            <View className="w-14 h-14 rounded-lg bg-secondary border border-border" />
             <View className="mt-1.5 h-3 w-14 rounded-full bg-secondary" />
             <View className="mt-1 h-3 w-10 rounded-full bg-secondary" />
           </View>
@@ -251,7 +245,7 @@ function LoadingProductRail() {
         contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}
       >
         {Array.from({ length: 3 }).map((_, index) => (
-          <View key={index} className="w-[140px] rounded-2xl overflow-hidden bg-card border border-border">
+          <View key={index} className="w-[140px] rounded-lg overflow-hidden bg-card border border-border">
             <View className="h-[134px] bg-secondary" />
             <View className="px-2.5 pt-2.5 pb-3">
               <View className="h-3.5 w-5/6 rounded-full bg-secondary" />

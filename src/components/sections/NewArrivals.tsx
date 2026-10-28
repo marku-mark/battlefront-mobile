@@ -15,7 +15,7 @@ export function NewArrivals({ products, onSelectProduct }: NewArrivalsProps) {
       <View className="flex-row items-center justify-between px-4 mb-3">
         <View>
           <Text className="text-foreground font-bold text-base">New Arrivals</Text>
-          <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.14em]">
+          <Text className="text-muted-foreground text-xs uppercase tracking-[0.14em]">
             fresh drops
           </Text>
         </View>

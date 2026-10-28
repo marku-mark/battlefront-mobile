@@ -45,6 +45,7 @@ function ProductCardView({ product, width = 150, stretch = false, onPress }: Pro
   }, [product.id]);
 
   async function handleQuickAdd() {
+    if (getProductVariants(product).length) { onPress?.(product); return; }
     const id = product.id;
     if (adding.current === id || selectedQuantity === 0) return;
     adding.current = id;
@@ -70,10 +71,7 @@ function ProductCardView({ product, width = 150, stretch = false, onPress }: Pro
   const reviewCount = product.reviewCount ?? 0;
   const hasRating = rating > 0 && reviewCount > 0;
   const stock = getProductStock(product);
-  const selectedQuantity = stock.maxQuantity > 0 ? Math.max(1, Math.min(quantity, stock.maxQuantity)) : 0;
-  useEffect(() => {
-    setQuantity((current) => Math.min(Math.max(1, current), Math.max(1, stock.maxQuantity)));
-  }, [stock.maxQuantity, setQuantity]);
+  const selectedQuantity = stock.maxQuantity > 0 ? 1 : 0;
   const variants = getProductVariants(product);
   const discountPct = hasDiscount
     ? Math.round(
@@ -84,7 +82,7 @@ function ProductCardView({ product, width = 150, stretch = false, onPress }: Pro
 
   return (
     <View style={{ width, flex: stretch ? 1 : undefined }} className={stretch ? "self-stretch" : "self-start"}>
-      <View style={{ flex: stretch ? 1 : undefined }} className="rounded-2xl overflow-hidden bg-card border border-border shadow-soft">
+      <View style={{ flex: stretch ? 1 : undefined }} className="rounded-lg overflow-hidden bg-card border border-border ">
         <Pressable
           accessibilityLabel={`View details for ${product.name}`}
           accessibilityRole="button"
@@ -99,7 +97,7 @@ function ProductCardView({ product, width = 150, stretch = false, onPress }: Pro
               accessibilityLabel={`${product.name} product image`}
               accessible
               style={{ width: "100%", height: width * 0.96 }}
-              resizeMode="cover"
+              resizeMode="contain"
               className="bg-secondary"
             />
 
@@ -121,7 +119,7 @@ function ProductCardView({ product, width = 150, stretch = false, onPress }: Pro
           </View>
 
           <View className="px-2.5 pt-2.5 pb-3">
-            <Text numberOfLines={2} className="text-foreground text-[13px] font-semibold leading-4">
+            <Text numberOfLines={2} className="text-foreground text-sm font-semibold leading-5">
               {product.name}
             </Text>
 
@@ -140,7 +138,7 @@ function ProductCardView({ product, width = 150, stretch = false, onPress }: Pro
               <View className="flex-row items-center gap-1">
                 {hasRating ? (
                   <>
-                    <Ionicons name="star" size={12} color="#f59e0b" />
+                    <Ionicons name="star" size={12} color={colors.rating} />
                     <Text className="text-foreground text-xs font-semibold">{rating.toFixed(1)}</Text>
                     <Text className="text-muted-foreground text-xs">({reviewCount})</Text>
                   </>
@@ -155,45 +153,9 @@ function ProductCardView({ product, width = 150, stretch = false, onPress }: Pro
                 {stock.statusLabel}
               </Text>
             </View>
-            {stock.statusLabel !== stock.quantityLabel && (
-              <Text className="mt-1 text-foreground text-xs font-semibold">{stock.quantityLabel}</Text>
-            )}
-            {variants.length > 0 && (
-              <Text className="text-muted-foreground text-xs mt-1.5" numberOfLines={1}>
-                Options: {variants.join(" • ")}
-              </Text>
-            )}
           </View>
         </Pressable>
 
-        <View className="items-center px-2.5 pb-2.5">
-          <Text className="self-start text-muted-foreground text-xs font-semibold mb-1">Quantity</Text>
-          <View className="flex-row items-center rounded-lg border border-border bg-secondary">
-            <Pressable
-              accessibilityLabel={`Decrease ${product.name} quantity`}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: isAdding || selectedQuantity <= 1 }}
-              disabled={isAdding || selectedQuantity <= 1}
-              onPress={() => setQuantity(selectedQuantity - 1)}
-              className="w-10 h-10 items-center justify-center"
-              style={({ pressed }) => ({ opacity: isAdding || selectedQuantity <= 1 ? 0.35 : pressed ? 0.7 : 1 })}
-            >
-              <Ionicons name="remove" size={16} color={colors.foreground} />
-            </Pressable>
-            <Text accessibilityLabel={`${selectedQuantity} selected`} className="min-w-[24px] text-center text-foreground text-xs font-semibold">{selectedQuantity}</Text>
-            <Pressable
-              accessibilityLabel={`Increase ${product.name} quantity`}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: isAdding || selectedQuantity >= stock.maxQuantity }}
-              disabled={isAdding || selectedQuantity >= stock.maxQuantity}
-              onPress={() => setQuantity(selectedQuantity + 1)}
-              className="w-10 h-10 items-center justify-center"
-              style={({ pressed }) => ({ opacity: isAdding || selectedQuantity >= stock.maxQuantity ? 0.35 : pressed ? 0.7 : 1 })}
-            >
-              <Ionicons name="add" size={16} color={colors.foreground} />
-            </Pressable>
-          </View>
-        </View>
         <View className="flex-row items-center gap-2 px-2.5 pb-2.5">
           <Pressable
             accessibilityLabel={`${wishlisted ? "Remove" : "Add"} ${product.name} ${wishlisted ? "from" : "to"} wishlist`}
@@ -213,8 +175,8 @@ function ProductCardView({ product, width = 150, stretch = false, onPress }: Pro
             />
           </Pressable>
           <Pressable
-            accessibilityLabel={`${justAdded ? "Add another" : "Add"} ${selectedQuantity} ${product.name} to cart`}
-            accessibilityHint={`Adds ${selectedQuantity} ${selectedQuantity === 1 ? "unit" : "units"} to your cart`}
+            accessibilityLabel={variants.length ? `Choose options for ${product.name}` : `${justAdded ? "Add another" : "Add"} ${selectedQuantity} ${product.name} to cart`}
+            accessibilityHint={variants.length ? "Opens product details to choose options" : `Adds ${selectedQuantity} ${selectedQuantity === 1 ? "unit" : "units"} to your cart`}
             accessibilityRole="button"
             accessibilityState={{ disabled: stock.maxQuantity <= 0 || isAdding, busy: isAdding }}
             disabled={stock.maxQuantity <= 0 || isAdding}
@@ -228,9 +190,9 @@ function ProductCardView({ product, width = 150, stretch = false, onPress }: Pro
               exiting={reducedMotion ? undefined : FadeOutUp.duration(120)}
               className="flex-row items-center justify-center gap-1.5"
             >
-              {width >= 165 && !isAdding && <Ionicons name={justAdded ? "checkmark" : "cart-outline"} size={15} color="#f8fafc" />}
+              {width >= 165 && !isAdding && <Ionicons name={justAdded ? "checkmark" : "cart-outline"} size={15} color={colors.primaryForeground} />}
               <Text className="text-primary-foreground text-xs font-bold text-center flex-shrink">
-                {isAdding ? "Adding…" : justAdded ? "Added" : "Add"}
+                {isAdding ? "Adding…" : justAdded ? "Added" : variants.length ? "Options" : "Add"}
               </Text>
             </Animated.View>
           </Pressable>

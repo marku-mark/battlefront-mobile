@@ -99,14 +99,14 @@ export default function CompareScreen() {
       ) : hasError ? (
         <View className="flex-1 items-center justify-center px-6">
           <Text className="text-foreground text-sm font-semibold">Couldn't load comparison data</Text>
-          <Pressable accessibilityRole="button" onPress={() => router.back()} className="mt-4 rounded-xl bg-primary px-5 py-3">
+          <Pressable accessibilityRole="button" onPress={() => router.back()} className="mt-4 rounded-lg bg-primary px-5 py-3">
             <Text className="text-primary-foreground text-sm font-semibold">Go back</Text>
           </Pressable>
         </View>
       ) : (
         <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
           <View className="px-4 pt-4">
-            <View className="flex-row items-center rounded-xl border border-border bg-secondary px-3">
+            <View className="flex-row items-center rounded-lg border border-border bg-secondary px-3">
               <Ionicons name="search-outline" size={18} color={colors.muted} />
               <TextInput
                 accessibilityLabel="Search products to compare"
@@ -123,7 +123,7 @@ export default function CompareScreen() {
               )}
             </View>
             {query.trim().length > 0 && (
-              <View className="mt-2 overflow-hidden rounded-xl border border-border bg-card">
+              <View className="mt-2 overflow-hidden rounded-lg border border-border bg-card">
                 {searchResults.map((product) => (
                   <Pressable
                     key={product.id}
@@ -137,13 +137,13 @@ export default function CompareScreen() {
                     <ProductImage source={getProductImageSource(product.image)} className="h-10 w-10 rounded-lg bg-secondary" />
                     <View className="ml-3 flex-1">
                       <Text className="text-foreground text-xs font-semibold" numberOfLines={1}>{product.name}</Text>
-                      <Text className="text-muted-foreground text-[10px] mt-1">{formatPrice(product.price)}</Text>
+                      <Text className="text-muted-foreground text-xs mt-1">{formatPrice(product.price)}</Text>
                     </View>
                     <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
                   </Pressable>
                 ))}
                 {searchResults.length === 0 && <Text className="px-3 py-4 text-muted-foreground text-xs">{isSearching ? "Searching…" : searchError ? "Could not search. Try again." : query.trim().length < 2 ? "Type at least two characters." : "No matching products."}</Text>}
-                {selectedIds.length >= MAX_COMPARE_ITEMS && <Text className="px-3 py-2 text-muted-foreground text-[10px]">Remove a product to add another.</Text>}
+                {selectedIds.length >= MAX_COMPARE_ITEMS && <Text className="px-3 py-2 text-muted-foreground text-xs">Remove a product to add another.</Text>}
               </View>
             )}
           </View>
@@ -166,7 +166,7 @@ export default function CompareScreen() {
                           <Ionicons name="close-circle-outline" size={19} color={colors.muted} />
                         </Pressable>
                       </View>
-                      <ProductImage source={getProductImageSource(product.image)} className="h-24 w-24 self-center rounded-xl bg-card" resizeMode="cover" />
+                      <ProductImage source={getProductImageSource(product.image)} className="h-24 w-24 self-center rounded-lg bg-card" resizeMode="cover" />
                       <Text className="mt-2 text-center text-foreground text-xs font-semibold" numberOfLines={3}>{product.name}</Text>
                       <Text className="mt-1 text-center text-primary text-sm font-bold">{formatPrice(product.price)}</Text>
                     </View>
@@ -191,7 +191,7 @@ function CompareRow({ label, values }: { label: string; values: string[] }) {
   return (
     <View className="flex-row border-b border-border py-3">
       <View style={{ width: LABEL_COLUMN_WIDTH }} className="justify-center pr-2">
-        <Text className="text-muted-foreground text-[10px] font-semibold uppercase">{label}</Text>
+        <Text className="text-muted-foreground text-xs font-semibold uppercase">{label}</Text>
       </View>
       {values.map((value, index) => (
         <View key={`${label}-${index}`} style={{ width: PRODUCT_COLUMN_WIDTH }} className="justify-center px-2">

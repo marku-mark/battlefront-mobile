@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, Modal, Pressable, ScrollView, Share, Text, TextInput, View } from "react-native";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -16,6 +17,12 @@ import { buildSubtotal, COMPONENT_LABELS, SIMPLE_TYPES, migrateLocalBuild, readL
 
 const money = (value: number) => `₱${value.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const MULTIPLE_TYPES = ["memory", "storage", "fan", "monitor"];
+const CATEGORY_ICONS: Record<string, React.ComponentProps<typeof Ionicons>["name"]> = {
+  processor: "hardware-chip-outline", motherboard: "git-network-outline", memory: "albums-outline", storage: "server-outline",
+  power_supply: "flash-outline", case: "cube-outline", graphics_card: "videocam-outline", cooler: "snow-outline",
+  fan: "sync-outline", network_adapter: "wifi-outline", monitor: "desktop-outline", keyboard: "keypad-outline",
+  mouse: "move-outline", headset: "headset-outline", speakers: "volume-high-outline", webcam: "camera-outline", ups_avr: "battery-charging-outline",
+};
 function Action({ title, onPress, disabled = false, primary = false }: { title: string; onPress: () => void; disabled?: boolean; primary?: boolean }) {
   return <Pressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} className={`min-h-12 justify-center rounded-lg px-4 py-3 ${primary ? "bg-primary" : "border border-border bg-secondary"}`} style={{ opacity: disabled ? 0.45 : 1 }}><Text className={primary ? "text-primary-foreground font-semibold" : "text-foreground font-semibold"}>{title}</Text></Pressable>;
 }
@@ -166,7 +173,7 @@ export default function BuilderScreen() {
             const first = selected.length ? byId.get(selected[0].product_id) : null;
             return <Pressable key={type} accessibilityRole="button" accessibilityLabel={`${selected.length ? "Change" : "Choose"} ${COMPONENT_LABELS[type]}`} accessibilityState={{ disabled: busy }} disabled={busy} onPress={() => { setQuery(""); setBrand(""); setActiveType(type); }} className="flex-row items-center gap-3 border-b border-border py-4" style={{ opacity: busy ? 0.45 : 1 }}>
               <View className="h-12 w-12 items-center justify-center rounded-lg bg-secondary">
-                {first?.image_url ? <ProductImage source={{ uri: first.image_url }} style={{ width: 40, height: 40 }} resizeMode="contain" /> : <Text className="text-muted-foreground font-bold">{String(index + 1).padStart(2, "0")}</Text>}
+                {first?.image_url ? <ProductImage source={{ uri: first.image_url }} style={{ width: 40, height: 40 }} resizeMode="contain" /> : <Ionicons name={CATEGORY_ICONS[type] ?? "hardware-chip-outline"} size={22} color="#9ca3af" accessibilityLabel={`${COMPONENT_LABELS[type]} category`} />}
               </View>
               <View className="flex-1">
                 <Text className="text-foreground font-semibold">{COMPONENT_LABELS[type]}</Text>

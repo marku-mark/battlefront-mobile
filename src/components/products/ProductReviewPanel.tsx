@@ -107,7 +107,7 @@ export function ProductReviewPanel({
         </Pressable>
       </View>
 
-      <View className="flex-row items-center rounded-2xl border border-border bg-card p-4">
+      <View className="flex-row items-center rounded-lg border border-border bg-card p-4">
         {totalReviewCount > 0 ? (
           <>
             <View className="items-center border-r border-border pr-5">
@@ -124,7 +124,7 @@ export function ProductReviewPanel({
       </View>
 
       {isWriting && (
-        <View className="mt-3 rounded-2xl border border-border bg-card p-4">
+        <View className="mt-3 rounded-lg border border-border bg-card p-4">
           <Text className="text-foreground text-sm font-semibold">Your rating</Text>
           <View className="mt-2 flex-row gap-2">
             {Array.from({ length: 5 }).map((_, index) => {
@@ -150,7 +150,7 @@ export function ProductReviewPanel({
             placeholder="Review title"
             placeholderTextColor={colors.muted}
             maxLength={80}
-            className="mt-3 h-11 rounded-xl border border-border bg-secondary px-3 text-foreground text-sm"
+            className="mt-3 h-11 rounded-lg border border-border bg-secondary px-3 text-foreground text-sm"
           />
           <TextInput
             accessibilityLabel="Review details"
@@ -161,10 +161,10 @@ export function ProductReviewPanel({
             multiline
             maxLength={500}
             textAlignVertical="top"
-            className="mt-2 min-h-24 rounded-xl border border-border bg-secondary px-3 py-3 text-foreground text-sm"
+            className="mt-2 min-h-24 rounded-lg border border-border bg-secondary px-3 py-3 text-foreground text-sm"
           />
           {error ? <Text className="mt-2 text-danger text-xs">{error}</Text> : null}
-          <Pressable accessibilityRole="button" onPress={() => void submitReview()} className="mt-3 h-11 items-center justify-center rounded-xl bg-primary">
+          <Pressable accessibilityRole="button" onPress={() => void submitReview()} className="mt-3 h-11 items-center justify-center rounded-lg bg-primary">
             <Text className="text-primary-foreground text-sm font-bold">Submit review</Text>
           </Pressable>
         </View>
@@ -182,7 +182,7 @@ export function ProductReviewPanel({
               </View>
             </View>
             <Text className="mt-1 text-muted-foreground text-xs leading-5">{review.body}</Text>
-            <Text className="mt-2 text-muted-foreground text-[10px] uppercase">{review.author}{review.author === "You" ? " · Your review" : " · Sample review · not verified"}</Text>
+            <Text className="mt-2 text-muted-foreground text-xs uppercase">{review.author}{review.author === "You" ? " · Your review" : " · Sample review · not verified"}</Text>
           </View>
         ))}
       </View>

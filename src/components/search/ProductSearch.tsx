@@ -58,7 +58,7 @@ export function ProductSearch({ visible, products, onClose, onSelectProduct }: P
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <View className="self-center w-full flex-row items-center gap-2 px-3 py-3 border-b border-border" style={{ maxWidth: MAX_CONTENT_WIDTH }}>
           <Pressable accessibilityRole="button" accessibilityLabel="Close product search" onPress={close} className="w-12 h-12 items-center justify-center"><Ionicons name="arrow-back" size={22} color={colors.icon} /></Pressable>
-          <View className="flex-1 flex-row items-center gap-2 bg-secondary rounded-xl px-3 min-h-12 border border-border">
+          <View className="flex-1 flex-row items-center gap-2 bg-secondary rounded-lg px-3 min-h-12 border border-border">
             <Ionicons name="search-outline" size={18} color={colors.muted} />
             <TextInput autoFocus value={query} onChangeText={setQuery} maxLength={255} placeholder="Search products or brands" placeholderTextColor={colors.muted} accessibilityLabel="Search products or brands" autoCapitalize="none" returnKeyType="search" className="flex-1 text-foreground text-base py-2" />
             {!!query && <Pressable accessibilityRole="button" accessibilityLabel="Clear product search" onPress={() => { setQuery(""); setTerm(""); }} className="w-12 h-12 items-center justify-center"><Ionicons name="close-circle" size={20} color={colors.icon} /></Pressable>}

@@ -42,7 +42,7 @@ export function ConfirmClearModal({
           style={{ paddingBottom: Math.max(insets.bottom, 16) }}
         >
           <View className="mb-5 h-1 w-10 self-center rounded-full bg-muted-foreground/40" />
-          <View className="mb-4 h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+          <View className="mb-4 h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
             <Ionicons name="trash-outline" size={22} color="#ef1b1b" />
           </View>
           <Text className="text-foreground text-lg font-bold">{title}</Text>

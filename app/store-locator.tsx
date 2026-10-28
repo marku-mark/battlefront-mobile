@@ -64,7 +64,7 @@ export default function StoreLocatorScreen() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ padding: layout.horizontalPadding, paddingBottom: 28, width: "100%", maxWidth: 900, alignSelf: "center" }}
       >
-        <View className="flex-row items-center gap-2 bg-secondary border border-border rounded-xl px-3 h-11">
+        <View className="flex-row items-center gap-2 bg-secondary border border-border rounded-lg px-3 h-11">
           <Ionicons name="search-outline" size={18} color={isDark ? "#cbd5e1" : "#68717e"} />
           <TextInput
             value={query}
@@ -122,9 +122,9 @@ function StoreCard({ store, isDark }: { store: Store; isDark: boolean }) {
   }
 
   return (
-    <View className="bg-card border border-border rounded-2xl p-4 mb-3">
+    <View className="bg-card border border-border rounded-lg p-4 mb-3">
       <View className="flex-row items-start gap-3">
-        <View className="w-10 h-10 rounded-xl bg-secondary items-center justify-center">
+        <View className="w-10 h-10 rounded-lg bg-secondary items-center justify-center">
           <Ionicons name="storefront-outline" size={20} color={isDark ? "#f8fafc" : "#30343b"} />
         </View>
         <View className="flex-1">
@@ -155,7 +155,7 @@ function StoreCard({ store, isDark }: { store: Store; isDark: boolean }) {
         <Pressable
           onPress={callStore}
           accessibilityLabel={`Call ${store.name}`}
-          className="flex-1 border border-border rounded-xl items-center py-2.5"
+          className="flex-1 border border-border rounded-lg items-center py-2.5"
           style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
         >
           <Text className="text-foreground text-xs font-bold">Call branch</Text>
@@ -163,7 +163,7 @@ function StoreCard({ store, isDark }: { store: Store; isDark: boolean }) {
         <Pressable
           onPress={openDirections}
           accessibilityLabel={`Get directions to ${store.name}`}
-          className="flex-1 bg-primary rounded-xl items-center py-2.5"
+          className="flex-1 bg-primary rounded-lg items-center py-2.5"
           style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
         >
           <Text className="text-primary-foreground text-xs font-bold">Get directions</Text>

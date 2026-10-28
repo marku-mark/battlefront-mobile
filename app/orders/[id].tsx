@@ -277,7 +277,7 @@ export default function OrderDetailScreen() {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-background px-6">
         <Text className="text-foreground text-base font-semibold">{loadError ? "Could not load this order" : "Order not found"}</Text>
-        <Pressable accessibilityRole="button" onPress={() => router.back()} className="mt-4 rounded-xl bg-primary px-5 py-3">
+        <Pressable accessibilityRole="button" onPress={() => router.back()} className="mt-4 rounded-lg bg-primary px-5 py-3">
           <Text className="text-primary-foreground text-sm font-semibold">Back to orders</Text>
         </Pressable>
       </SafeAreaView>
@@ -288,7 +288,7 @@ export default function OrderDetailScreen() {
     <SafeAreaView className="flex-1 bg-background">
       <Modal visible={refundProofUrl !== null} animationType="fade" transparent onRequestClose={() => setRefundProofUrl(null)}>
         <View className="flex-1 items-center justify-center bg-black/80 p-5">
-          <View className="w-full rounded-2xl border border-border bg-background p-4" style={{ maxWidth: 600, maxHeight: "90%" }}>
+          <View className="w-full rounded-lg border border-border bg-background p-4" style={{ maxWidth: 600, maxHeight: "90%" }}>
             <View className="mb-3 flex-row items-center justify-between"><Text className="text-foreground text-base font-semibold">Refund payment proof</Text><Pressable accessibilityLabel="Close payment proof" onPress={() => setRefundProofUrl(null)} className="h-10 w-10 items-center justify-center"><Ionicons name="close" size={22} color={colors.foreground} /></Pressable></View>
             {refundProofUrl ? <Image source={authenticatedMediaSource(refundProofUrl)} resizeMode="contain" accessibilityLabel="Refund payment proof image" style={{ width: "100%", height: 520 }} /> : null}
           </View>
@@ -312,8 +312,8 @@ export default function OrderDetailScreen() {
             <ScrollView className="mt-2 max-h-44" keyboardShouldPersistTaps="handled">
               {(order.returnReasonOptions ?? []).map((option) => <Pressable key={option.value} accessibilityRole="radio" accessibilityState={{ checked: returnReason === option.value }} onPress={() => setReturnReason(option.value)} className={`mb-2 min-h-11 flex-row items-center gap-3 rounded-lg border px-3 ${returnReason === option.value ? "border-primary bg-primary/10" : "border-border"}`}><Ionicons name={returnReason === option.value ? "radio-button-on" : "radio-button-off"} size={18} color={returnReason === option.value ? colors.primary : colors.muted} /><Text className="text-foreground text-sm">{option.label}</Text></Pressable>)}
             </ScrollView>
-            {returnReason === "other" ? <TextInput accessibilityLabel="Return reason explanation" value={returnExplanation} onChangeText={setReturnExplanation} placeholder="Explain the issue (at least five characters)" placeholderTextColor={colors.muted} multiline maxLength={2000} className="mt-2 min-h-20 rounded-xl border border-border bg-card p-3 text-foreground" /> : null}
-            <Pressable accessibilityRole="button" accessibilityState={{ disabled: isSubmittingReturn }} disabled={isSubmittingReturn || !returnReason} onPress={() => void submitReturn()} className="mt-4 min-h-12 items-center justify-center rounded-xl bg-primary" style={{ opacity: isSubmittingReturn || !returnReason ? 0.6 : 1 }}><Text className="text-primary-foreground font-bold">{isSubmittingReturn ? "Submitting..." : "Submit return request"}</Text></Pressable>
+            {returnReason === "other" ? <TextInput accessibilityLabel="Return reason explanation" value={returnExplanation} onChangeText={setReturnExplanation} placeholder="Explain the issue (at least five characters)" placeholderTextColor={colors.muted} multiline maxLength={2000} className="mt-2 min-h-20 rounded-lg border border-border bg-card p-3 text-foreground" /> : null}
+            <Pressable accessibilityRole="button" accessibilityState={{ disabled: isSubmittingReturn }} disabled={isSubmittingReturn || !returnReason} onPress={() => void submitReturn()} className="mt-4 min-h-12 items-center justify-center rounded-lg bg-primary" style={{ opacity: isSubmittingReturn || !returnReason ? 0.6 : 1 }}><Text className="text-primary-foreground font-bold">{isSubmittingReturn ? "Submitting..." : "Submit return request"}</Text></Pressable>
           </View>
         </View>
       </Modal>
@@ -331,19 +331,19 @@ export default function OrderDetailScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
         {loadError && <Text className="text-danger text-sm mb-3">Could not refresh this order. Showing saved details.</Text>}
-        <View className="rounded-2xl border border-border bg-card p-4">
+        <View className="rounded-lg border border-border bg-card p-4">
           <Text className="text-foreground text-xl font-bold">{order.reference}</Text>
           <Text className="text-muted-foreground text-xs mt-1">Placed {order.date}</Text>
 
           <View className="mt-4 flex-row items-center justify-between border-b border-border pb-3">
             <Text className="text-muted-foreground text-xs uppercase tracking-[0.12em]">Status</Text>
             <View className="rounded-full bg-primary/10 px-2 py-1">
-              <Text className="text-primary text-[10px] font-bold uppercase tracking-[0.08em]">{order.status}</Text>
+              <Text className="text-primary text-xs font-bold uppercase tracking-[0.08em]">{order.status}</Text>
             </View>
           </View>
 
           {order.statusValue === "cancelled" ? (
-            <View className="mt-4 flex-row items-center gap-2 rounded-xl border border-border bg-secondary p-3">
+            <View className="mt-4 flex-row items-center gap-2 rounded-lg border border-border bg-secondary p-3">
               <Ionicons name="close-circle-outline" size={19} color={colors.muted} />
               <Text className="flex-1 text-muted-foreground text-xs">This order was cancelled before packing.</Text>
             </View>
@@ -369,11 +369,11 @@ export default function OrderDetailScreen() {
           )}
         </View>
 
-        {order.paymentRejection ? <View className="mt-4 rounded-xl border border-danger/40 bg-danger/10 p-4"><Text className="text-foreground text-sm font-semibold">Payment proof rejected</Text><Text className="text-muted-foreground text-xs mt-2">{order.paymentRejection.reason}</Text>{order.paymentRejection.note ? <Text className="text-muted-foreground text-xs mt-1">{order.paymentRejection.note}</Text> : null}</View> : null}
-        {order.canResubmitProof ? <Pressable accessibilityRole="button" accessibilityState={{ disabled: isUploadingProof }} disabled={isUploadingProof} onPress={() => void replaceProof()} className="mt-3 min-h-12 justify-center rounded-xl bg-primary px-4"><Text className="text-center text-primary-foreground font-semibold">{isUploadingProof ? "Uploading proof..." : "Replace rejected payment proof"}</Text></Pressable> : null}
+        {order.paymentRejection ? <View className="mt-4 rounded-lg border border-danger/40 bg-danger/10 p-4"><Text className="text-foreground text-sm font-semibold">Payment proof rejected</Text><Text className="text-muted-foreground text-xs mt-2">{order.paymentRejection.reason}</Text>{order.paymentRejection.note ? <Text className="text-muted-foreground text-xs mt-1">{order.paymentRejection.note}</Text> : null}</View> : null}
+        {order.canResubmitProof ? <Pressable accessibilityRole="button" accessibilityState={{ disabled: isUploadingProof }} disabled={isUploadingProof} onPress={() => void replaceProof()} className="mt-3 min-h-12 justify-center rounded-lg bg-primary px-4"><Text className="text-center text-primary-foreground font-semibold">{isUploadingProof ? "Uploading proof..." : "Replace rejected payment proof"}</Text></Pressable> : null}
         {order.paymentNotice ? <Text className="text-muted-foreground mt-4">{order.paymentNotice}</Text> : null}
-        {order.payment.checkout_url || order.payment.can_retry_hosted || order.payment.qr_can_retry || order.payment.can_retry ? <Pressable accessibilityRole="button" disabled={isContinuingPayment} accessibilityState={{ disabled: isContinuingPayment }} onPress={() => void continuePayment()} className="mt-3 min-h-12 justify-center rounded-xl bg-primary px-4"><Text className="text-center text-primary-foreground font-semibold">{order.payment.qr_can_retry ? "Generate QR code" : order.payment.can_retry ? "Retry bank payment" : order.payment.can_retry_hosted ? "Retry online payment" : "Continue payment"}</Text></Pressable> : null}
-        {order.payment.qr_code_image_url ? <View className="mt-4 items-center rounded-xl border border-border bg-card p-4"><Text className="self-start text-foreground font-semibold">Scan to pay with QR Ph</Text><Image source={{ uri: order.payment.qr_code_image_url }} accessibilityLabel="PayMongo QR Ph payment code" resizeMode="contain" style={{ width: 240, height: 240, marginTop: 12 }} />{order.payment.qr_expires_at ? <Text className="mt-2 text-muted-foreground text-xs">Expires {new Date(order.payment.qr_expires_at).toLocaleString("en-PH")}</Text> : null}</View> : null}
+        {order.payment.checkout_url || order.payment.can_retry_hosted || order.payment.qr_can_retry || order.payment.can_retry ? <Pressable accessibilityRole="button" disabled={isContinuingPayment} accessibilityState={{ disabled: isContinuingPayment }} onPress={() => void continuePayment()} className="mt-3 min-h-12 justify-center rounded-lg bg-primary px-4"><Text className="text-center text-primary-foreground font-semibold">{order.payment.qr_can_retry ? "Generate QR code" : order.payment.can_retry ? "Retry bank payment" : order.payment.can_retry_hosted ? "Retry online payment" : "Continue payment"}</Text></Pressable> : null}
+        {order.payment.qr_code_image_url ? <View className="mt-4 items-center rounded-lg border border-border bg-card p-4"><Text className="self-start text-foreground font-semibold">Scan to pay with QR Ph</Text><Image source={{ uri: order.payment.qr_code_image_url }} accessibilityLabel="PayMongo QR Ph payment code" resizeMode="contain" style={{ width: 240, height: 240, marginTop: 12 }} />{order.payment.qr_expires_at ? <Text className="mt-2 text-muted-foreground text-xs">Expires {new Date(order.payment.qr_expires_at).toLocaleString("en-PH")}</Text> : null}</View> : null}
 
         {order.canCancel && (
           <Pressable
@@ -381,21 +381,21 @@ export default function OrderDetailScreen() {
             accessibilityState={{ disabled: isCancellingOrder }}
             disabled={isCancellingOrder}
             onPress={confirmCancelOrder}
-            className="mt-4 h-11 flex-row items-center justify-center gap-2 rounded-xl border border-border bg-card"
+            className="mt-4 h-11 flex-row items-center justify-center gap-2 rounded-lg border border-border bg-card"
             style={{ opacity: isCancellingOrder ? 0.55 : 1 }}
           >
             {isCancellingOrder ? <ActivityIndicator color={colors.muted} /> : <Ionicons name="close-circle-outline" size={17} color={colors.muted} />}
             <Text className="text-foreground text-sm font-semibold">Cancel order</Text>
           </Pressable>
         )}
-        {order.canRequestCancellation ? <Pressable accessibilityRole="button" onPress={requestCancellation} className="mt-3 min-h-12 justify-center rounded-xl border border-border px-4"><Text className="text-center text-foreground font-semibold">Request cancellation review</Text></Pressable> : null}
-        {order.canRequestReturn && order.productLines?.filter((line) => line.orderItemId && line.canRequestReturn).map((line) => <Pressable key={line.orderItemId} accessibilityRole="button" onPress={() => requestReturn(line.orderItemId!, line.productName ?? line.productId, line.remainingReturnable ?? line.quantity)} className="mt-2 min-h-12 justify-center rounded-xl border border-border px-4"><Text className="text-center text-foreground">Request return for {line.productName ?? line.productId} · {line.remainingReturnable ?? line.quantity} available</Text></Pressable>)}
-        {order.canRequestReturn || order.returnRequests.length > 0 ? <View className="mt-4 rounded-xl border border-border bg-card p-4"><Text className="text-foreground font-semibold">Returns and refunds</Text><Text className="mt-1 text-muted-foreground text-xs">Requests are reviewed after the item is received. Approval and refunds are not guaranteed.</Text>{order.returnEligibility?.received_at ? <Text className="mt-2 text-muted-foreground text-xs">Received {new Date(order.returnEligibility.received_at).toLocaleDateString("en-PH")}.</Text> : <Text className="mt-2 text-muted-foreground text-xs">Receipt date unconfirmed; Battlefront will review eligibility.</Text>}{order.returnEligibility?.deadline_at ? <Text className="mt-1 text-muted-foreground text-xs">{order.returnEligibility.window_approved ? "Change-of-mind deadline" : `Proposed ${order.returnEligibility.window_days}-day deadline`}: {new Date(order.returnEligibility.deadline_at).toLocaleDateString("en-PH")}.</Text> : null}{order.returnRequests.some((request) => request.status?.value === "submitted") && order.returnInstructions ? <View className="mt-3 border-t border-border pt-3"><Text className="text-foreground text-sm font-medium">{order.returnInstructions.label}</Text><Text className="mt-1 text-muted-foreground text-xs leading-5">{order.returnInstructions.message}</Text>{order.returnInstructions.branch ? <Text className="mt-1 text-muted-foreground text-xs">{order.returnInstructions.branch.name} · {order.returnInstructions.branch.city} · {order.returnInstructions.branch.address}{order.returnInstructions.branch.contact_number ? ` · ${order.returnInstructions.branch.contact_number}` : ""}</Text> : null}</View> : null}</View> : null}
+        {order.canRequestCancellation ? <Pressable accessibilityRole="button" onPress={requestCancellation} className="mt-3 min-h-12 justify-center rounded-lg border border-border px-4"><Text className="text-center text-foreground font-semibold">Request cancellation review</Text></Pressable> : null}
+        {order.canRequestReturn && order.productLines?.filter((line) => line.orderItemId && line.canRequestReturn).map((line) => <Pressable key={line.orderItemId} accessibilityRole="button" onPress={() => requestReturn(line.orderItemId!, line.productName ?? line.productId, line.remainingReturnable ?? line.quantity)} className="mt-2 min-h-12 justify-center rounded-lg border border-border px-4"><Text className="text-center text-foreground">Request return for {line.productName ?? line.productId} · {line.remainingReturnable ?? line.quantity} available</Text></Pressable>)}
+        {order.canRequestReturn || order.returnRequests.length > 0 ? <View className="mt-4 rounded-lg border border-border bg-card p-4"><Text className="text-foreground font-semibold">Returns and refunds</Text><Text className="mt-1 text-muted-foreground text-xs">Requests are reviewed after the item is received. Approval and refunds are not guaranteed.</Text>{order.returnEligibility?.received_at ? <Text className="mt-2 text-muted-foreground text-xs">Received {new Date(order.returnEligibility.received_at).toLocaleDateString("en-PH")}.</Text> : <Text className="mt-2 text-muted-foreground text-xs">Receipt date unconfirmed; Battlefront will review eligibility.</Text>}{order.returnEligibility?.deadline_at ? <Text className="mt-1 text-muted-foreground text-xs">{order.returnEligibility.window_approved ? "Change-of-mind deadline" : `Proposed ${order.returnEligibility.window_days}-day deadline`}: {new Date(order.returnEligibility.deadline_at).toLocaleDateString("en-PH")}.</Text> : null}{order.returnRequests.some((request) => request.status?.value === "submitted") && order.returnInstructions ? <View className="mt-3 border-t border-border pt-3"><Text className="text-foreground text-sm font-medium">{order.returnInstructions.label}</Text><Text className="mt-1 text-muted-foreground text-xs leading-5">{order.returnInstructions.message}</Text>{order.returnInstructions.branch ? <Text className="mt-1 text-muted-foreground text-xs">{order.returnInstructions.branch.name} · {order.returnInstructions.branch.city} · {order.returnInstructions.branch.address}{order.returnInstructions.branch.contact_number ? ` · ${order.returnInstructions.branch.contact_number}` : ""}</Text> : null}</View> : null}</View> : null}
         {order.cancellation ? <View className="mt-4 border-t border-border pt-3"><Text className="text-foreground font-semibold">Cancellation request</Text><Text className="mt-1 text-muted-foreground">{order.cancellation.status?.label ?? order.cancellation.notice ?? "Under review"}</Text></View> : null}
         {order.returnRequests.map((request) => <View key={request.id} className="mt-4 border-t border-border pt-3"><Text className="text-foreground font-semibold">Return request</Text><Text className="mt-1 text-muted-foreground">{request.status?.label ?? "Submitted"} · {request.product?.name ?? "Item"} · Qty {request.quantity} · {request.reason_label ?? request.reason}</Text>{request.feedback ? <Text className="mt-1 text-muted-foreground">{request.feedback}</Text> : null}{request.can_withdraw ? <Pressable disabled={isSubmittingReturn} onPress={() => void withdrawReturn(request.id)} className="mt-2 py-2"><Text className="text-primary">Withdraw return request</Text></Pressable> : null}</View>)}
         {order.refundPayments.map((refund) => <View key={refund.id} className="mt-4 border-t border-border pt-3"><Text className="text-foreground font-semibold">Refund payment · {refund.amount ? `₱${refund.amount}` : ""}</Text><Text className="mt-1 text-muted-foreground">{refund.payment_method ?? "Recorded"}{refund.paid_at ? ` · ${new Date(refund.paid_at).toLocaleDateString("en-PH")}` : ""}</Text>{refund.proof ? <Pressable accessibilityRole="button" onPress={() => setRefundProofUrl(refund.proof!.url)} className="mt-2 min-h-10 justify-center"><Text className="text-primary text-sm font-semibold">View payment proof</Text></Pressable> : <Text className="mt-2 text-muted-foreground text-xs">Payment proof unavailable. Contact Battlefront for help.</Text>}</View>)}
 
-        <View className="mt-5 rounded-2xl border border-border bg-card p-4">
+        <View className="mt-5 rounded-lg border border-border bg-card p-4">
           <Text className="text-foreground text-base font-bold">Order summary</Text>
           <View className="mt-3 flex-row justify-between">
             <Text className="text-muted-foreground text-sm">Item</Text>
@@ -413,8 +413,8 @@ export default function OrderDetailScreen() {
           {order.deliveryFee ? <DetailRow label="Delivery fee" value={`₱${Number(order.deliveryFee).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`} /> : null}
         </View>
 
-        {order.deliveryQuote ? <View className="mt-4 rounded-2xl border border-border bg-card p-4"><Text className="text-foreground text-base font-bold">Delivery estimate</Text><DetailRow label="Carrier" value={order.deliveryQuote.carrier.toUpperCase()} /><DetailRow label="Destination" value={order.deliveryQuote.destination} /><DetailRow label="Packing" value={order.deliveryQuote.packing_expectation} /><DetailRow label="Estimate" value={`${order.deliveryQuote.eta_min_days}–${order.deliveryQuote.eta_max_days} days`} />{order.deliveryQuote.is_demo && order.deliveryQuote.assumption_label ? <Text className="text-muted-foreground text-xs mt-2">{order.deliveryQuote.assumption_label}</Text> : null}<Text className="text-muted-foreground text-xs mt-2">{order.deliveryQuote.notice}</Text></View> : null}
-        {order.shipment ? <View className="mt-4 rounded-2xl border border-border bg-card p-4">
+        {order.deliveryQuote ? <View className="mt-4 rounded-lg border border-border bg-card p-4"><Text className="text-foreground text-base font-bold">Delivery estimate</Text><DetailRow label="Carrier" value={order.deliveryQuote.carrier.toUpperCase()} /><DetailRow label="Destination" value={order.deliveryQuote.destination} /><DetailRow label="Packing" value={order.deliveryQuote.packing_expectation} /><DetailRow label="Estimate" value={`${order.deliveryQuote.eta_min_days}–${order.deliveryQuote.eta_max_days} days`} />{order.deliveryQuote.is_demo && order.deliveryQuote.assumption_label ? <Text className="text-muted-foreground text-xs mt-2">{order.deliveryQuote.assumption_label}</Text> : null}<Text className="text-muted-foreground text-xs mt-2">{order.deliveryQuote.notice}</Text></View> : null}
+        {order.shipment ? <View className="mt-4 rounded-lg border border-border bg-card p-4">
           <Text className="text-foreground text-base font-bold">Shipment tracking</Text>
           <DetailRow label="Status" value={order.shipment.status.label} />
           {order.shipment.tracking_reference ? <View className="mt-3">
@@ -439,7 +439,7 @@ export default function OrderDetailScreen() {
             accessibilityState={{ disabled: isReordering }}
             disabled={isReordering}
             onPress={() => void buyAgain()}
-            className="mt-4 h-11 flex-row items-center justify-center gap-2 rounded-xl bg-primary"
+            className="mt-4 h-11 flex-row items-center justify-center gap-2 rounded-lg bg-primary"
             style={{ opacity: isReordering ? 0.55 : 1 }}
           >
             {isReordering ? <ActivityIndicator color="#ffffff" /> : <Ionicons name="refresh-outline" size={17} color="#ffffff" />}

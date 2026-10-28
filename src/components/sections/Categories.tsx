@@ -12,6 +12,26 @@ type CategoriesProps = {
 export function Categories({ categories, onSelect, onBrowseAll }: CategoriesProps) {
   const { colors } = useTheme();
 
+  const used = new Set<string>();
+  const rules: [RegExp, keyof typeof Ionicons.glyphMap][] = [
+    [/laptop|notebook/i, "laptop-outline"], [/monitor|display/i, "desktop-outline"],
+    [/processor|cpu/i, "hardware-chip-outline"], [/graphic|gpu|video card/i, "videocam-outline"],
+    [/motherboard/i, "git-network-outline"], [/memory|ram/i, "albums-outline"],
+    [/storage|ssd|hard drive/i, "server-outline"], [/power|psu/i, "flash-outline"],
+    [/cool|fan/i, "snow-outline"], [/case|chassis/i, "file-tray-stacked-outline"],
+    [/keyboard/i, "keypad-outline"], [/mouse/i, "navigate-outline"],
+    [/headset|headphone|audio/i, "headset-outline"], [/network|router/i, "wifi-outline"],
+    [/cable|adapter/i, "link-outline"], [/desktop|computer|pc/i, "tv-outline"],
+    [/accessor/i, "construct-outline"],
+  ];
+  const icons = new Map(categories.slice().sort((a, b) => a.id.localeCompare(b.id)).map(category => {
+    const preferred = rules.find(([pattern]) => pattern.test(category.name))?.[1];
+    const candidates = [preferred, category.icon, ...rules.map(([, icon]) => icon), ...Object.keys(Ionicons.glyphMap)];
+    const icon = candidates.find(value => value && value in Ionicons.glyphMap && !used.has(value)) as keyof typeof Ionicons.glyphMap;
+    used.add(icon);
+    return [category.id, icon] as const;
+  }));
+
   return (
     <View className="mt-6">
       <View className="flex-row items-center justify-between px-4 mb-3">
@@ -45,9 +65,9 @@ export function Categories({ categories, onSelect, onBrowseAll }: CategoriesProp
             className="items-center w-[78px]"
             style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1, transform: [{ scale: pressed ? 0.96 : 1 }] })}
           >
-            <View className="w-14 h-14 rounded-xl bg-secondary items-center justify-center border border-border">
+            <View className="w-14 h-14 rounded-lg bg-secondary items-center justify-center border border-border">
               <Ionicons
-                name={item.icon as any}
+                name={icons.get(item.id)}
                 size={22}
                 color={colors.foreground}
               />

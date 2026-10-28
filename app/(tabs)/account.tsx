@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MockSignInSheet } from "@/components/account/MockSignInSheet";
 import { PasswordForm } from "@/components/account/PasswordForm";
-import { Chatbot } from "@/components/support/Chatbot";
+import { useChat } from "@/hooks/useChat";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { useSession } from "@/hooks/useSession";
 import { getLocalUserId, getNegrosDeliveryLocations, getDeliveryLocations, resolveDeliveryLocation } from "@/lib/api";
@@ -29,7 +29,7 @@ export default function AccountScreen() {
   const { session, isHydrated, signOut, saveProfile, refreshProfile } = useSession();
   const isMockAccount = session.mode === "customer";
   const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const [isChatOpen, setIsChatOpen] = useState(false);
+  const { open: openChat } = useChat();
   const [selectedUtility, setSelectedUtility] = useState<string | null>(null);
   const [authMessage, setAuthMessage] = useState("");
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
@@ -230,10 +230,10 @@ export default function AccountScreen() {
           <Text className="text-foreground text-2xl font-bold">Account</Text>
         </View>
 
-        <View className="mx-4 mt-5 rounded-2xl bg-card border border-border p-4">
+        <View className="mx-4 mt-5 rounded-lg bg-card border border-border p-4">
           <View className="flex-row items-center">
             <View className="w-14 h-14 rounded-full bg-secondary border border-border items-center justify-center">
-              <Ionicons name="person-outline" size={26} color={isDark ? "#cbd5e1" : "#68717e"} />
+              <Ionicons name="person-outline" size={26} color={colors.icon} />
             </View>
             <View className="flex-1 ml-3">
               <Text className="text-foreground text-base font-semibold">
@@ -253,7 +253,7 @@ export default function AccountScreen() {
                 openSignIn();
               }}
               accessibilityLabel={isMockAccount ? "Sign out" : "Sign in"}
-              className="flex-1 bg-primary rounded-xl items-center py-3"
+              className="flex-1 bg-primary rounded-lg items-center py-3"
               style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
             >
               <Text className="text-primary-foreground text-sm font-semibold">
@@ -269,7 +269,7 @@ export default function AccountScreen() {
                 router.navigate("/");
               }}
               accessibilityLabel={isMockAccount ? "Open account settings" : "Continue as guest"}
-              className="flex-1 border border-border rounded-xl items-center py-3"
+              className="flex-1 border border-border rounded-lg items-center py-3"
               style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
             >
               <Text className="text-foreground text-sm font-semibold">
@@ -282,21 +282,21 @@ export default function AccountScreen() {
         <View className="flex-row items-center justify-between px-4 mt-7 mb-3">
           <Text className="text-foreground text-base font-bold">Shopping and support</Text>
         </View>
-        <View className="mx-4 rounded-2xl bg-card border border-border overflow-hidden">
+        <View className="mx-4 rounded-lg bg-card border border-border overflow-hidden">
           <Pressable
             onPress={() => router.push("/notifications")}
             accessibilityRole="button"
             accessibilityLabel="Open order updates"
             className="flex-row items-center border-b border-border p-4"
           >
-            <View className="h-9 w-9 items-center justify-center rounded-xl bg-secondary">
-              <Ionicons name="mail-unread-outline" size={19} color={isDark ? "#f8fafc" : "#30343b"} />
+            <View className="h-9 w-9 items-center justify-center rounded-lg bg-secondary">
+              <Ionicons name="mail-unread-outline" size={19} color={colors.foreground} />
             </View>
             <View className="ml-3 flex-1">
               <Text className="text-foreground text-sm font-medium">Order updates</Text>
               <Text className="mt-0.5 text-muted-foreground text-xs">Read payment and delivery messages</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={isDark ? "#9ca3af" : "#68717e"} />
+            <Ionicons name="chevron-forward" size={18} color={colors.muted} />
           </Pressable>
           <Pressable
             onPress={() => router.push("/store-locator")}
@@ -304,24 +304,24 @@ export default function AccountScreen() {
             className="flex-row items-center p-4 border-b border-border"
             style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
           >
-            <View className="w-9 h-9 rounded-xl bg-secondary items-center justify-center">
-              <Ionicons name="storefront-outline" size={19} color={isDark ? "#f8fafc" : "#30343b"} />
+            <View className="w-9 h-9 rounded-lg bg-secondary items-center justify-center">
+              <Ionicons name="storefront-outline" size={19} color={colors.foreground} />
             </View>
             <View className="flex-1 ml-3">
               <Text className="text-foreground text-sm font-medium">Store locator</Text>
               <Text className="text-muted-foreground text-xs mt-0.5">Find a Battlefront branch near you</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={isDark ? "#9ca3af" : "#68717e"} />
+            <Ionicons name="chevron-forward" size={18} color={colors.muted} />
           </Pressable>
-          <Pressable accessibilityRole="button" onPress={() => setIsChatOpen(true)} className="flex-row items-center border-b border-border p-4">
-            <View className="h-9 w-9 items-center justify-center rounded-xl bg-secondary">
-              <Ionicons name="chatbubble-ellipses-outline" size={19} color={isDark ? "#f8fafc" : "#30343b"} />
+          <Pressable accessibilityRole="button" onPress={(event) => openChat(event.nativeEvent.target)} className="flex-row items-center border-b border-border p-4">
+            <View className="h-9 w-9 items-center justify-center rounded-lg bg-secondary">
+              <Ionicons name="chatbubble-ellipses-outline" size={19} color={colors.foreground} />
             </View>
             <View className="ml-3 flex-1">
               <Text className="text-foreground text-sm font-medium">Battlefront support</Text>
               <Text className="mt-0.5 text-muted-foreground text-xs">Ask about products, stores, and orders</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={isDark ? "#9ca3af" : "#68717e"} />
+            <Ionicons name="chevron-forward" size={18} color={colors.muted} />
           </Pressable>
           <Pressable
             onPress={() => router.push("/notification-settings")}
@@ -330,14 +330,14 @@ export default function AccountScreen() {
             className="flex-row items-center border-b border-border p-4"
             style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
           >
-            <View className="h-9 w-9 items-center justify-center rounded-xl bg-secondary">
-              <Ionicons name="notifications-outline" size={19} color={isDark ? "#f8fafc" : "#30343b"} />
+            <View className="h-9 w-9 items-center justify-center rounded-lg bg-secondary">
+              <Ionicons name="notifications-outline" size={19} color={colors.foreground} />
             </View>
             <View className="ml-3 flex-1">
               <Text className="text-foreground text-sm font-medium">Order notifications</Text>
               <Text className="mt-0.5 text-muted-foreground text-xs">Manage push alerts on this device</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={isDark ? "#9ca3af" : "#68717e"} />
+            <Ionicons name="chevron-forward" size={18} color={colors.muted} />
           </Pressable>
           {accountLinks.map((link, index) => (
             <Pressable
@@ -367,8 +367,8 @@ export default function AccountScreen() {
               className={`flex-row items-center p-4 ${index < accountLinks.length - 1 ? "border-b border-border" : ""}`}
               style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
             >
-              <View className="w-9 h-9 rounded-xl bg-secondary items-center justify-center">
-                <Ionicons name={link.icon} size={19} color={isDark ? "#f8fafc" : "#30343b"} />
+              <View className="w-9 h-9 rounded-lg bg-secondary items-center justify-center">
+                <Ionicons name={link.icon} size={19} color={colors.foreground} />
               </View>
               <View className="flex-1 ml-3">
                 <View className="flex-row items-center gap-2">
@@ -376,7 +376,7 @@ export default function AccountScreen() {
                     {link.label}
                   </Text>
                   {(link.label === "Wishlist" ? isMockAccount ? "Synced" : "Local" : link.badge) && <View className="rounded-full px-1.5 py-0.5 bg-secondary">
-                    <Text className="text-[9px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
+                    <Text className="text-xs font-bold uppercase tracking-[0.08em] text-muted-foreground">
                       {link.label === "Wishlist" ? isMockAccount ? "Synced" : "Local" : link.badge}
                     </Text>
                   </View>}
@@ -385,7 +385,7 @@ export default function AccountScreen() {
                   {link.label === "Wishlist" ? isMockAccount ? "Synced across devices" : "Saved on this device" : link.detail}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={isDark ? "#9ca3af" : "#68717e"} />
+              <Ionicons name="chevron-forward" size={18} color={colors.muted} />
             </Pressable>
           ))}
           <Pressable
@@ -393,8 +393,8 @@ export default function AccountScreen() {
             className="flex-row items-center p-4 border-t border-border"
             style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
           >
-            <View className="w-9 h-9 rounded-xl bg-secondary items-center justify-center">
-              <Ionicons name={isDark ? "sunny-outline" : "moon-outline"} size={19} color={isDark ? "#f8fafc" : "#30343b"} />
+            <View className="w-9 h-9 rounded-lg bg-secondary items-center justify-center">
+              <Ionicons name={isDark ? "sunny-outline" : "moon-outline"} size={19} color={colors.foreground} />
             </View>
             <View className="flex-1 ml-3">
               <Text className="text-foreground text-sm font-medium">
@@ -404,7 +404,7 @@ export default function AccountScreen() {
                 Change the app appearance
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={isDark ? "#9ca3af" : "#68717e"} />
+            <Ionicons name="chevron-forward" size={18} color={colors.muted} />
           </Pressable>
         </View>
 
@@ -423,26 +423,26 @@ export default function AccountScreen() {
           setIsAuthOpen(false);
         }}
       />
-      {isChatOpen && <Chatbot visible onClose={() => setIsChatOpen(false)} />}
+
 
       <Modal visible={selectedUtility !== null} animationType="fade" transparent onRequestClose={() => setSelectedUtility(null)}>
         <View className="flex-1 items-center justify-center px-6 bg-black/50">
-          <View className="w-full self-center bg-background border border-border rounded-2xl p-5" style={{ maxWidth: 560, maxHeight: "90%" }}>
+          <View className="w-full self-center bg-background border border-border rounded-lg p-5" style={{ maxWidth: 560, maxHeight: "90%" }}>
             <Text className="text-foreground text-lg font-bold">{selectedUtility}</Text>
             <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} className="mt-3" contentContainerStyle={{ paddingBottom: 4 }}>
             {selectedUtility === "Delivery addresses" ? (
               <View className="mt-3 gap-3">
                 <Text className="text-muted-foreground text-xs">Your default address syncs with Battlefront and pre-fills delivery checkout. Additional addresses stay on this device.</Text>
-                {session.mode === "customer" && session.user.default_delivery_address && <View className="rounded-xl border border-border bg-card p-3">
+                {session.mode === "customer" && session.user.default_delivery_address && <View className="rounded-lg border border-border bg-card p-3">
                   <Text className="text-foreground text-sm font-semibold">Default delivery address</Text>
                   <Text className="text-muted-foreground text-xs leading-5 mt-1">{session.user.default_delivery_address}</Text>
                   <Pressable disabled={isSavingAddress} onPress={() => void useDefaultAddress(null)} className="mt-3 py-2"><Text className="text-primary text-xs font-semibold">{isSavingAddress ? "Updating..." : "Clear default address"}</Text></Pressable>
                 </View>}
                 {isAddressesLoading ? (
-                  <ActivityIndicator color={isDark ? "#f8fafc" : "#30343b"} />
+                  <ActivityIndicator color={colors.foreground} />
                 ) : savedAddresses.length > 0 ? (
                   savedAddresses.map((address) => (
-                    <View key={address.id} className="flex-row items-center rounded-xl border border-border bg-card p-3">
+                    <View key={address.id} className="flex-row items-center rounded-lg border border-border bg-card p-3">
                       <View className="flex-1">
                         <Text className="text-foreground text-sm font-semibold">{address.label} · {address.recipient}</Text>
                         <Text className="text-muted-foreground text-xs leading-5 mt-1">{address.address}</Text>
@@ -459,7 +459,7 @@ export default function AccountScreen() {
                         hitSlop={8}
                         className="h-10 w-10 items-center justify-center"
                       >
-                        <Ionicons name="trash-outline" size={17} color={isDark ? "#9ca3af" : "#68717e"} />
+                        <Ionicons name="trash-outline" size={17} color={colors.muted} />
                       </Pressable>
                     </View>
                   ))
@@ -467,7 +467,7 @@ export default function AccountScreen() {
                   <Text className="text-muted-foreground text-xs">No additional addresses saved on this device. Add one below.</Text>
                 )}
                 {!isAddressesLoading && isAddingAddress && (
-                  <View className="rounded-xl border border-border bg-secondary p-3">
+                  <View className="rounded-lg border border-border bg-secondary p-3">
                     <Text className="text-foreground text-sm font-semibold">New address</Text>
                     <TextInput
                       accessibilityLabel="Address label"
@@ -526,7 +526,7 @@ export default function AccountScreen() {
                       setAddressError("");
                       setIsAddingAddress(true);
                     }}
-                    className="h-11 flex-row items-center justify-center gap-2 rounded-xl bg-primary"
+                    className="h-11 flex-row items-center justify-center gap-2 rounded-lg bg-primary"
                   >
                     <Ionicons name="add" size={18} color="#ffffff" />
                     <Text className="text-primary-foreground text-sm font-bold">Add address</Text>
@@ -534,7 +534,7 @@ export default function AccountScreen() {
                 )}
               </View>
             ) : selectedUtility === "Account settings" && isMockAccount ? (
-              <View className="mt-3 rounded-xl border border-border bg-card p-3">
+              <View className="mt-3 rounded-lg border border-border bg-card p-3">
                 {isProfileLoading ? <ActivityIndicator /> : <>
                   <Text className="text-foreground text-sm font-semibold">Name</Text>
                   <TextInput accessibilityLabel="Profile name" value={profileName} onChangeText={setProfileName} editable={!isSavingProfile} maxLength={255} className="mt-2 h-11 rounded-lg border border-border bg-secondary px-3 text-foreground text-sm" />
@@ -546,7 +546,7 @@ export default function AccountScreen() {
                   <Text className="text-foreground text-sm font-semibold mt-4">Default delivery address</Text>
                   <Text className="mt-2 text-foreground text-sm">{profileAddress || "No default address selected."}</Text>
                   <Pressable onPress={() => void openSavedAddresses()} className="mt-2 rounded-lg border border-border bg-secondary px-3 py-3"><Text className="text-primary text-sm font-semibold">Manage delivery addresses</Text></Pressable>
-                  <View className="mt-5 rounded-xl border border-border bg-background p-3">
+                  <View className="mt-5 rounded-lg border border-border bg-background p-3">
                     <Text className="text-foreground text-sm font-semibold">Recommendation privacy</Text>
                     <Text className="text-muted-foreground text-xs leading-5 mt-1">Choose which activity Battlefront may use to personalize product suggestions. Turning off a source deletes its saved recommendation history.</Text>
                     <View className="mt-3 flex-row items-center justify-between gap-3">
@@ -562,14 +562,14 @@ export default function AccountScreen() {
                       <Switch accessibilityRole="switch" accessibilityLabel="Use product views for recommendations" value={productViewRecommendationsEnabled} onValueChange={setProductViewRecommendationsEnabled} disabled={isSavingProfile} />
                     </View>
                   </View>
-                  <Pressable disabled={isSavingProfile || !isProfileLoaded} onPress={() => void submitProfile()} className="mt-4 rounded-xl bg-primary items-center py-3"><Text className="text-primary-foreground text-sm font-semibold">{isSavingProfile ? "Saving..." : "Save changes"}</Text></Pressable>
+                  <Pressable disabled={isSavingProfile || !isProfileLoaded} onPress={() => void submitProfile()} className="mt-4 rounded-lg bg-primary items-center py-3"><Text className="text-primary-foreground text-sm font-semibold">{isSavingProfile ? "Saving..." : "Save changes"}</Text></Pressable>
                   <PasswordForm key={customerId} />
                 </>}
                 {profileError ? <Text accessibilityRole="alert" className="text-danger text-xs mt-3">{profileError}</Text> : null}
                 {!isProfileLoading && !isProfileLoaded && <Pressable onPress={() => void openProfileSettings()} className="mt-3 py-2"><Text className="text-primary text-sm">Retry loading profile</Text></Pressable>}
               </View>
             ) : null}
-            <Pressable onPress={() => setSelectedUtility(null)} className="bg-primary rounded-xl items-center py-3 mt-5">
+            <Pressable onPress={() => setSelectedUtility(null)} className="bg-primary rounded-lg items-center py-3 mt-5">
               <Text className="text-primary-foreground text-sm font-semibold">Close</Text>
             </Pressable>
             </ScrollView>

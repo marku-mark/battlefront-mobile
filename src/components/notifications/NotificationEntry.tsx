@@ -38,13 +38,13 @@ export function NotificationEntry({ item, onPress, disabled = false, compact = f
     </View>
     <View className="ml-3 flex-1">
       <View className="flex-row items-center gap-2">
-        <Text className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wide">{category}</Text>
-        {time ? <Text className="text-muted-foreground text-[11px]">{time}</Text> : null}
+        <Text className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">{category}</Text>
+        {time ? <Text className="text-muted-foreground text-xs">{time}</Text> : null}
         {!item.is_read && <View className="ml-auto h-2 w-2 rounded-full bg-primary" />}
       </View>
       <Text className={`mt-1 text-foreground text-sm ${item.is_read ? "font-medium" : "font-bold"}`} numberOfLines={compact ? 1 : 2}>{item.title}</Text>
       <Text className="mt-1 text-muted-foreground text-xs leading-5" numberOfLines={compact ? 2 : 3}>{item.body}</Text>
-      {item.order?.reference ? <Text className="mt-1 text-muted-foreground text-[11px]">Order {item.order.reference}</Text> : null}
+      {item.order?.reference ? <Text className="mt-1 text-muted-foreground text-xs">Order {item.order.reference}</Text> : null}
     </View>
   </Pressable>;
 }

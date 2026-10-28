@@ -69,15 +69,15 @@ export default function RecommendationsScreen() {
       <Text className="text-foreground text-xl font-bold mt-4">Product recommendations</Text>
       <Text className="text-muted-foreground text-sm mt-2">Suggestions selected using Battlefront’s available product and shopping data.</Text>
       {loading && recommendations.length === 0 ? <ActivityIndicator className="mt-6" /> : null}
-      {error ? <View className="mt-4 rounded-xl border border-border bg-card p-4">
+      {error ? <View className="mt-4 rounded-lg border border-border bg-card p-4">
         <Text accessibilityRole="alert" className="text-danger">{error}</Text>
-        <Pressable onPress={() => void loadRecommendations(isScreenActive)} className="mt-3 rounded-xl bg-primary p-3"><Text className="text-primary-foreground text-center">Try again</Text></Pressable>
+        <Pressable onPress={() => void loadRecommendations(isScreenActive)} className="mt-3 rounded-lg bg-primary p-3"><Text className="text-primary-foreground text-center">Try again</Text></Pressable>
       </View> : null}
       {!loading && !error && recommendations.length === 0 ? <Text className="text-muted-foreground mt-5">No recommendations are available right now.</Text> : null}
       {recommendations.map((recommendation, index) => <Pressable
         key={recommendation.product.id}
         onPress={() => openRecommendation(recommendation, index + 1)}
-        className="mt-4 flex-row rounded-xl border border-border bg-card p-3"
+        className="mt-4 flex-row rounded-lg border border-border bg-card p-3"
       >
         <ProductImage source={getProductImageSource(recommendation.product.image)} className="h-24 w-24 rounded-lg bg-secondary" resizeMode="cover" />
         <View className="ml-3 flex-1 justify-center">

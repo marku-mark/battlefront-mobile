@@ -12,7 +12,7 @@ export function TrustBar() {
   const { isDark } = useTheme();
 
   return (
-    <View className="mx-4 mt-6 overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
+    <View className="mx-4 mt-6 overflow-hidden rounded-lg border border-border bg-card ">
       <View className="flex-row px-3 py-3.5">
         {items.map((item, index) => (
           <View
@@ -20,7 +20,7 @@ export function TrustBar() {
             className={`flex-1 flex-row items-center justify-center gap-1.5 ${index > 0 ? "border-l border-border" : ""}`}
           >
             <Ionicons name={item.icon} size={15} color={isDark ? "#cbd5e1" : "#68717e"} />
-            <Text className="text-muted-foreground text-[10px] font-medium uppercase tracking-[0.08em]">
+            <Text className="text-muted-foreground text-xs font-medium uppercase tracking-[0.08em]">
               {item.label}
             </Text>
           </View>

@@ -34,36 +34,21 @@ export function Header({ cartCount = 0, onCartPress, onNotificationPress, onSear
     >
       <View className="flex-row items-center gap-3 self-center w-full px-4 py-3.5" style={{ maxWidth: MAX_CONTENT_WIDTH }}>
         <View className="flex-1">
-          <LogoMark width={180} />
+          <LogoMark width={140} />
         </View>
 
         <Pressable
           onPress={() => setPreviewOpen(true)}
           accessibilityRole="button"
           accessibilityLabel={`Open notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ""}`}
-          className="relative w-12 h-12 items-center justify-center rounded-xl bg-secondary border border-border shadow-soft"
+          className="relative w-12 h-12 items-center justify-center rounded-lg bg-secondary border border-border "
           style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
         >
           <Ionicons name="notifications-outline" size={20} color={colors.foreground} />
-          {unreadCount > 0 && <View className="absolute -top-1 -right-1 bg-ring rounded-full min-w-[18px] h-[18px] items-center justify-center px-1"><Text className="text-[9px] text-primary-foreground font-bold">{unreadCount > 99 ? "99+" : unreadCount}</Text></View>}
+          {unreadCount > 0 && <View className="absolute -top-1 -right-1 bg-ring rounded-full min-w-[18px] h-[18px] items-center justify-center px-1"><Text className="text-xs text-primary-foreground font-bold">{unreadCount > 99 ? "99+" : unreadCount}</Text></View>}
         </Pressable>
 
-        <Pressable
-          onPress={onCartPress}
-          accessibilityRole="button"
-          accessibilityLabel={`Open cart${cartCount > 0 ? `, ${cartCount} items` : ""}`}
-          className="relative w-12 h-12 items-center justify-center rounded-xl bg-secondary border border-border shadow-soft"
-          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-        >
-          <Ionicons name="cart-outline" size={20} color={colors.foreground} />
-          {cartCount > 0 && (
-            <View className="absolute -top-1 -right-1 bg-ring rounded-full min-w-[18px] h-[18px] items-center justify-center px-1">
-              <Text className="text-[9px] text-primary-foreground font-bold">
-                {cartCount > 99 ? "99+" : cartCount}
-              </Text>
-            </View>
-          )}
-        </Pressable>
+
       </View>
 
       <View className="self-center w-full px-4 pb-3.5" style={{ maxWidth: MAX_CONTENT_WIDTH }}>
@@ -73,7 +58,7 @@ export function Header({ cartCount = 0, onCartPress, onNotificationPress, onSear
           accessibilityRole="button"
           accessibilityLabel="Search products"
           accessibilityState={{ disabled: searchDisabled }}
-          className="min-h-12 flex-row items-center gap-2 bg-secondary border border-border rounded-xl px-3 py-2.5"
+          className="min-h-12 flex-row items-center gap-2 bg-secondary border border-border rounded-lg px-3 py-2.5"
           style={({ pressed }) => ({ opacity: searchDisabled ? 0.5 : pressed ? 0.82 : 1 })}
         >
           <Ionicons name="search-outline" size={16} color={colors.muted} />

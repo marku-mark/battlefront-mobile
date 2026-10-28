@@ -29,7 +29,7 @@ export function ScreenHeader({ title, subtitle, onBack, right }: ScreenHeaderPro
             accessibilityRole="button"
             onPress={onBack}
             hitSlop={8}
-            className="h-11 w-11 items-center justify-center rounded-xl border border-border bg-secondary"
+            className="h-11 w-11 items-center justify-center rounded-lg border border-border bg-secondary"
             style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
           >
             <Ionicons name="arrow-back" size={20} color={iconColor} />

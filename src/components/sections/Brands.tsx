@@ -21,7 +21,7 @@ export function Brands({ brands, onSelect }: BrandsProps) {
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ paddingHorizontal: 16, paddingRight: 20, gap: 10 }}
         renderItem={({ item }) => (
-          <Pressable accessibilityLabel={`Browse ${item.name} products`} accessibilityRole="button" onPress={() => onSelect?.(item)} className="border border-border rounded-xl bg-card min-w-[96px] px-4 py-3.5 items-center justify-center">
+          <Pressable accessibilityLabel={`Browse ${item.name} products`} accessibilityRole="button" onPress={() => onSelect?.(item)} className="border border-border rounded-lg bg-card min-w-[96px] px-4 py-3.5 items-center justify-center">
             <Text className="text-foreground text-xs font-bold uppercase tracking-[0.08em]">
               {item.name}
             </Text>

@@ -1,3 +1,4 @@
+import { createChatApi } from "./chatApi";
 import { createDeliveryDirectory } from "./deliveryDirectory";
 import { fetch as expoFetch } from "expo/fetch";
 import { createCategoryCachePool } from "./categoryQuery";
@@ -20,8 +21,6 @@ let sessionRevision = 0;
 export function getSessionRevision() { return sessionRevision; }
 let accessToken: string | null = null;
 let localUserId: number | null = null;
-let chatContext: string | null = null;
-let chatGeneration = 0;
 const sessionChangeListeners = new Set<() => void>();
 export function onSessionChange(listener: () => void) { sessionChangeListeners.add(listener); return () => { sessionChangeListeners.delete(listener); }; }
 const sessionListeners = new Set<() => void>();
@@ -29,11 +28,11 @@ export function setAccessToken(token: string | null, userId: number | null = nul
   const changed = accessToken !== token || localUserId !== userId;
   accessToken = token; localUserId = userId;
   if (changed) { sessionRevision++; profileCache.clear(); cartCache.clear(); sessionChangeListeners.forEach((listener) => listener()); }
-  resetChatContext();
+  if (changed) resetChatContext();
 }
 export function getLocalUserId() { return localUserId ?? "guest"; }
 export function onSessionExpired(listener: () => void) { sessionListeners.add(listener); return () => { sessionListeners.delete(listener); }; }
-export function resetChatContext() { chatContext = null; chatGeneration++; }
+export function resetChatContext() { chat.reset(); }
 export const apiRequest = createApiClient(process.env.EXPO_PUBLIC_API_URL ?? "", () => accessToken, () => {
   setAccessToken(null);
   sessionListeners.forEach((listener) => listener());
@@ -143,12 +142,8 @@ export function homeCatalogFromProducts(catalogProducts: Product[]): HomeCatalog
 export async function getFlashDeals() { return (await getHomeCatalog()).flashDeals; }
 export async function getSulitPicks() { return (await getHomeCatalog()).sulitPicks; }
 export async function getNewArrivals() { return (await getHomeCatalog()).newArrivals; }
-export async function getChatbotReply(message: string): Promise<string> {
-  const generation = chatGeneration;
-  const result = (await apiRequest<Envelope<{ message: string; context_token: string | null }>>("chatbot", { method: "POST", body: JSON.stringify({ message, context_token: chatContext }) })).data;
-  if (generation === chatGeneration) chatContext = result.context_token;
-  return result.message;
-}
+const chat = createChatApi(apiRequest);
+export const getChatbotReply = chat.reply;
 const branchCache = createReadCache<Store[]>(CACHE_AGE.branches, Date.now, 1);
 export function getBranches(force = false): Promise<Store[]> {
   return branchCache.read("branches", async () => {

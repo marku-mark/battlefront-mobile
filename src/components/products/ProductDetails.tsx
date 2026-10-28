@@ -7,7 +7,7 @@ import { getProductImageSource, getProductVariants, type Product } from "@/lib/d
 import { getProductFacts, getProductStock } from "@/lib/productCatalog";
 import { useTheme } from "@/theme/ThemeProvider";
 import { useWishlist } from "@/hooks/useWishlist";
-import { Chatbot } from "@/components/support/Chatbot";
+import { useChat } from "@/hooks/useChat";
 import { getResponsiveLayout, MAX_CONTENT_WIDTH } from "@/lib/responsive";
 import * as Clipboard from "expo-clipboard";
 import { useToast } from "@/hooks/useToast";
@@ -59,7 +59,7 @@ export function ProductDetails({ refreshError = false, onRetry, product, quantit
   const [selectedVariant, setSelectedVariant] = useState(variants[0] ?? null);
   const [specificationsOpen, setSpecificationsOpen] = useState(false);
   const [compatibilityOpen, setCompatibilityOpen] = useState(false);
-  const [isChatOpen, setIsChatOpen] = useState(false);
+  const { open: openChat } = useChat();
   const wishlisted = isWishlisted(product.id);
   const hasDiscount = product.originalPrice !== undefined && product.originalPrice > product.price;
   const discount = hasDiscount ? Math.round(((product.originalPrice! - product.price) / product.originalPrice!) * 100) : 0;
@@ -76,7 +76,7 @@ export function ProductDetails({ refreshError = false, onRetry, product, quantit
           <Ionicons name="arrow-back" size={22} color={colors.foreground} />
         </Pressable>
         <Text className="text-foreground text-base font-semibold">Product details</Text>
-        <Pressable accessibilityLabel={`${wishlisted ? "Remove" : "Add"} ${product.name} ${wishlisted ? "from" : "to"} wishlist`} accessibilityRole="button" accessibilityState={{ selected: wishlisted }} onPress={() => toggleWishlist(product.id)} hitSlop={8} className="w-11 h-11 items-center justify-center rounded-xl border border-border bg-secondary">
+        <Pressable accessibilityLabel={`${wishlisted ? "Remove" : "Add"} ${product.name} ${wishlisted ? "from" : "to"} wishlist`} accessibilityRole="button" accessibilityState={{ selected: wishlisted }} onPress={() => toggleWishlist(product.id)} hitSlop={8} className="w-11 h-11 items-center justify-center rounded-lg border border-border bg-secondary">
           <Ionicons name={wishlisted ? "heart" : "heart-outline"} size={21} color={wishlisted ? colors.primary : colors.foreground} />
         </Pressable>
       </View>
@@ -114,29 +114,29 @@ export function ProductDetails({ refreshError = false, onRetry, product, quantit
               accessibilityRole="button"
               accessibilityLabel={`Compare ${product.name} with other products`}
               onPress={() => onCompare(product.id)}
-              className="mt-4 h-10 flex-row items-center justify-center gap-2 rounded-xl border border-border bg-secondary"
+              className="mt-4 h-10 flex-row items-center justify-center gap-2 rounded-lg border border-border bg-secondary"
             >
               <Ionicons name="git-compare-outline" size={16} color={colors.foreground} />
               <Text className="text-foreground text-xs font-semibold">Compare products</Text>
             </Pressable>
           )}
-          <Pressable accessibilityRole="button" onPress={() => setIsChatOpen(true)} className="mt-3 min-h-11 flex-row items-center justify-center gap-2 border-b border-border">
+          <Pressable accessibilityRole="button" onPress={(event) => openChat(event.nativeEvent.target)} className="mt-3 min-h-11 flex-row items-center justify-center gap-2 border-b border-border">
             <Ionicons name="chatbubble-ellipses-outline" size={17} color={colors.foreground} />
             <Text className="text-foreground text-sm font-semibold">Ask Battlefront support</Text>
           </Pressable>
-          <View className="mt-5 rounded-2xl bg-secondary border border-border p-3 shadow-soft"><Text className="text-foreground text-sm font-semibold">Fulfillment and payment</Text><Text className="text-muted-foreground text-xs mt-1.5">Available pickup, delivery, and payment options are shown at checkout.</Text></View>
+          <View className="mt-5 rounded-lg bg-secondary border border-border p-3 "><Text className="text-foreground text-sm font-semibold">Fulfillment and payment</Text><Text className="text-muted-foreground text-xs mt-1.5">Available pickup, delivery, and payment options are shown at checkout.</Text></View>
 
           <View className="mt-6 pt-5 border-t border-border"><Text className="text-foreground text-base font-semibold">About this product</Text><Text selectable className="text-muted-foreground text-sm leading-5 mt-2">{facts.description}</Text></View>
           <DetailDisclosure title="Specifications" open={specificationsOpen} color={colors.muted} onPress={() => setSpecificationsOpen((current) => !current)}>{facts.specifications.map(([label, value]) => <View key={label} className="flex-row justify-between gap-4 py-2 border-b border-border"><Text className="text-muted-foreground text-sm">{label}</Text><Text selectable className="text-foreground text-sm font-medium flex-1 text-right">{value}</Text></View>)}</DetailDisclosure>
           <DetailDisclosure title="Compatibility and support" open={compatibilityOpen} color={colors.muted} onPress={() => setCompatibilityOpen((current) => !current)}><Text selectable className="text-muted-foreground text-sm leading-5">{facts.compatibility}</Text></DetailDisclosure>
 
-          <View className="flex-row items-center justify-between mt-6"><Text className="text-foreground text-sm font-semibold">Quantity</Text><View className="flex-row items-center border border-border rounded-xl overflow-hidden bg-secondary"><QuantityButton icon="remove" accessibilityLabel="Decrease quantity" color={colors.foreground} disabled={selectedQuantity <= 1} onPress={() => onQuantityChange(Math.max(1, selectedQuantity - 1))} /><Text className="text-foreground text-sm font-semibold min-w-[36px] text-center">{selectedQuantity}</Text><QuantityButton icon="add" accessibilityLabel="Increase quantity" color={colors.foreground} disabled={selectedQuantity >= stock.maxQuantity} onPress={() => onQuantityChange(Math.min(stock.maxQuantity, selectedQuantity + 1))} /></View></View>
+          <View className="flex-row items-center justify-between mt-6"><Text className="text-foreground text-sm font-semibold">Quantity</Text><View className="flex-row items-center border border-border rounded-lg overflow-hidden bg-secondary"><QuantityButton icon="remove" accessibilityLabel="Decrease quantity" color={colors.foreground} disabled={selectedQuantity <= 1} onPress={() => onQuantityChange(Math.max(1, selectedQuantity - 1))} /><Text className="text-foreground text-sm font-semibold min-w-[36px] text-center">{selectedQuantity}</Text><QuantityButton icon="add" accessibilityLabel="Increase quantity" color={colors.foreground} disabled={selectedQuantity >= stock.maxQuantity} onPress={() => onQuantityChange(Math.min(stock.maxQuantity, selectedQuantity + 1))} /></View></View>
         </View>
         </View>
       </ScrollView>
 
-      <View className="self-center w-full px-4 pt-3 border-t border-border bg-background" style={{ maxWidth: 760, paddingBottom: Math.max(insets.bottom, 12) }}><View className="flex-row items-center justify-between mb-3"><Text className="text-muted-foreground text-xs uppercase tracking-[0.12em]">Total</Text><Text className="text-foreground text-lg font-bold">{formatPrice(subtotal)}</Text></View><Pressable accessibilityLabel={`Add ${product.name} to cart`} accessibilityRole="button" accessibilityState={{ busy: isAdding, disabled: isAdding || selectedQuantity === 0 || (variants.length > 0 && !selectedVariant) }} disabled={isAdding || selectedQuantity === 0 || (variants.length > 0 && !selectedVariant)} onPress={() => void addToCart()} className="min-h-12 py-3 rounded-xl bg-primary items-center justify-center" style={({ pressed }) => ({ opacity: selectedQuantity === 0 || (variants.length > 0 && !selectedVariant) ? 0.45 : pressed ? 0.8 : 1 })}><Text className="text-primary-foreground text-sm font-bold">{isAdding ? "Adding…" : selectedQuantity === 0 ? stock.statusLabel : variants.length > 0 && !selectedVariant ? "Choose an option" : "Add to cart"}</Text></Pressable></View>
-      {isChatOpen && <Chatbot visible onClose={() => setIsChatOpen(false)} />}
+      <View className="self-center w-full px-4 pt-3 border-t border-border bg-background" style={{ maxWidth: 760, paddingBottom: Math.max(insets.bottom, 12) }}><View className="flex-row items-center justify-between mb-3"><Text className="text-muted-foreground text-xs uppercase tracking-[0.12em]">Total</Text><Text className="text-foreground text-lg font-bold">{formatPrice(subtotal)}</Text></View><Pressable accessibilityLabel={`Add ${product.name} to cart`} accessibilityRole="button" accessibilityState={{ busy: isAdding, disabled: isAdding || selectedQuantity === 0 || (variants.length > 0 && !selectedVariant) }} disabled={isAdding || selectedQuantity === 0 || (variants.length > 0 && !selectedVariant)} onPress={() => void addToCart()} className="min-h-12 py-3 rounded-lg bg-primary items-center justify-center" style={({ pressed }) => ({ opacity: selectedQuantity === 0 || (variants.length > 0 && !selectedVariant) ? 0.45 : pressed ? 0.8 : 1 })}><Text className="text-primary-foreground text-sm font-bold">{isAdding ? "Adding…" : selectedQuantity === 0 ? stock.statusLabel : variants.length > 0 && !selectedVariant ? "Choose an option" : "Add to cart"}</Text></Pressable></View>
+
     </View>
   );
 }
@@ -146,7 +146,7 @@ function DetailDisclosure({ title, open, color, onPress, children }: { title: st
 }
 
 function InfoChip({ icon, label, color }: { icon: "shield-checkmark-outline" | "cube-outline" | "trending-up-outline"; label: string; color: string }) {
-  return <View className="flex-row items-center gap-1.5 bg-secondary border border-border rounded-xl px-2.5 py-2"><Ionicons name={icon} size={14} color={color} /><Text className="text-muted-foreground text-xs">{label}</Text></View>;
+  return <View className="flex-row items-center gap-1.5 bg-secondary border border-border rounded-lg px-2.5 py-2"><Ionicons name={icon} size={14} color={color} /><Text className="text-muted-foreground text-xs">{label}</Text></View>;
 }
 
 function QuantityButton({ icon, accessibilityLabel, color, disabled = false, onPress }: { icon: "remove" | "add"; accessibilityLabel: string; color: string; disabled?: boolean; onPress: () => void }) {

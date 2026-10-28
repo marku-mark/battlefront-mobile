@@ -56,7 +56,7 @@ export function PromoBanners({ banners, onSelect }: PromoBannersProps) {
             accessibilityRole="button"
             onPress={() => onSelect?.(item)}
             style={{ width: bannerWidth }}
-            className="rounded-xl overflow-hidden bg-card border border-border"
+            className="rounded-lg overflow-hidden bg-card border border-border"
           >
             <ExpoImage
               source={{ uri: item.image }}

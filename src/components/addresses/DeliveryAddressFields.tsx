@@ -67,7 +67,7 @@ export function DeliveryAddressFields({
   return (
     <View className="mt-2">
       <Text className="text-foreground text-sm font-semibold">Delivery address</Text>
-      <Text className="mt-1 text-muted-foreground text-[11px]">Choose a Philippine address. Availability and delivery charges are confirmed by the store.</Text>
+      <Text className="mt-1 text-muted-foreground text-xs">Choose a Philippine address. Availability and delivery charges are confirmed by the store.</Text>
       {error ? <Pressable onPress={() => { setError(""); setRetry((value) => value + 1); }} className="py-3"><Text accessibilityRole="alert" className="text-danger">{error} Tap to retry.</Text></Pressable> : null}
       <AddressPicker label="Region" value={regions.find((region) => region.code === selectedRegion)?.name ?? ""} placeholder="Select a region" isOpen={openPicker === "region"} disabled={disabled || regions.length === 0} search={search} options={filteredOptions} placeholderTextColor={colors.muted} onToggle={() => togglePicker("region")} onSearch={setSearch} onSelect={(option) => { setRegionCode(option.code); setProvinceCode(""); onChange({ ...value, delivery_destination: "", delivery_barangay_code: "" }); setOpenPicker(null); }} />
       <AddressPicker label="Province" value={provinces.find((province) => province.code === selectedProvince)?.name ?? (selectedRegion ? "No province / Independent city" : "")} placeholder="Select a region first" isOpen={openPicker === "province"} disabled={disabled || !selectedRegion} search={search} options={filteredOptions} placeholderTextColor={colors.muted} onToggle={() => togglePicker("province")} onSearch={setSearch} onSelect={(option) => { setRegionCode(selectedRegion); setProvinceCode(option.code); onChange({ ...value, delivery_destination: "", delivery_barangay_code: "" }); setOpenPicker(null); }} />
@@ -117,7 +117,7 @@ export function DeliveryAddressFields({
         textAlignVertical="top"
         placeholder="House number, building, street, or nearby landmark"
         placeholderTextColor={colors.muted}
-        className="mt-2 min-h-20 rounded-xl border border-border bg-background px-3 py-3 text-foreground text-sm"
+        className="mt-2 min-h-20 rounded-lg border border-border bg-background px-3 py-3 text-foreground text-sm"
       />
     </View>
   );
@@ -157,11 +157,11 @@ function AddressPicker({
         accessibilityState={{ disabled, expanded: isOpen }}
         disabled={disabled}
         onPress={onToggle}
-        className={`mt-2 min-h-11 justify-center rounded-xl border border-border bg-background px-3 ${disabled ? "opacity-50" : ""}`}
+        className={`mt-2 min-h-11 justify-center rounded-lg border border-border bg-background px-3 ${disabled ? "opacity-50" : ""}`}
       >
         <Text className={`text-sm ${value ? "text-foreground" : "text-muted-foreground"}`}>{value || placeholder}</Text>
       </Pressable>
-      {isOpen && !disabled && <View className="mt-2 overflow-hidden rounded-xl border border-border bg-card">
+      {isOpen && !disabled && <View className="mt-2 overflow-hidden rounded-lg border border-border bg-card">
         <TextInput
           accessibilityLabel={`Search ${label.toLowerCase()}`}
           value={search}

@@ -122,7 +122,7 @@ export function MockSignInSheet({
             accessibilityLabel="Login failed. Check your credentials."
             accessibilityHint="Double tap to dismiss this message."
             onPress={dismissLoginFailureToast}
-            className="flex-row items-center gap-3 rounded-xl border border-danger bg-card px-4 py-3 shadow-lg"
+            className="flex-row items-center gap-3 rounded-lg border border-danger bg-card px-4 py-3 shadow-lg"
           >
             <Ionicons name="alert-circle" size={20} color="#ef4444" />
             <Text className="flex-1 text-foreground text-sm font-semibold">Login failed. Check your credentials.</Text>
@@ -145,7 +145,7 @@ export function MockSignInSheet({
               <Ionicons name="close" size={22} color={isDark ? "#f8fafc" : "#30343b"} />
             </Pressable>
           </View>
-          {isRegistering && <TextInput accessibilityLabel="Customer name" value={name} onChangeText={setName} placeholder="Full name" editable={!isSubmitting} autoComplete="name" className="bg-secondary border border-border rounded-xl px-3 h-12 text-foreground text-sm mt-6" />}
+          {isRegistering && <TextInput accessibilityLabel="Customer name" value={name} onChangeText={setName} placeholder="Full name" editable={!isSubmitting} autoComplete="name" className="bg-secondary border border-border rounded-lg px-3 h-12 text-foreground text-sm mt-6" />}
           <View style={verification ? { display: "none" } : undefined}>
           <TextInput
             accessibilityLabel="Customer email"
@@ -158,7 +158,7 @@ export function MockSignInSheet({
             autoCapitalize="none"
             autoCorrect={false}
             returnKeyType="next"
-            className="bg-secondary border border-border rounded-xl px-3 h-12 text-foreground text-sm mt-6"
+            className="bg-secondary border border-border rounded-lg px-3 h-12 text-foreground text-sm mt-6"
           />
           <TextInput
             accessibilityLabel="Customer password"
@@ -172,16 +172,16 @@ export function MockSignInSheet({
             autoCorrect={false}
             returnKeyType="go"
             onSubmitEditing={() => void handleSignIn()}
-            className="bg-secondary border border-border rounded-xl px-3 h-12 text-foreground text-sm mt-3"
+            className="bg-secondary border border-border rounded-lg px-3 h-12 text-foreground text-sm mt-3"
           />
           {!isRegistering ? <Pressable accessibilityRole="button" disabled={isSubmitting} onPress={() => {
             if (!email.trim()) { setError("Enter your email address first."); return; }
             void (async () => { try { await Linking.openURL(passwordResetUrl(email)); } catch { setError("Could not open password recovery. Please try again."); } })();
           }} className="self-end py-2"><Text className="text-primary text-xs font-semibold">Forgot password?</Text></Pressable> : null}
-          {isRegistering && <TextInput accessibilityLabel="Confirm password" value={passwordConfirmation} onChangeText={setPasswordConfirmation} placeholder="Confirm password" secureTextEntry autoCapitalize="none" editable={!isSubmitting} className="bg-secondary border border-border rounded-xl px-3 h-12 text-foreground text-sm mt-3" />}
+          {isRegistering && <TextInput accessibilityLabel="Confirm password" value={passwordConfirmation} onChangeText={setPasswordConfirmation} placeholder="Confirm password" secureTextEntry autoCapitalize="none" editable={!isSubmitting} className="bg-secondary border border-border rounded-lg px-3 h-12 text-foreground text-sm mt-3" />}
           </View>
           {verification && <View className="mt-5">
-            <TextInput accessibilityLabel="Email verification code" value={code} onChangeText={(value) => setCode(value.replace(/\D/g, "").slice(0, 6))} keyboardType="number-pad" autoComplete="one-time-code" maxLength={6} editable={!isSubmitting} placeholder="Six-digit code" className="bg-secondary border border-border rounded-xl px-3 h-12 text-foreground" />
+            <TextInput accessibilityLabel="Email verification code" value={code} onChangeText={(value) => setCode(value.replace(/\D/g, "").slice(0, 6))} keyboardType="number-pad" autoComplete="one-time-code" maxLength={6} editable={!isSubmitting} placeholder="Six-digit code" className="bg-secondary border border-border rounded-lg px-3 h-12 text-foreground" />
             <Text className="mt-2 text-muted-foreground text-xs">{verification.delivery_status === "failed" ? "Email delivery failed. Request another code when available." : "Codes expire after five minutes. Verification does not sign you in."}</Text>
             <Pressable disabled={isSubmitting || clock < resendUntil} onPress={() => {
               setIsSubmitting(true); setError("");
@@ -193,7 +193,7 @@ export function MockSignInSheet({
             <Pressable disabled={isSubmitting} onPress={() => { clearVerification(); setIsRegistering(false); setCode(""); setError(""); }} className="py-2"><Text className="text-primary">Return to sign in</Text></Pressable>
           </View>}
           {error.length > 0 && <Text accessibilityRole="alert" className="text-danger text-xs mt-3">{error}</Text>}
-          <Pressable accessibilityLabel={verification ? "Verify email" : isRegistering ? "Create account" : "Sign in"} disabled={isSubmitting} onPress={() => void handleSignIn()} className="bg-primary rounded-xl items-center py-3.5 mt-5">
+          <Pressable accessibilityLabel={verification ? "Verify email" : isRegistering ? "Create account" : "Sign in"} disabled={isSubmitting} onPress={() => void handleSignIn()} className="bg-primary rounded-lg items-center py-3.5 mt-5">
             <Text className="text-primary-foreground text-sm font-bold">{isSubmitting ? "Please wait..." : verification ? "Verify email" : isRegistering ? "Create account" : "Sign in"}</Text>
           </Pressable>
           <Pressable disabled={isSubmitting} style={verification ? { display: "none" } : undefined} onPress={() => { setIsRegistering((current) => !current); setError(""); setPassword(""); setPasswordConfirmation(""); }} className="items-center py-3">
