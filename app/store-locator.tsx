@@ -129,7 +129,7 @@ function StoreCard({ store, isDark }: { store: Store; isDark: boolean }) {
         </View>
         <View className="flex-1">
           <Text className="text-foreground text-base font-bold">{store.name}</Text>
-          <Text className="text-primary text-xs font-bold mt-1">{store.branch}</Text>
+          <Text className="text-primary-text text-xs font-bold mt-1">{store.branch}</Text>
           <Text className="text-muted-foreground text-xs mt-1 leading-4">{store.address}</Text>
           {store.landmark && (
             <View className="flex-row items-center gap-1.5 mt-2">

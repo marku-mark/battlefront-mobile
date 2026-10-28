@@ -103,7 +103,7 @@ export function ProductReviewPanel({
             setError("");
           }}
         >
-          <Text className="text-primary text-xs font-semibold">{isMockAccount ? (isWriting ? "Cancel" : "Write a review") : "Sign in to review"}</Text>
+          <Text className="text-primary-text text-xs font-semibold">{isMockAccount ? (isWriting ? "Cancel" : "Write a review") : "Sign in to review"}</Text>
         </Pressable>
       </View>
 

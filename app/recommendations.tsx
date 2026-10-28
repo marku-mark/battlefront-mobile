@@ -65,7 +65,7 @@ export default function RecommendationsScreen() {
 
   return <SafeAreaView className="flex-1 bg-background">
     <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
-      <Pressable onPress={() => router.back()}><Text className="text-primary">Back</Text></Pressable>
+      <Pressable onPress={() => router.back()}><Text className="text-primary-text">Back</Text></Pressable>
       <Text className="text-foreground text-xl font-bold mt-4">Product recommendations</Text>
       <Text className="text-muted-foreground text-sm mt-2">Suggestions selected using Battlefront’s available product and shopping data.</Text>
       {loading && recommendations.length === 0 ? <ActivityIndicator className="mt-6" /> : null}
@@ -82,7 +82,7 @@ export default function RecommendationsScreen() {
         <ProductImage source={getProductImageSource(recommendation.product.image)} className="h-24 w-24 rounded-lg bg-secondary" resizeMode="cover" />
         <View className="ml-3 flex-1 justify-center">
           <Text className="text-foreground font-bold" numberOfLines={2}>{recommendation.product.name}</Text>
-          <Text className="text-primary mt-2">₱{Number(recommendation.effective_price).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</Text>
+          <Text className="text-primary-text mt-2">₱{Number(recommendation.effective_price).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</Text>
           {recommendation.reasons.map((reason) => <Text key={reason.code} className="text-muted-foreground mt-1 text-xs">{reason.value}</Text>)}
         </View>
       </Pressable>)}

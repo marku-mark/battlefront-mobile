@@ -4,7 +4,7 @@ import {
   AccessibilityInfo,
   Alert,
   FlatList,
-  KeyboardAvoidingView,
+  Keyboard,
   Modal,
   Platform,
   Pressable,
@@ -29,6 +29,14 @@ export function Chatbot() {
   const listRef = useRef<FlatList<ChatMessage>>(null);
   const nearBottom = useRef(true);
   const [availableHeight, setAvailableHeight] = useState(height);
+  const [keyboardTop, setKeyboardTop] = useState<number | null>(null);
+  useEffect(() => {
+    const show = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillChangeFrame" : "keyboardDidShow", (event) => setKeyboardTop(event.endCoordinates.height > 0 ? event.endCoordinates.screenY : null));
+    const hide = Keyboard.addListener("keyboardDidHide", () => setKeyboardTop(null));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
+  const keyboardOverlap = keyboardTop === null ? 0 : Math.max(0, availableHeight - keyboardTop);
+  const panelSpace = Math.max(0, availableHeight - keyboardOverlap - insets.top - 24);
   const [newMessage, setNewMessage] = useState(false);
   const [clock, setClock] = useState(Date.now());
   const cooldown = Math.max(0, Math.ceil((retryAt - clock) / 1000));
@@ -48,13 +56,12 @@ export function Chatbot() {
       onRequestClose={onClose}
       onShow={() => { if (nearBottom.current) listRef.current?.scrollToEnd({ animated: false }); }}
     >
-      <KeyboardAvoidingView
+      <View
         className="flex-1 bg-black/45 justify-end items-center"
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <View style={{ flex: 1, width: "100%", alignItems: "center", justifyContent: "flex-end" }} onLayout={({ nativeEvent }) => setAvailableHeight(nativeEvent.layout.height)}>
         <Pressable className="absolute inset-0" onPress={onClose} />
-        <SafeAreaView edges={[]} style={{ width: Math.max(0, width - 32 - insets.left - insets.right), height: Math.max(0, Math.min(height * 0.75, 640, availableHeight - insets.top - 24)), marginBottom: 8, paddingBottom: Math.max(insets.bottom, 8), borderRadius: 12 }} accessibilityViewIsModal className="bg-background border border-border overflow-hidden">
+        <SafeAreaView edges={[]} style={{ width: Math.max(0, Math.min(520, width - 32 - insets.left - insets.right)), height: Math.min(height * 0.75, 640, panelSpace), marginBottom: keyboardOverlap + 8, paddingBottom: keyboardTop === null ? Math.max(insets.bottom, 8) : 8, borderRadius: 12 }} accessibilityViewIsModal className="bg-background border border-border overflow-hidden">
           <View className="flex-row items-center justify-between px-3 py-2 border-b border-border">
             <View className="flex-row items-center gap-2 flex-1">
               <View className="w-8 h-8 rounded-lg bg-primary items-center justify-center">
@@ -119,11 +126,11 @@ export function Chatbot() {
             }
           />
 
-          {newMessage && <Pressable accessibilityRole="button" onPress={scrollToBottom} className="min-h-12 items-center justify-center"><Text className="text-primary">New message ↓</Text></Pressable>}
+          {newMessage && <Pressable accessibilityRole="button" onPress={scrollToBottom} className="min-h-12 items-center justify-center"><Text className="text-primary-text">New message ↓</Text></Pressable>}
           {!!error && <Text accessibilityLiveRegion="polite" className="px-4 py-2 text-danger text-sm">{error}</Text>}
           {messages.length === 1 && <View className="flex-row px-4 border-t border-border">
-            <Pressable accessibilityRole="button" onPress={() => navigate("/orders")} className="min-h-12 flex-1 justify-center"><Text className="text-primary text-sm">View orders</Text></Pressable>
-            <Pressable accessibilityRole="button" onPress={() => navigate("/store-locator")} className="min-h-12 flex-1 justify-center"><Text className="text-primary text-sm">Store contact</Text></Pressable>
+            <Pressable accessibilityRole="button" onPress={() => navigate("/orders")} className="min-h-12 flex-1 justify-center"><Text className="text-primary-text text-sm">View orders</Text></Pressable>
+            <Pressable accessibilityRole="button" onPress={() => navigate("/store-locator")} className="min-h-12 flex-1 justify-center"><Text className="text-primary-text text-sm">Store contact</Text></Pressable>
           </View>}
           <View className="flex-row items-end gap-2 px-4 py-3 border-t border-border">
             <TextInput
@@ -151,7 +158,7 @@ export function Chatbot() {
           </View>
         </SafeAreaView>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }

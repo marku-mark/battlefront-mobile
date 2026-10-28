@@ -119,7 +119,7 @@ export default function HomeScreen() {
       onEndReachedThreshold={0.4}
       contentContainerStyle={{ paddingBottom: 88, width: "100%", maxWidth: MAX_CONTENT_WIDTH, alignSelf: "center" }}
       ListHeaderComponent={<View>
-        {(catalog.error || metadataError) && <View className="mx-4 mt-4 border border-border bg-card p-4"><Text accessibilityLiveRegion="polite" className="text-danger text-sm">{catalog.error?.message ?? "Some browsing options could not be refreshed."}</Text><Pressable accessibilityRole="button" onPress={retry} className="min-h-12 justify-center"><Text className="text-primary font-semibold">Try again</Text></Pressable></View>}
+        {(catalog.error || metadataError) && <View className="mx-4 mt-4 border border-border bg-card p-4"><Text accessibilityLiveRegion="polite" className="text-danger text-sm">{catalog.error?.message ?? "Some browsing options could not be refreshed."}</Text><Pressable accessibilityRole="button" onPress={retry} className="min-h-12 justify-center"><Text className="text-primary-text font-semibold">Try again</Text></Pressable></View>}
         <Categories categories={categories} onBrowseAll={() => router.navigate("/categories")} onSelect={(category) => router.push({ pathname: "/categories", params: { categoryId: category.id } })} />
         {cartItems.length > 0 && <ContinueCartBanner itemCount={itemCount} subtotal={subtotal} onPress={() => router.navigate("/cart")} />}
         {featured.flashDeals.length ? <FlashDeals products={featured.flashDeals.slice(0, 6)} onSelectProduct={openProduct} /> : null}
@@ -127,7 +127,7 @@ export default function HomeScreen() {
         <View className="px-4 mt-6 mb-3"><Text accessibilityRole="header" className="text-foreground text-lg font-bold">Browse products</Text></View>
       </View>}
       ListEmptyComponent={catalog.loading ? <View><LoadingCategories /><LoadingProductRail /></View> : !catalog.error ? <View className="px-6 py-12"><Text className="text-foreground text-base">No products available</Text><Text className="text-muted-foreground mt-2">Pull down to refresh the catalog.</Text></View> : null}
-      ListFooterComponent={catalog.loading && catalog.rows.length ? <LoadingMoreFooter /> : catalog.error && catalog.rows.length ? <Pressable accessibilityRole="button" onPress={retry} className="p-4"><Text className="text-primary text-center">Retry loading products</Text></Pressable> : null}
+      ListFooterComponent={catalog.loading && catalog.rows.length ? <LoadingMoreFooter /> : catalog.error && catalog.rows.length ? <Pressable accessibilityRole="button" onPress={retry} className="p-4"><Text className="text-primary-text text-center">Retry loading products</Text></Pressable> : null}
     />
     <ProductSearch visible={isSearchOpen} products={catalog.rows} onClose={() => setIsSearchOpen(false)} onSelectProduct={(product) => { returnToSearch.current = true; openProduct(product); }} />
   </View>;
@@ -156,7 +156,7 @@ function ContinueCartBanner({
           </Text>
         </View>
         <View className="flex-row items-center gap-2">
-          <Text className="text-primary text-xs font-bold uppercase tracking-[0.12em]">Review</Text>
+          <Text className="text-primary-text text-xs font-bold uppercase tracking-[0.12em]">Review</Text>
           <Ionicons name="chevron-forward" size={16} color="#ef1b1b" />
         </View>
       </Pressable>
@@ -190,7 +190,7 @@ function RecentlyViewedSection({
               <Text className="text-foreground text-[12px] font-semibold" numberOfLines={2}>
                 {product.name}
               </Text>
-              <Text className="text-primary text-[12px] font-bold mt-1">
+              <Text className="text-primary-text text-[12px] font-bold mt-1">
                 ₱{product.price.toLocaleString("en-PH")}
               </Text>
             </View>

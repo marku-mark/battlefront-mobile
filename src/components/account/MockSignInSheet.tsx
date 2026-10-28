@@ -1,4 +1,5 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import Animated, { SlideInDown, SlideOutUp } from "react-native-reanimated";
@@ -20,6 +21,7 @@ export function MockSignInSheet({
   onClose,
   message = "Sign in with your Battlefront customer account.",
 }: MockSignInSheetProps) {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isDark, reducedMotion } = useTheme();
   const { showToast } = useToast();
@@ -95,6 +97,7 @@ export function MockSignInSheet({
       setPassword("");
       setPasswordConfirmation("");
       onClose();
+      router.replace("/");
       showToast(createdAccount ? "Account created successfully." : "Logged in successfully.");
     } catch (error) {
       if (createdAccount || !(error instanceof Error) || !("status" in error) || error.status !== 401) {
@@ -177,7 +180,7 @@ export function MockSignInSheet({
           {!isRegistering ? <Pressable accessibilityRole="button" disabled={isSubmitting} onPress={() => {
             if (!email.trim()) { setError("Enter your email address first."); return; }
             void (async () => { try { await Linking.openURL(passwordResetUrl(email)); } catch { setError("Could not open password recovery. Please try again."); } })();
-          }} className="self-end py-2"><Text className="text-primary text-xs font-semibold">Forgot password?</Text></Pressable> : null}
+          }} className="self-end py-2"><Text className="text-primary-text text-xs font-semibold">Forgot password?</Text></Pressable> : null}
           {isRegistering && <TextInput accessibilityLabel="Confirm password" value={passwordConfirmation} onChangeText={setPasswordConfirmation} placeholder="Confirm password" secureTextEntry autoCapitalize="none" editable={!isSubmitting} className="bg-secondary border border-border rounded-lg px-3 h-12 text-foreground text-sm mt-3" />}
           </View>
           {verification && <View className="mt-5">
@@ -189,15 +192,15 @@ export function MockSignInSheet({
                 setError(reason instanceof Error ? reason.message : "Could not resend email.");
                 if (reason?.retryAfter) setResendUntil(Date.now() + reason.retryAfter * 1000);
               }).finally(() => setIsSubmitting(false));
-            }} className="py-3"><Text className="text-primary">{clock < resendUntil ? `Resend in ${Math.ceil((resendUntil - clock) / 1000)}s` : "Resend code"}</Text></Pressable>
-            <Pressable disabled={isSubmitting} onPress={() => { clearVerification(); setIsRegistering(false); setCode(""); setError(""); }} className="py-2"><Text className="text-primary">Return to sign in</Text></Pressable>
+            }} className="py-3"><Text className="text-primary-text">{clock < resendUntil ? `Resend in ${Math.ceil((resendUntil - clock) / 1000)}s` : "Resend code"}</Text></Pressable>
+            <Pressable disabled={isSubmitting} onPress={() => { clearVerification(); setIsRegistering(false); setCode(""); setError(""); }} className="py-2"><Text className="text-primary-text">Return to sign in</Text></Pressable>
           </View>}
           {error.length > 0 && <Text accessibilityRole="alert" className="text-danger text-xs mt-3">{error}</Text>}
           <Pressable accessibilityLabel={verification ? "Verify email" : isRegistering ? "Create account" : "Sign in"} disabled={isSubmitting} onPress={() => void handleSignIn()} className="bg-primary rounded-lg items-center py-3.5 mt-5">
             <Text className="text-primary-foreground text-sm font-bold">{isSubmitting ? "Please wait..." : verification ? "Verify email" : isRegistering ? "Create account" : "Sign in"}</Text>
           </Pressable>
           <Pressable disabled={isSubmitting} style={verification ? { display: "none" } : undefined} onPress={() => { setIsRegistering((current) => !current); setError(""); setPassword(""); setPasswordConfirmation(""); }} className="items-center py-3">
-            <Text className="text-primary text-sm font-semibold">{isRegistering ? "Already have an account? Sign in" : "Create a customer account"}</Text>
+            <Text className="text-primary-text text-sm font-semibold">{isRegistering ? "Already have an account? Sign in" : "Create a customer account"}</Text>
           </Pressable>
           <Pressable onPress={closeSheet} className="items-center py-3">
             <Text className="text-muted-foreground text-xs font-semibold">Continue as guest</Text>

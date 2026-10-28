@@ -136,13 +136,13 @@ export default function CartScreen() {
             onPress={() => setIsClearConfirmOpen(true)}
             hitSlop={8}
           >
-            <Text className="text-primary text-xs font-semibold">Clear all</Text>
+            <Text className="text-primary-text text-xs font-semibold">Clear all</Text>
           </Pressable>
         }
       />
 
       <ScrollView refreshControl={<RefreshControl refreshing={isUpdating} onRefresh={() => void refreshCart().catch(() => undefined)} tintColor="#ef1b1b" />} showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: layout.horizontalPadding, paddingBottom: 28, width: "100%", maxWidth: 800, alignSelf: "center" }}>
-        {error && <View className="mb-3"><Text accessibilityRole="alert" className="text-danger">{error}</Text><Pressable accessibilityRole="button" disabled={isUpdating} onPress={() => void refreshCart().catch(() => undefined)} className="min-h-12 justify-center"><Text className="text-primary font-semibold">Refresh cart</Text></Pressable></View>}
+        {error && <View className="mb-3"><Text accessibilityRole="alert" className="text-danger">{error}</Text><Pressable accessibilityRole="button" disabled={isUpdating} onPress={() => void refreshCart().catch(() => undefined)} className="min-h-12 justify-center"><Text className="text-primary-text font-semibold">Refresh cart</Text></Pressable></View>}
         {isUpdating && <View className="flex-row items-center gap-2 mb-3"><ActivityIndicator size="small" color="#ef1b1b" /><Text className="text-muted-foreground text-xs">Updating cart…</Text></View>}
         {conflictCount > 0 && <Text className="text-danger mb-3">Some items are unavailable or exceed current stock. Update or remove them before checkout.</Text>}
         <View className="flex-row items-center justify-between mb-3 rounded-lg border border-border bg-card px-3 py-2">
@@ -189,9 +189,9 @@ export default function CartScreen() {
                   <Ionicons name="trash-outline" size={17} color="#94a3b8" />
                 </Pressable>
               </View>
-              {buildGroup && <Text className="text-primary text-xs mt-1">PC build · {buildGroup.name}. Removing a part removes this complete build.</Text>}
+              {buildGroup && <Text className="text-primary-text text-xs mt-1">PC build · {buildGroup.name}. Removing a part removes this complete build.</Text>}
               {variant && <Text className="text-muted-foreground text-xs mt-1">Option: {variant}</Text>}
-              <Text className="text-primary text-sm font-bold mt-2">{formatPrice(product.price)}</Text>
+              <Text className="text-primary-text text-sm font-bold mt-2">{formatPrice(product.price)}</Text>
               {product.availability !== "available" && <Text className="text-danger text-xs mt-1">{product.availability === "insufficient_stock" ? `Only ${product.stockQuantity ?? 0} available; reduce quantity.` : "Currently unavailable"}</Text>}
               <View className="flex-row items-center justify-between mt-2">
                 <View className="flex-row items-center border border-border rounded-lg overflow-hidden bg-secondary">
@@ -231,7 +231,7 @@ export default function CartScreen() {
                   hitSlop={6}
                 >
                   <Ionicons name="heart-outline" size={15} color="#ef1b1b" />
-                  <Text className="text-primary text-xs font-semibold">Save for later</Text>
+                  <Text className="text-primary-text text-xs font-semibold">Save for later</Text>
                 </Pressable>
               </View>
             </View>
@@ -249,7 +249,7 @@ export default function CartScreen() {
               onPress={() => void runAction(() => addItem(removedItem.product, removedItem.quantity, removedItem.variant), () => setRemovedItem(null))}
               className="px-3 min-h-12 justify-center"
             >
-              <Text className="text-primary text-xs font-bold">Undo</Text>
+              <Text className="text-primary-text text-xs font-bold">Undo</Text>
             </Pressable>
           </View>
         )}

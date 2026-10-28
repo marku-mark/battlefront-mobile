@@ -47,7 +47,7 @@ export function Categories({ categories, onSelect, onBrowseAll }: CategoriesProp
           hitSlop={8}
           style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
         >
-          <Text className="text-primary text-xs font-semibold uppercase tracking-wide">
+          <Text className="text-primary-text text-xs font-semibold uppercase tracking-wide">
             Browse all
           </Text>
         </Pressable>

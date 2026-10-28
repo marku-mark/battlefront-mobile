@@ -98,7 +98,7 @@ export function NotificationPreview({ visible, onClose, onViewAll }: { visible: 
             : rows.map((item) => <NotificationEntry key={item.id} item={item} compact disabled={openingId !== null} onPress={() => void open(item)} />)}
         </ScrollView>
         <Pressable accessibilityRole="button" onPress={() => { onClose(); onViewAll(); }} className="min-h-12 items-center justify-center border-t border-border" style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
-          <Text className="text-primary text-sm font-semibold">View all notifications</Text>
+          <Text className="text-primary-text text-sm font-semibold">View all notifications</Text>
         </Pressable>
       </View>
     </View>

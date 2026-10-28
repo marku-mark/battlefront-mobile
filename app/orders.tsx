@@ -73,13 +73,13 @@ export default function OrdersScreen() {
             <View className="flex-row items-center justify-between">
               <Text className="text-foreground text-sm font-bold">{order.reference}</Text>
               <View className="rounded-full bg-primary/10 px-2 py-1">
-                <Text className="text-primary text-xs font-bold uppercase tracking-[0.08em]">{order.status}</Text>
+                <Text className="text-primary-text text-xs font-bold uppercase tracking-[0.08em]">{order.status}</Text>
               </View>
             </View>
 
             <Text className="text-muted-foreground text-xs mt-3">Placed {order.date}</Text>
             <Text className="text-foreground text-sm mt-2">{order.items}</Text>
-            <Text className="text-primary text-sm font-bold mt-3">{order.total}</Text>
+            <Text className="text-primary-text text-sm font-bold mt-3">{order.total}</Text>
 
             <View className="flex-row items-center justify-between mt-4 pt-3 border-t border-border">
               <Text className="text-muted-foreground text-xs uppercase tracking-[0.12em]">View order details</Text>
@@ -87,7 +87,7 @@ export default function OrdersScreen() {
             </View>
           </Pressable>
         )} ListFooterComponent={<View>
-        {error && <View><Text className="py-4 text-center text-primary">{error}</Text><Pressable disabled={loading} onPress={() => void (orders.length ? loadNextOrdersPage() : getOrders(true)).catch(() => undefined)} className="min-h-12 justify-center"><Text className="text-primary text-center">Retry loading orders</Text></Pressable></View>}
+        {error && <View><Text className="py-4 text-center text-primary-text">{error}</Text><Pressable disabled={loading} onPress={() => void (orders.length ? loadNextOrdersPage() : getOrders(true)).catch(() => undefined)} className="min-h-12 justify-center"><Text className="text-primary-text text-center">Retry loading orders</Text></Pressable></View>}
         {loading && <Text className="py-4 text-center text-muted-foreground">Loading orders…</Text>}
         {!loading && !error && orders.length === 0 && <View className="items-center py-10 px-6">
           <Ionicons name="receipt-outline" size={32} color="#94a3b8" />

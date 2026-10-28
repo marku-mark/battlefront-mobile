@@ -124,7 +124,7 @@ function ProductCardView({ product, width = 150, stretch = false, onPress }: Pro
             </Text>
 
             <View className="flex-row flex-wrap items-end gap-1.5 mt-2">
-              <Text className="text-primary font-bold text-[15px]">
+              <Text className="text-primary-text font-bold text-[15px]">
                 {formatPrice(product.price)}
               </Text>
               {hasDiscount && (

@@ -123,7 +123,7 @@ export default function WishlistScreen() {
                 }}
                 className="ml-3 px-2 py-1"
               >
-                <Text className="text-primary text-xs font-bold">Undo</Text>
+                <Text className="text-primary-text text-xs font-bold">Undo</Text>
               </Pressable>
             </View>
           )}
@@ -147,11 +147,11 @@ export default function WishlistScreen() {
                 }}
                 className="px-2 py-1"
               >
-                <Text className="text-primary text-xs font-bold">Undo</Text>
+                <Text className="text-primary-text text-xs font-bold">Undo</Text>
               </Pressable>
             </View>
           ) : null} renderItem={({ item: product }) => "unavailable" in product ? (
-            <View className="mb-3 border-b border-border p-3"><Text className="text-foreground">{isCatalogLoading ? "Loading saved product…" : `Saved product #${product.id} is currently unavailable.`}</Text><Pressable disabled={isCatalogLoading} onPress={() => toggleWishlist(product.id)} className="min-h-12 justify-center"><Text className="text-primary">Remove from wishlist</Text></Pressable></View>
+            <View className="mb-3 border-b border-border p-3"><Text className="text-foreground">{isCatalogLoading ? "Loading saved product…" : `Saved product #${product.id} is currently unavailable.`}</Text><Pressable disabled={isCatalogLoading} onPress={() => toggleWishlist(product.id)} className="min-h-12 justify-center"><Text className="text-primary-text">Remove from wishlist</Text></Pressable></View>
           ) : (
             <View key={product.id} className="flex-row bg-card border border-border rounded-lg p-3 mb-3 ">
               <Pressable
@@ -181,7 +181,7 @@ export default function WishlistScreen() {
                   </Pressable>
                 </View>
 
-                <Text className="text-primary text-sm font-bold mt-2">{formatPrice(product.price)}</Text>
+                <Text className="text-primary-text text-sm font-bold mt-2">{formatPrice(product.price)}</Text>
 
                 <View className="flex-row items-center justify-between mt-3">
                   <Text className="text-muted-foreground text-xs uppercase tracking-[0.12em]">

@@ -183,7 +183,7 @@ export default function NotificationSettingsScreen() {
           <DetailRow label="Server channel" value={checks?.registration?.notification_channel ?? "Not registered"} />
           <DetailRow label="Latest remote push" value={providerResult} />
         </View>
-        {checkError ? <Text accessibilityRole="alert" className="mt-2 text-sm text-primary">{checkError}</Text> : null}
+        {checkError ? <Text accessibilityRole="alert" className="mt-2 text-sm text-primary-text">{checkError}</Text> : null}
         <Pressable accessibilityRole="button" disabled={isInspecting} onPress={() => void inspectDevice()} className="mt-3 min-h-11 items-center justify-center rounded-lg bg-primary px-4">
           <Text className="text-primary-foreground text-sm font-bold">{isInspecting ? "Checking..." : "Re-register and check device"}</Text>
         </Pressable>

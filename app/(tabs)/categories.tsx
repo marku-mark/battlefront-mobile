@@ -141,7 +141,7 @@ export default function CategoriesScreen() {
         keyExtractor={(item) => item.id}
         onEndReached={loadMoreProducts}
         onEndReachedThreshold={0.4}
-        ListFooterComponent={isCatalogLoading && products.length > 0 ? <LoadingMoreFooter /> : hasLoadError && products.length > 0 ? <Pressable accessibilityRole="button" onPress={() => { void catalog.pager.next().catch(() => undefined); }} className="p-4"><Text className="text-primary text-center">Retry loading products</Text></Pressable> : null}
+        ListFooterComponent={isCatalogLoading && products.length > 0 ? <LoadingMoreFooter /> : hasLoadError && products.length > 0 ? <Pressable accessibilityRole="button" onPress={() => { void catalog.pager.next().catch(() => undefined); }} className="p-4"><Text className="text-primary-text text-center">Retry loading products</Text></Pressable> : null}
         key={`category-products-${queryKey}-${layout.productColumns}`}
         numColumns={layout.productColumns}
         contentContainerStyle={{ paddingBottom: 32, paddingTop: 16, paddingHorizontal: 10, width: "100%", maxWidth: MAX_CONTENT_WIDTH, alignSelf: "center" }}
@@ -150,7 +150,7 @@ export default function CategoriesScreen() {
         keyboardDismissMode="on-drag"
         ListHeaderComponent={
           <View className="pb-2">
-            {metadataError && <Pressable accessibilityRole="button" onPress={() => setRetryCount((count) => count + 1)} className="mx-4 p-3"><Text className="text-primary">Could not load filter options. Tap to retry.</Text></Pressable>}
+            {metadataError && <Pressable accessibilityRole="button" onPress={() => setRetryCount((count) => count + 1)} className="mx-4 p-3"><Text className="text-primary-text">Could not load filter options. Tap to retry.</Text></Pressable>}
             <View className="self-center w-full px-4" style={{ maxWidth: MAX_CONTENT_WIDTH }}>
               <View className="h-10 flex-row items-center gap-2 rounded-lg border border-border bg-secondary px-3">
                 <Ionicons name="search-outline" size={16} color={colors.icon} />
@@ -209,7 +209,7 @@ export default function CategoriesScreen() {
                   {priceFilter !== "all" && <FilterChip label={getPriceFilterLabel(priceFilter)} onRemove={() => setPriceFilter("all")} />}
                   {sortOrder !== "featured" && <FilterChip label={sortOrder === "price-low" ? "Price: low to high" : "Price: high to low"} onRemove={() => setSortOrder("featured")} />}
                   <Pressable accessibilityRole="button" onPress={resetFilters} className="min-h-12 justify-center px-1">
-                    <Text className="text-primary text-xs font-semibold">Clear all</Text>
+                    <Text className="text-primary-text text-xs font-semibold">Clear all</Text>
                   </Pressable>
                 </View>
               )}
@@ -313,7 +313,7 @@ export default function CategoriesScreen() {
 }
 
 function FilterButton({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
-  return <Pressable accessibilityRole="button" accessibilityState={{ selected: active }} onPress={onPress} className={`min-h-12 justify-center rounded-lg border px-3 ${active ? "border-primary bg-primary/10" : "border-border bg-secondary"}`} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}><Text className={`text-xs font-semibold ${active ? "text-primary" : "text-muted-foreground"}`}>{label}</Text></Pressable>;
+  return <Pressable accessibilityRole="button" accessibilityState={{ selected: active }} onPress={onPress} className={`min-h-12 justify-center rounded-lg border px-3 ${active ? "border-primary bg-primary/10" : "border-border bg-secondary"}`} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}><Text className={`text-xs font-semibold ${active ? "text-primary-text" : "text-muted-foreground"}`}>{label}</Text></Pressable>;
 }
 
 function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
@@ -324,7 +324,7 @@ function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }
       onPress={onRemove}
       className="min-h-12 flex-row items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5"
     >
-      <Text numberOfLines={1} className="max-w-[180px] text-primary text-xs font-semibold">{label}</Text>
+      <Text numberOfLines={1} className="max-w-[180px] text-primary-text text-xs font-semibold">{label}</Text>
       <Ionicons name="close" size={13} color="#ef1b1b" />
     </Pressable>
   );
@@ -338,7 +338,7 @@ function CategoryChip({ label, selected, onPress }: { label: string; selected: b
       onPress={onPress}
       className={`min-h-12 justify-center rounded-full border px-3 ${selected ? "border-primary bg-primary/10" : "border-border bg-secondary"}`}
     >
-      <Text className={`text-xs font-semibold ${selected ? "text-primary" : "text-muted-foreground"}`}>{label}</Text>
+      <Text className={`text-xs font-semibold ${selected ? "text-primary-text" : "text-muted-foreground"}`}>{label}</Text>
     </Pressable>
   );
 }

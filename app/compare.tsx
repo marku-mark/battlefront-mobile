@@ -89,7 +89,7 @@ export default function CompareScreen() {
         </View>
         {selectedIds.length > 0 && (
           <Pressable accessibilityRole="button" accessibilityLabel="Clear comparison" onPress={() => setSelectedIds([])} hitSlop={8}>
-            <Text className="text-primary text-xs font-semibold">Clear</Text>
+            <Text className="text-primary-text text-xs font-semibold">Clear</Text>
           </Pressable>
         )}
       </View>
@@ -168,7 +168,7 @@ export default function CompareScreen() {
                       </View>
                       <ProductImage source={getProductImageSource(product.image)} className="h-24 w-24 self-center rounded-lg bg-card" resizeMode="cover" />
                       <Text className="mt-2 text-center text-foreground text-xs font-semibold" numberOfLines={3}>{product.name}</Text>
-                      <Text className="mt-1 text-center text-primary text-sm font-bold">{formatPrice(product.price)}</Text>
+                      <Text className="mt-1 text-center text-primary-text text-sm font-bold">{formatPrice(product.price)}</Text>
                     </View>
                   ))}
                 </View>

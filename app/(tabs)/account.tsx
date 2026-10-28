@@ -436,7 +436,7 @@ export default function AccountScreen() {
                 {session.mode === "customer" && session.user.default_delivery_address && <View className="rounded-lg border border-border bg-card p-3">
                   <Text className="text-foreground text-sm font-semibold">Default delivery address</Text>
                   <Text className="text-muted-foreground text-xs leading-5 mt-1">{session.user.default_delivery_address}</Text>
-                  <Pressable disabled={isSavingAddress} onPress={() => void useDefaultAddress(null)} className="mt-3 py-2"><Text className="text-primary text-xs font-semibold">{isSavingAddress ? "Updating..." : "Clear default address"}</Text></Pressable>
+                  <Pressable disabled={isSavingAddress} onPress={() => void useDefaultAddress(null)} className="mt-3 py-2"><Text className="text-primary-text text-xs font-semibold">{isSavingAddress ? "Updating..." : "Clear default address"}</Text></Pressable>
                 </View>}
                 {isAddressesLoading ? (
                   <ActivityIndicator color={colors.foreground} />
@@ -448,7 +448,7 @@ export default function AccountScreen() {
                         <Text className="text-muted-foreground text-xs leading-5 mt-1">{address.address}</Text>
                         <Text className="text-muted-foreground text-xs mt-1">{address.phone}</Text>
                         <Pressable disabled={isSavingAddress || isAddressesLoading || !locations.some((item) => item.code === address.delivery_destination) || !address.delivery_barangay_code || !address.delivery_address_details || (session.mode === "customer" && session.user.default_delivery_address === address.address)} onPress={() => void useDefaultAddress(address)} className="mt-2 py-2">
-                          <Text className="text-primary text-xs font-semibold">{session.mode === "customer" && session.user.default_delivery_address === address.address ? "Default address" : !locations.some((item) => item.code === address.delivery_destination) ? "Recreate to use as default" : isSavingAddress ? "Updating..." : "Use as default"}</Text>
+                          <Text className="text-primary-text text-xs font-semibold">{session.mode === "customer" && session.user.default_delivery_address === address.address ? "Default address" : !locations.some((item) => item.code === address.delivery_destination) ? "Recreate to use as default" : isSavingAddress ? "Updating..." : "Use as default"}</Text>
                         </Pressable>
                       </View>
                       <Pressable
@@ -545,7 +545,7 @@ export default function AccountScreen() {
                   <TextInput accessibilityLabel="Default contact number" value={profilePhone} onChangeText={setProfilePhone} editable={!isSavingProfile} keyboardType="phone-pad" maxLength={30} className="mt-2 h-12 rounded-lg border border-border px-3 text-foreground" />
                   <Text className="text-foreground text-sm font-semibold mt-4">Default delivery address</Text>
                   <Text className="mt-2 text-foreground text-sm">{profileAddress || "No default address selected."}</Text>
-                  <Pressable onPress={() => void openSavedAddresses()} className="mt-2 rounded-lg border border-border bg-secondary px-3 py-3"><Text className="text-primary text-sm font-semibold">Manage delivery addresses</Text></Pressable>
+                  <Pressable onPress={() => void openSavedAddresses()} className="mt-2 rounded-lg border border-border bg-secondary px-3 py-3"><Text className="text-primary-text text-sm font-semibold">Manage delivery addresses</Text></Pressable>
                   <View className="mt-5 rounded-lg border border-border bg-background p-3">
                     <Text className="text-foreground text-sm font-semibold">Recommendation privacy</Text>
                     <Text className="text-muted-foreground text-xs leading-5 mt-1">Choose which activity Battlefront may use to personalize product suggestions. Turning off a source deletes its saved recommendation history.</Text>
@@ -566,7 +566,7 @@ export default function AccountScreen() {
                   <PasswordForm key={customerId} />
                 </>}
                 {profileError ? <Text accessibilityRole="alert" className="text-danger text-xs mt-3">{profileError}</Text> : null}
-                {!isProfileLoading && !isProfileLoaded && <Pressable onPress={() => void openProfileSettings()} className="mt-3 py-2"><Text className="text-primary text-sm">Retry loading profile</Text></Pressable>}
+                {!isProfileLoading && !isProfileLoaded && <Pressable onPress={() => void openProfileSettings()} className="mt-3 py-2"><Text className="text-primary-text text-sm">Retry loading profile</Text></Pressable>}
               </View>
             ) : null}
             <Pressable onPress={() => setSelectedUtility(null)} className="bg-primary rounded-lg items-center py-3 mt-5">
